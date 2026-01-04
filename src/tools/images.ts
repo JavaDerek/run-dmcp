@@ -85,25 +85,6 @@ function getExtension(mimeType: string): string {
   return map[mimeType] || "png";
 }
 
-// Helper: Infer mime type from base64 header or magic bytes
-function inferMimeType(base64: string): string {
-  // Check for data URI prefix
-  if (base64.startsWith("data:")) {
-    const match = base64.match(/^data:([^;]+);/);
-    if (match) return match[1];
-  }
-
-  // Check magic bytes
-  const cleanBase64 = base64.replace(/^data:[^;]+;base64,/, "");
-  const decoded = Buffer.from(cleanBase64, "base64");
-
-  if (decoded[0] === 0x89 && decoded[1] === 0x50) return "image/png";
-  if (decoded[0] === 0xff && decoded[1] === 0xd8) return "image/jpeg";
-  if (decoded[0] === 0x47 && decoded[1] === 0x49) return "image/gif";
-  if (decoded[0] === 0x52 && decoded[1] === 0x49) return "image/webp"; // RIFF header
-
-  return "image/png"; // Default
-}
 
 // Helper: Map database row to StoredImage
 function mapRowToStoredImage(row: Record<string, unknown>): StoredImage {
@@ -136,39 +117,15 @@ export async function storeImage(params: StoreImageParams): Promise<StoredImage>
   const id = uuidv4();
   const now = new Date().toISOString();
 
-  let imageBuffer: Buffer;
-  let mimeType: string;
-  let source: "generated" | "uploaded" | "url";
-  let sourceUrl: string | null = null;
-
-  if (params.base64) {
-    // Handle base64 input
-    const base64Data = params.base64.replace(/^data:[^;]+;base64,/, "");
-    imageBuffer = Buffer.from(base64Data, "base64");
-    mimeType = params.mimeType || inferMimeType(params.base64);
-    source = params.generationTool ? "generated" : "uploaded";
-  } else if (params.url) {
-    // Fetch from URL
-    const response = await fetch(params.url);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch image: ${response.status}`);
-    }
-    imageBuffer = Buffer.from(await response.arrayBuffer());
-    mimeType =
-      response.headers.get("content-type") || params.mimeType || "image/png";
-    source = "url";
-    sourceUrl = params.url;
-  } else if (params.filePath) {
-    // Copy from local file
-    if (!existsSync(params.filePath)) {
-      throw new Error(`File not found: ${params.filePath}`);
-    }
-    imageBuffer = readFileSync(params.filePath);
-    mimeType = params.mimeType || "image/png"; // Will be refined by sharp below
-    source = "uploaded";
-  } else {
-    throw new Error("Either base64, url, or filePath must be provided");
+  // Fetch image from URL
+  const response = await fetch(params.url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch image: ${response.status}`);
   }
+  const imageBuffer = Buffer.from(await response.arrayBuffer());
+  let mimeType = response.headers.get("content-type") || params.mimeType || "image/png";
+  const source: "generated" | "uploaded" | "url" = params.generationTool ? "generated" : "url";
+  const sourceUrl = params.url;
 
   // Get image metadata using sharp
   let width: number | null = null;

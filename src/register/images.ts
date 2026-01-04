@@ -9,7 +9,7 @@ export function registerImageTools(server: McpServer) {
   server.registerTool(
     "store_image",
     {
-      description: "Store an image for an entity (from base64 data, URL, or local file path)",
+      description: "Store an image for an entity. Provide a URL and the image will be downloaded and stored locally.",
       inputSchema: {
         gameId: z.string().max(100).describe("The game ID"),
         entityId: z
@@ -20,14 +20,7 @@ export function registerImageTools(server: McpServer) {
           .string()
           .max(50)
           .describe("Type of entity (e.g., character, location, item, scene, faction, quest, ability)"),
-        base64: z
-          .string()
-          .optional()
-          .describe(
-            "Base64-encoded image data (with or without data URI prefix)"
-          ),
-        url: z.string().max(2000).optional().describe("URL to fetch the image from"),
-        filePath: z.string().max(2000).optional().describe("Local file path to copy the image from"),
+        url: z.string().max(2000).describe("URL to fetch the image from"),
         label: z
           .string()
           .max(LIMITS.NAME_MAX)
@@ -42,12 +35,12 @@ export function registerImageTools(server: McpServer) {
           .string()
           .max(100)
           .optional()
-          .describe("MIME type (e.g., 'image/png'). Inferred if not provided."),
+          .describe("MIME type (e.g., 'image/png'). Inferred from response headers if not provided."),
         generationTool: z
           .string()
           .max(100)
           .optional()
-          .describe("Tool used to generate (e.g., 'dalle', 'sdxl', 'midjourney')"),
+          .describe("Tool used to generate (e.g., 'dalle', 'sdxl', 'midjourney', 'comfyui')"),
         generationPrompt: z
           .string()
           .max(LIMITS.CONTENT_MAX)

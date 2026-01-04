@@ -1114,15 +1114,13 @@ export interface StoreImageParams {
   entityId: string;
   entityType: string;  // Flexible: character, location, item, scene, faction, quest, ability, etc.
 
-  // Image data (one required)
-  base64?: string;            // Base64-encoded image data
-  url?: string;               // URL to fetch image from
-  filePath?: string;          // Local file path to copy from
+  // Image URL (required) - will be downloaded and stored locally
+  url: string;
 
   // Metadata
   label?: string;
   description?: string;
-  mimeType?: string;          // Required if base64, inferred from URL/content otherwise
+  mimeType?: string;          // Inferred from response headers if not provided
   generationTool?: string;
   generationPrompt?: string;
 
