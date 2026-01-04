@@ -205,8 +205,8 @@ onMounted(async () => {
 /* Hero Image Styles */
 .hero-image-container {
   position: relative;
-  margin: calc(-1 * var(--space-6)) calc(-1 * var(--space-6)) var(--space-6);
-  border-radius: 0 0 var(--border-radius) var(--border-radius);
+  margin: 0 calc(-1 * var(--space-6)) var(--space-6);
+  border-radius: var(--border-radius);
   overflow: hidden;
 }
 
@@ -255,7 +255,7 @@ onMounted(async () => {
 
 @media (max-width: 768px) {
   .hero-image-container {
-    margin: calc(-1 * var(--space-4)) calc(-1 * var(--space-4)) var(--space-4);
+    margin: 0 calc(-1 * var(--space-4)) var(--space-4);
   }
 
   .hero-image {
