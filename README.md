@@ -5,6 +5,7 @@ An MCP (Model Context Protocol) server that enables AI agents to act as dynamic 
 - [DMCP - Dungeon Master MCP Service](#dmcp---dungeon-master-mcp-service)
   - [Features](#features)
   - [Installation](#installation)
+    - [AI Self-Configuration Prompt](#ai-self-configuration-prompt)
     - [From Source](#from-source)
     - [Docker](#docker)
   - [Setup by Platform](#setup-by-platform)
@@ -18,34 +19,33 @@ An MCP (Model Context Protocol) server that enables AI agents to act as dynamic 
     - [Docker Configuration](#docker-configuration)
     - [Testing with MCP Inspector](#testing-with-mcp-inspector)
     - [HTTP Web UI](#http-web-ui)
-    - [AI Self-Configuration Prompt](#ai-self-configuration-prompt)
   - [Available Tools (170 total)](#available-tools-170-total)
-    - [Game Management](#game-management-8-tools)
-    - [Game Setup Interview](#game-setup-interview-3-tools)
-    - [Rules System](#rules-system-3-tools)
-    - [World Management](#world-management-6-tools)
-    - [Character Management](#character-management-7-tools)
-    - [Dice \& Checks](#dice--checks-3-tools)
-    - [Combat](#combat-7-tools)
-    - [Inventory](#inventory-6-tools)
-    - [Quests](#quests-5-tools)
-    - [Narrative](#narrative-6-tools)
-    - [Player Interaction](#player-interaction-2-tools)
-    - [Resources](#resources-7-tools)
-    - [Time \& Calendar](#time--calendar-7-tools)
-    - [Timers](#timers-6-tools)
-    - [Random Tables](#random-tables-7-tools)
-    - [Secrets \& Knowledge](#secrets--knowledge-9-tools)
-    - [Relationships](#relationships-7-tools)
-    - [Tags](#tags-5-tools)
-    - [Status Effects](#status-effects-8-tools)
-    - [Factions](#factions-8-tools)
-    - [Abilities \& Powers](#abilities--powers-9-tools)
-    - [Game Notes](#game-notes-9-tools)
-    - [Pause \& Resume](#pause--resume-7-tools)
-    - [Multi-Agent Collaboration](#multi-agent-collaboration-8-tools)
-    - [Image Storage](#image-storage-7-tools)
-    - [Display & Theme](#display--theme-10-tools)
+    - [Game Management (8 tools)](#game-management-8-tools)
+    - [Game Setup Interview (3 tools)](#game-setup-interview-3-tools)
+    - [Rules System (3 tools)](#rules-system-3-tools)
+    - [World Management (6 tools)](#world-management-6-tools)
+    - [Character Management (7 tools)](#character-management-7-tools)
+    - [Dice \& Checks (3 tools)](#dice--checks-3-tools)
+    - [Combat (7 tools)](#combat-7-tools)
+    - [Inventory (6 tools)](#inventory-6-tools)
+    - [Quests (5 tools)](#quests-5-tools)
+    - [Narrative (6 tools)](#narrative-6-tools)
+    - [Player Interaction (2 tools)](#player-interaction-2-tools)
+    - [Resources (7 tools)](#resources-7-tools)
+    - [Time \& Calendar (7 tools)](#time--calendar-7-tools)
+    - [Timers (6 tools)](#timers-6-tools)
+    - [Random Tables (7 tools)](#random-tables-7-tools)
+    - [Secrets \& Knowledge (9 tools)](#secrets--knowledge-9-tools)
+    - [Relationships (7 tools)](#relationships-7-tools)
+    - [Tags (5 tools)](#tags-5-tools)
+    - [Status Effects (8 tools)](#status-effects-8-tools)
+    - [Factions (8 tools)](#factions-8-tools)
+    - [Abilities \& Powers (9 tools)](#abilities--powers-9-tools)
+    - [Game Notes (9 tools)](#game-notes-9-tools)
+    - [Pause \& Resume (7 tools)](#pause--resume-7-tools)
+    - [Multi-Agent Collaboration (8 tools)](#multi-agent-collaboration-8-tools)
+    - [Image Storage (7 tools)](#image-storage-7-tools)
+    - [Display \& Theme (10 tools)](#display--theme-10-tools)
   - [MCP Prompts (6 total)](#mcp-prompts-6-total)
   - [Example Usage](#example-usage)
     - [Starting a New Game](#starting-a-new-game)
@@ -85,6 +85,48 @@ An MCP (Model Context Protocol) server that enables AI agents to act as dynamic 
 - **MCP Prompts** - Reusable prompt templates for game setup, resume, and save verification
 
 ## Installation
+
+
+### AI Self-Configuration Prompt
+
+Copy and paste this prompt to any MCP-compatible AI assistant to have it guide you through setup:
+
+<details>
+<summary>Click to expand the setup prompt</summary>
+
+```
+I want to set up DMCP (Dungeon Master MCP) so we can play text-based RPGs together. DMCP is an MCP server that lets you act as a dungeon master with full game state management.
+
+Repository: https://github.com/shawnrushefsky/dmcp
+Docker image: ghcr.io/shawnrushefsky/dmcp:latest
+
+Please help me configure this MCP server for my system. Here's what I need you to do:
+
+1. First, determine what AI tool/platform I'm using (Claude Desktop, Claude Code, ChatGPT, Cursor, etc.) and my operating system.
+
+2. Then guide me through the setup:
+   - For Docker setup (recommended): Help me verify Docker is installed and configure the MCP server using the Docker image
+   - For source setup: Help me clone the repo, run npm install && npm run build, and configure
+
+3. The configuration should use these settings:
+   - Docker: command "docker" with args ["run", "-i", "--rm", "-p", "3456:3456", "-v", "dmcp-data:/app/data", "ghcr.io/shawnrushefsky/dmcp:latest"]
+   - Source: command "node" with args pointing to the dist/index.js file
+
+4. After configuration, tell me to restart my AI application, then we can start playing!
+
+Configuration file locations:
+- Claude Desktop (macOS): ~/Library/Application Support/Claude/claude_desktop_config.json
+- Claude Desktop (Windows): %APPDATA%\Claude\claude_desktop_config.json
+- Claude Code: .mcp.json in project root or ~/.claude/claude_desktop_config.json
+- ChatGPT Desktop: ~/.chatgpt/mcp.json
+- Cursor: Settings → MCP Servers
+- Windsurf: ~/.windsurf/config.json
+
+Once DMCP is configured, you'll have access to tools for managing games, characters, locations, items, quests, combat, dice rolls, and narrative events. You can run any style of RPG - fantasy, sci-fi, horror, or anything the player wants.
+```
+
+</details>
+
 
 ### From Source
 
@@ -378,46 +420,6 @@ auto_theme_game({ gameId: "...", genre: "sci-fi" })
 Available presets: `dark-fantasy`, `cyberpunk`, `cosmic-horror`, `high-fantasy`, `noir`, `steampunk`, `post-apocalyptic`, `pirate`, `western`, `modern`, `superhero`, `sci-fi`
 
 ---
-
-### AI Self-Configuration Prompt
-
-Copy and paste this prompt to any MCP-compatible AI assistant to have it guide you through setup:
-
-<details>
-<summary>Click to expand the setup prompt</summary>
-
-```
-I want to set up DMCP (Dungeon Master MCP) so we can play text-based RPGs together. DMCP is an MCP server that lets you act as a dungeon master with full game state management.
-
-Repository: https://github.com/shawnrushefsky/dmcp
-Docker image: ghcr.io/shawnrushefsky/dmcp:latest
-
-Please help me configure this MCP server for my system. Here's what I need you to do:
-
-1. First, determine what AI tool/platform I'm using (Claude Desktop, Claude Code, ChatGPT, Cursor, etc.) and my operating system.
-
-2. Then guide me through the setup:
-   - For Docker setup (recommended): Help me verify Docker is installed and configure the MCP server using the Docker image
-   - For source setup: Help me clone the repo, run npm install && npm run build, and configure
-
-3. The configuration should use these settings:
-   - Docker: command "docker" with args ["run", "-i", "--rm", "-p", "3456:3456", "-v", "dmcp-data:/app/data", "ghcr.io/shawnrushefsky/dmcp:latest"]
-   - Source: command "node" with args pointing to the dist/index.js file
-
-4. After configuration, tell me to restart my AI application, then we can start playing!
-
-Configuration file locations:
-- Claude Desktop (macOS): ~/Library/Application Support/Claude/claude_desktop_config.json
-- Claude Desktop (Windows): %APPDATA%\Claude\claude_desktop_config.json
-- Claude Code: .mcp.json in project root or ~/.claude/claude_desktop_config.json
-- ChatGPT Desktop: ~/.chatgpt/mcp.json
-- Cursor: Settings → MCP Servers
-- Windsurf: ~/.windsurf/config.json
-
-Once DMCP is configured, you'll have access to tools for managing games, characters, locations, items, quests, combat, dice rolls, and narrative events. You can run any style of RPG - fantasy, sci-fi, horror, or anything the player wants.
-```
-
-</details>
 
 ## Available Tools (170 total)
 
