@@ -86,3 +86,10 @@ export function withTransaction<T>(fn: () => T): T {
 export function getDatabasePath(): string {
   return DB_PATH;
 }
+
+/**
+ * Get the current data directory (for images and other media).
+ */
+export function getDataDir(): string {
+  return DATA_DIR;
+}

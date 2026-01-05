@@ -4,8 +4,9 @@ import { useRoute } from 'vue-router'
 import { useApi } from '../composables/useApi'
 import { useEntityLinker } from '../composables/useEntityLinker'
 import { useGameEvents, type GameEvent } from '../composables/useGameEvents'
-import type { NarrativeEvent, GameState } from '../types'
+import type { NarrativeEvent, GameState, Breadcrumb } from '../types'
 import GameTabs from '../components/GameTabs.vue'
+import GameHeader from '../components/GameHeader.vue'
 import EventCard from '../components/EventCard.vue'
 import SkeletonLoader from '../components/SkeletonLoader.vue'
 
@@ -16,6 +17,12 @@ const state = ref<GameState | null>(null)
 const events = ref<NarrativeEvent[]>([])
 
 const gameId = computed(() => route.params.gameId as string)
+
+const breadcrumbs = computed<Breadcrumb[]>(() => [
+  { label: 'Games', href: '/' },
+  { label: state.value?.game.name || 'Loading...', href: `/games/${gameId.value}` },
+  { label: 'History' },
+])
 
 // Subscribe to realtime updates
 const { on } = useGameEvents(gameId)
@@ -59,7 +66,12 @@ onMounted(async () => {
 
   <!-- Content -->
   <div v-else-if="state" class="animate-fade-in">
-    <h2>Narrative History</h2>
+    <GameHeader
+      :breadcrumbs="breadcrumbs"
+      :game-name="state.game.name"
+      :setting="state.game.setting"
+      :title-image-id="state.game.titleImageId"
+    />
 
     <GameTabs :game-id="gameId" active="history" :counts="state.counts" />
 

@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import { getDatabase } from "../db/connection.js";
+import { getDatabase, getDataDir } from "../db/connection.js";
 import {
   writeFileSync,
   readFileSync,
@@ -9,7 +9,6 @@ import {
   rmSync,
 } from "fs";
 import { dirname, join } from "path";
-import { fileURLToPath } from "url";
 import sharp from "sharp";
 import type {
   StoredImage,
@@ -21,9 +20,10 @@ import { getLocation } from "./world.js";
 import { getItem } from "./inventory.js";
 import { getFaction } from "./faction.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const IMAGES_DIR = join(__dirname, "..", "..", "data", "images");
+// Use the same data directory as the database
+function getImagesDir(): string {
+  return join(getDataDir(), "images");
+}
 
 // Helper: Validate entity exists and return its name
 // For known entity types (character, location, item, faction), validates the entity exists
@@ -159,7 +159,7 @@ export async function storeImage(params: StoreImageParams): Promise<StoredImage>
     params.entityId,
     `${id}.${ext}`
   );
-  const fullPath = join(IMAGES_DIR, relativePath);
+  const fullPath = join(getImagesDir(), relativePath);
 
   // Ensure directory exists and write file
   ensureDir(dirname(fullPath));
@@ -250,7 +250,7 @@ export async function getImageData(
   const image = getImage(imageId);
   if (!image) return null;
 
-  const fullPath = join(IMAGES_DIR, image.filePath);
+  const fullPath = join(getImagesDir(), image.filePath);
   if (!existsSync(fullPath)) return null;
 
   const originalBuffer = readFileSync(fullPath);
@@ -457,7 +457,7 @@ export function deleteImage(imageId: string): boolean {
   if (!image) return false;
 
   // Delete file
-  const fullPath = join(IMAGES_DIR, image.filePath);
+  const fullPath = join(getImagesDir(), image.filePath);
   if (existsSync(fullPath)) {
     unlinkSync(fullPath);
   }
@@ -517,7 +517,7 @@ export function updateImageMetadata(
 
     // If entity changed, move the file
     if (newEntityId !== current.entityId || newEntityType !== current.entityType) {
-      const oldFullPath = join(IMAGES_DIR, current.filePath);
+      const oldFullPath = join(getImagesDir(), current.filePath);
       const ext = current.filePath.split(".").pop() || "png";
       newFilePath = join(
         current.gameId,
@@ -525,7 +525,7 @@ export function updateImageMetadata(
         newEntityId,
         `${imageId}.${ext}`
       );
-      const newFullPath = join(IMAGES_DIR, newFilePath);
+      const newFullPath = join(getImagesDir(), newFilePath);
 
       // Ensure new directory exists
       ensureDir(dirname(newFullPath));
@@ -562,7 +562,7 @@ export function deleteGameImages(gameId: string): number {
   const db = getDatabase();
 
   // Delete files
-  const sessionDir = join(IMAGES_DIR, gameId);
+  const sessionDir = join(getImagesDir(), gameId);
   if (existsSync(sessionDir)) {
     rmSync(sessionDir, { recursive: true, force: true });
   }

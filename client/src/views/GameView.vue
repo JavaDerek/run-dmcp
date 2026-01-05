@@ -6,15 +6,15 @@ import { useEntityLinker } from '../composables/useEntityLinker'
 import { useGameEvents } from '../composables/useGameEvents'
 import type { GameState, Character, Breadcrumb } from '../types'
 import GameTabs from '../components/GameTabs.vue'
+import GameHeader from '../components/GameHeader.vue'
 import CharacterCard from '../components/CharacterCard.vue'
 import LocationCard from '../components/LocationCard.vue'
 import QuestTable from '../components/QuestTable.vue'
-import Breadcrumbs from '../components/Breadcrumbs.vue'
 import SkeletonLoader from '../components/SkeletonLoader.vue'
 
 const route = useRoute()
 const { getGame, loading } = useApi()
-const { linkText, setGameState } = useEntityLinker()
+const { setGameState } = useEntityLinker()
 const state = ref<GameState | null>(null)
 
 const gameId = computed(() => route.params.gameId as string)
@@ -83,26 +83,12 @@ onMounted(async () => {
 
   <!-- Content -->
   <div v-else-if="state" class="animate-fade-in">
-    <!-- Hero Image -->
-    <div v-if="state.game.titleImageId" class="hero-image-container">
-      <img
-        :src="`/images/${state.game.titleImageId}/file?width=1200`"
-        :alt="state.game.name"
-        class="hero-image"
-      />
-      <div class="hero-overlay">
-        <Breadcrumbs :items="breadcrumbs" class="hero-breadcrumbs" />
-        <h2 class="hero-title">{{ state.game.name }}</h2>
-        <p class="hero-setting linked-content" v-html="linkText(state.game.setting)"></p>
-      </div>
-    </div>
-
-    <!-- No Hero Image - Standard Header -->
-    <template v-else>
-      <Breadcrumbs :items="breadcrumbs" />
-      <h2>{{ state.game.name }}</h2>
-      <p class="setting-description linked-content" v-html="linkText(state.game.setting)"></p>
-    </template>
+    <GameHeader
+      :breadcrumbs="breadcrumbs"
+      :game-name="state.game.name"
+      :setting="state.game.setting"
+      :title-image-id="state.game.titleImageId"
+    />
 
     <GameTabs :game-id="gameId" active="overview" :counts="state.counts" />
 
@@ -200,77 +186,6 @@ onMounted(async () => {
   display: flex;
   gap: var(--space-2);
   margin: var(--space-4) 0;
-}
-
-/* Hero Image Styles */
-.hero-image-container {
-  position: relative;
-  margin: 0 calc(-1 * var(--space-6)) var(--space-6);
-  border-radius: var(--border-radius);
-  overflow: hidden;
-}
-
-.hero-image {
-  width: 100%;
-  height: 300px;
-  object-fit: cover;
-  display: block;
-}
-
-.hero-overlay {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: var(--space-8) var(--space-6) var(--space-6);
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.4) 60%, transparent 100%);
-}
-
-.hero-breadcrumbs {
-  margin-bottom: var(--space-2);
-}
-
-.hero-breadcrumbs :deep(a),
-.hero-breadcrumbs :deep(span) {
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.hero-breadcrumbs :deep(a:hover) {
-  color: white;
-}
-
-.hero-title {
-  color: white;
-  margin: 0 0 var(--space-2);
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
-}
-
-.hero-setting {
-  color: rgba(255, 255, 255, 0.85);
-  margin: 0;
-  font-size: var(--text-lg);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
-  max-width: 700px;
-}
-
-@media (max-width: 768px) {
-  .hero-image-container {
-    margin: 0 calc(-1 * var(--space-4)) var(--space-4);
-  }
-
-  .hero-image {
-    height: 200px;
-  }
-
-  .hero-overlay {
-    padding: var(--space-6) var(--space-4) var(--space-4);
-  }
-}
-
-.setting-description {
-  color: var(--text-muted);
-  margin-bottom: var(--space-6);
-  font-size: var(--text-lg);
 }
 
 .empty-inline {

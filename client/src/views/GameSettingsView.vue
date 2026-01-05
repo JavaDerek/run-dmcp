@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router'
 import { useApi } from '../composables/useApi'
 import type { GameState, ImagePresetsResponse, Breadcrumb } from '../types'
 import GameTabs from '../components/GameTabs.vue'
-import Breadcrumbs from '../components/Breadcrumbs.vue'
+import GameHeader from '../components/GameHeader.vue'
 import SkeletonLoader from '../components/SkeletonLoader.vue'
 
 const route = useRoute()
@@ -73,8 +73,12 @@ onMounted(async () => {
 
   <!-- Content -->
   <div v-else-if="state" class="animate-fade-in">
-    <Breadcrumbs :items="breadcrumbs" />
-    <h2>Settings</h2>
+    <GameHeader
+      :breadcrumbs="breadcrumbs"
+      :game-name="state.game.name"
+      :setting="state.game.setting"
+      :title-image-id="state.game.titleImageId"
+    />
 
     <GameTabs :game-id="gameId" active="settings" :counts="state.counts" />
 

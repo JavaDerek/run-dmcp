@@ -2,8 +2,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApi } from '../composables/useApi'
-import type { StoredImage, GameState } from '../types'
+import type { StoredImage, GameState, Breadcrumb } from '../types'
 import GameTabs from '../components/GameTabs.vue'
+import GameHeader from '../components/GameHeader.vue'
 import ImageCard from '../components/ImageCard.vue'
 import SkeletonLoader from '../components/SkeletonLoader.vue'
 
@@ -13,6 +14,12 @@ const state = ref<GameState | null>(null)
 const images = ref<StoredImage[]>([])
 
 const gameId = computed(() => route.params.gameId as string)
+
+const breadcrumbs = computed<Breadcrumb[]>(() => [
+  { label: 'Games', href: '/' },
+  { label: state.value?.game.name || 'Loading...', href: `/games/${gameId.value}` },
+  { label: 'Images' },
+])
 
 onMounted(async () => {
   const [gameResult, imagesResult] = await Promise.all([
@@ -38,7 +45,12 @@ onMounted(async () => {
 
   <!-- Content -->
   <div v-else-if="state" class="animate-fade-in">
-    <h2>Images</h2>
+    <GameHeader
+      :breadcrumbs="breadcrumbs"
+      :game-name="state.game.name"
+      :setting="state.game.setting"
+      :title-image-id="state.game.titleImageId"
+    />
 
     <GameTabs :game-id="gameId" active="images" :counts="state.counts" />
 

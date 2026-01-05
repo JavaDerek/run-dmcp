@@ -2,8 +2,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApi } from '../composables/useApi'
-import type { MapData, GameState } from '../types'
+import type { MapData, GameState, Breadcrumb } from '../types'
 import GameTabs from '../components/GameTabs.vue'
+import GameHeader from '../components/GameHeader.vue'
 import SkeletonLoader from '../components/SkeletonLoader.vue'
 
 const route = useRoute()
@@ -12,6 +13,12 @@ const state = ref<GameState | null>(null)
 const mapData = ref<MapData | null>(null)
 
 const gameId = computed(() => route.params.gameId as string)
+
+const breadcrumbs = computed<Breadcrumb[]>(() => [
+  { label: 'Games', href: '/' },
+  { label: state.value?.game.name || 'Loading...', href: `/games/${gameId.value}` },
+  { label: 'Map' },
+])
 
 onMounted(async () => {
   const [gameResult, mapResult] = await Promise.all([
@@ -39,7 +46,12 @@ onMounted(async () => {
 
   <!-- Content -->
   <div v-else-if="state" class="animate-fade-in">
-    <h2>World Map</h2>
+    <GameHeader
+      :breadcrumbs="breadcrumbs"
+      :game-name="state.game.name"
+      :setting="state.game.setting"
+      :title-image-id="state.game.titleImageId"
+    />
 
     <GameTabs :game-id="gameId" active="map" :counts="state.counts" />
 

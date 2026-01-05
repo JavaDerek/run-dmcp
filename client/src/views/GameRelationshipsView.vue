@@ -2,8 +2,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApi } from '../composables/useApi'
-import type { GameState, Relationship } from '../types'
+import type { GameState, Relationship, Breadcrumb } from '../types'
 import GameTabs from '../components/GameTabs.vue'
+import GameHeader from '../components/GameHeader.vue'
 import SkeletonLoader from '../components/SkeletonLoader.vue'
 import RelationshipGraph from '../components/RelationshipGraph.vue'
 
@@ -13,6 +14,12 @@ const state = ref<GameState | null>(null)
 const relationships = ref<Relationship[]>([])
 
 const gameId = computed(() => route.params.gameId as string)
+
+const breadcrumbs = computed<Breadcrumb[]>(() => [
+  { label: 'Games', href: '/' },
+  { label: state.value?.game.name || 'Loading...', href: `/games/${gameId.value}` },
+  { label: 'Relationships' },
+])
 
 onMounted(async () => {
   const [gameResult, relationshipsResult] = await Promise.all([
@@ -36,7 +43,12 @@ onMounted(async () => {
 
   <!-- Content -->
   <div v-else-if="state" class="animate-fade-in relationships-page">
-    <h2>Relationships</h2>
+    <GameHeader
+      :breadcrumbs="breadcrumbs"
+      :game-name="state.game.name"
+      :setting="state.game.setting"
+      :title-image-id="state.game.titleImageId"
+    />
 
     <GameTabs :game-id="gameId" active="relationships" :counts="state.counts" />
 
