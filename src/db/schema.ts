@@ -23,7 +23,7 @@ export function initializeSchema(): void {
       'combats', 'resources', 'game_time', 'scheduled_events', 'timers',
       'random_tables', 'secrets', 'relationships', 'factions', 'abilities',
       'status_effects', 'tags', 'notes', 'external_updates', 'pause_states',
-      'stored_images'
+      'stored_images', 'stored_audio'
     ];
 
     for (const table of tablesWithSessionId) {
@@ -620,6 +620,49 @@ export function initializeSchema(): void {
     )
   `);
 
+  // Stored audio table - file-based audio storage for TTS/voice clips
+  // entity_type is flexible to support any entity (character, location, game, scene, etc.)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS stored_audio (
+      id TEXT PRIMARY KEY,
+      game_id TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+
+      -- File information
+      file_path TEXT NOT NULL,
+      file_size INTEGER NOT NULL,
+      mime_type TEXT NOT NULL,
+      duration_ms INTEGER,
+      sample_rate INTEGER,
+
+      -- Metadata
+      label TEXT,
+      description TEXT,
+      source TEXT NOT NULL CHECK (source IN ('generated', 'uploaded', 'url')),
+      source_url TEXT,
+
+      -- TTS-specific metadata
+      tts_engine TEXT,
+      tts_voice TEXT,
+      tts_text TEXT,
+      tts_settings TEXT,
+
+      -- Voice reference metadata (for voice cloning)
+      is_voice_reference INTEGER DEFAULT 0,
+      voice_name TEXT,
+      voice_description TEXT,
+
+      -- Flags
+      is_primary INTEGER DEFAULT 0,
+
+      -- Timestamps
+      created_at TEXT NOT NULL,
+
+      FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
+    )
+  `);
+
   // Create indexes for common queries
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_characters_game ON characters(game_id);
@@ -668,5 +711,9 @@ export function initializeSchema(): void {
     CREATE INDEX IF NOT EXISTS idx_stored_images_game ON stored_images(game_id);
     CREATE INDEX IF NOT EXISTS idx_stored_images_entity ON stored_images(entity_id, entity_type);
     CREATE INDEX IF NOT EXISTS idx_stored_images_primary ON stored_images(entity_id, entity_type, is_primary);
+    CREATE INDEX IF NOT EXISTS idx_stored_audio_game ON stored_audio(game_id);
+    CREATE INDEX IF NOT EXISTS idx_stored_audio_entity ON stored_audio(entity_id, entity_type);
+    CREATE INDEX IF NOT EXISTS idx_stored_audio_primary ON stored_audio(entity_id, entity_type, is_primary);
+    CREATE INDEX IF NOT EXISTS idx_stored_audio_voice_ref ON stored_audio(game_id, is_voice_reference);
   `);
 }

@@ -27,6 +27,7 @@ import { registerAbilityTools } from "./register/abilities.js";
 import { registerNoteTools } from "./register/notes.js";
 import { registerPauseTools } from "./register/pause.js";
 import { registerImageTools } from "./register/images.js";
+import { registerAudioTools } from "./register/audio.js";
 import { registerDisplayTools } from "./register/display.js";
 import { registerBatchTools } from "./register/batch.js";
 import { registerMcpResources } from "./register/mcp-resources.js";
@@ -61,6 +62,7 @@ registerAbilityTools(server);        // Abilities/Powers
 registerNoteTools(server);           // Game Notes
 registerPauseTools(server);          // Pause/Resume, Context Snapshots, External Updates
 registerImageTools(server);          // Stored Images
+registerAudioTools(server);          // Stored Audio (TTS, Voice References)
 registerDisplayTools(server);        // Display/Theme Configuration
 registerBatchTools(server);          // Batch Operations (multi-entity, workflows)
 

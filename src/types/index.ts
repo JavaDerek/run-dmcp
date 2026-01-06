@@ -1134,3 +1134,88 @@ export interface ImageListResult {
   images: StoredImage[];
   primaryImage: StoredImage | null;
 }
+
+// Stored audio types - for file-based audio storage (TTS narration, voice clips)
+export interface StoredAudio {
+  id: string;
+  gameId: string;
+  entityId: string;
+  entityType: string;  // Flexible: character, location, game, scene, narration, etc.
+  entityName?: string;  // Populated at runtime for confirmation, not stored in DB
+
+  // File information
+  filePath: string;           // Relative path from data/audio/
+  fileSize: number;           // Size in bytes
+  mimeType: string;           // e.g., 'audio/mp3', 'audio/wav'
+  durationMs: number | null;  // Duration in milliseconds
+  sampleRate: number | null;  // Sample rate in Hz
+
+  // Metadata
+  label: string | null;
+  description: string | null;
+  source: "generated" | "uploaded" | "url";
+  sourceUrl: string | null;
+
+  // TTS-specific metadata
+  ttsEngine: string | null;       // e.g., 'maya1', 'chatterbox', 'kokoro', 'xtts'
+  ttsVoice: string | null;        // Voice name/ID used
+  ttsText: string | null;         // The text that was synthesized
+  ttsSettings: Record<string, unknown> | null;  // Engine-specific settings
+
+  // Voice reference metadata (for voice cloning)
+  isVoiceReference: boolean;      // True if this is a reference clip for voice cloning
+  voiceName: string | null;       // Name for this voice (for cloning)
+  voiceDescription: string | null; // Description of the voice characteristics
+
+  // Flags
+  isPrimary: boolean;
+
+  // Timestamps
+  createdAt: string;
+}
+
+export interface StoreAudioParams {
+  gameId: string;
+  entityId: string;
+  entityType: string;  // Flexible: character, location, game, scene, narration, etc.
+
+  // Audio source (provide one)
+  url?: string;                   // URL to fetch the audio from
+  filePath?: string;              // Local file path to copy from
+
+  // Metadata
+  label?: string;
+  description?: string;
+  mimeType?: string;              // Inferred if not provided
+
+  // TTS metadata
+  ttsEngine?: string;
+  ttsVoice?: string;
+  ttsText?: string;
+  ttsSettings?: Record<string, unknown>;
+
+  // Voice reference
+  isVoiceReference?: boolean;
+  voiceName?: string;
+  voiceDescription?: string;
+
+  // Set as primary?
+  setAsPrimary?: boolean;
+}
+
+export interface AudioListResult {
+  entityId: string;
+  entityType: string;
+  audioFiles: StoredAudio[];
+  primaryAudio: StoredAudio | null;
+}
+
+export interface VoiceReferenceResult {
+  gameId: string;
+  characterId: string;
+  characterName: string;
+  voiceReferences: StoredAudio[];
+  /** Full file paths ready to pass to TTS voice cloning tools */
+  filePaths: string[];
+  totalCount: number;
+}
