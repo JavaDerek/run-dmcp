@@ -163,6 +163,14 @@ export interface TickResult {
   remaining: StatusEffect[];
 }
 
+// NOTE on expiry consequences: status effects do NOT support the declared
+// on-expiry consequence mechanism that scheduled_events (time.ts) and
+// timers (timers.ts) support. tickDurations() only decrements duration and
+// deletes the row at zero, exactly as before. Status effects were left out
+// deliberately -- unifying all three expiry systems behind one consequence
+// mechanism is a larger refactor than this feature warrants; see the
+// scheduled_events/timers implementations for the supported pattern if this
+// gets extended later.
 export function tickDurations(gameId: string, amount = 1): TickResult {
   const db = getDatabase();
 

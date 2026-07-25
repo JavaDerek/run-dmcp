@@ -274,6 +274,17 @@ export function initializeSchema(): void {
     )
   `);
 
+  // Add consequence column to scheduled_events (migration). Holds an
+  // optional JSON-encoded ExpiryConsequence ({resourceId, delta}) that
+  // advanceTime() applies itself, atomically with marking the event
+  // triggered, when its trigger time is crossed. Null/absent means "no
+  // consequence" -- behavior is unchanged from before this feature existed.
+  try {
+    db.exec(`ALTER TABLE scheduled_events ADD COLUMN consequence TEXT`);
+  } catch {
+    // Column already exists
+  }
+
   // Timers table (countdowns, stopwatches, clocks)
   db.exec(`
     CREATE TABLE IF NOT EXISTS timers (
@@ -293,6 +304,15 @@ export function initializeSchema(): void {
       FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
     )
   `);
+
+  // Add consequence column to timers (migration). Same shape and semantics
+  // as scheduled_events.consequence, applied by tickTimer() the moment the
+  // timer crosses trigger_at.
+  try {
+    db.exec(`ALTER TABLE timers ADD COLUMN consequence TEXT`);
+  } catch {
+    // Column already exists
+  }
 
   // Random tables
   db.exec(`

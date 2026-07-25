@@ -13,6 +13,15 @@ const gameDateTimeSchema = z.object({
   minute: z.number(),
 });
 
+// A declared, structured on-expiry consequence: when the event/timer
+// expires, the server applies this delta to the named resource itself, in
+// the same call, with no LLM action required. Opt-in -- omit entirely for
+// the old passive-only behavior.
+const expiryConsequenceSchema = z.object({
+  resourceId: z.string().max(100).describe("The resource to modify when this expires"),
+  delta: z.number().describe("Amount to add to the resource's value (negative to subtract)"),
+});
+
 export function registerTimeTools(server: McpServer) {
   // ============================================================================
   // TIME/CALENDAR TOOLS
@@ -96,7 +105,7 @@ export function registerTimeTools(server: McpServer) {
   server.registerTool(
     "advance_time",
     {
-      description: "Advance time by a duration, returning any triggered scheduled events",
+      description: "Advance time by a duration. Any scheduled events whose trigger time is crossed fire, and their declared consequences (if any) are applied automatically -- no follow-up call needed. Check consequenceFailures for any that couldn't be applied (e.g. target resource missing); those events remain pending and are not silently marked handled.",
       inputSchema: {
         gameId: z.string().max(100).describe("The game ID"),
         days: z.number().optional().describe("Days to advance"),
@@ -137,7 +146,7 @@ export function registerTimeTools(server: McpServer) {
   server.registerTool(
     "schedule_event",
     {
-      description: "Schedule an event to trigger at a specific in-game time",
+      description: "Schedule an event to trigger at a specific in-game time. Optionally attach a consequence -- a resource delta the server applies itself the moment the event fires, atomically, with no further action required.",
       inputSchema: {
         gameId: z.string().max(100).describe("The game ID"),
         name: z.string().min(1).max(LIMITS.NAME_MAX).describe("Event name"),
@@ -145,6 +154,7 @@ export function registerTimeTools(server: McpServer) {
         triggerTime: gameDateTimeSchema.describe("When the event should trigger"),
         recurring: z.enum(["daily", "weekly", "monthly", "yearly"]).optional().describe("Recurrence pattern"),
         metadata: z.record(z.string(), z.unknown()).optional().describe("Additional event data"),
+        consequence: expiryConsequenceSchema.optional().describe("Optional: a resource delta applied automatically when this event triggers"),
       },
       annotations: ANNOTATIONS.CREATE,
     },
@@ -199,7 +209,7 @@ export function registerTimeTools(server: McpServer) {
   server.registerTool(
     "create_timer",
     {
-      description: "Create a countdown, stopwatch, or segmented clock",
+      description: "Create a countdown, stopwatch, or segmented clock. Optionally attach a consequence -- a resource delta the server applies itself the moment the timer crosses its trigger value, atomically, with no further action required.",
       inputSchema: {
         gameId: z.string().max(100).describe("The game ID"),
         name: z.string().min(1).max(LIMITS.NAME_MAX).describe("Timer name (e.g., 'Doom Clock', 'Ritual Progress')"),
@@ -211,6 +221,7 @@ export function registerTimeTools(server: McpServer) {
         triggerAt: z.number().optional().describe("Value that triggers an event. If not provided, defaults to 0 for countdowns (direction 'down') or maxValue for stopwatches (direction 'up')"),
         unit: z.string().max(100).optional().describe("Unit label (e.g., 'rounds', 'hours', 'segments')"),
         visibleToPlayers: z.boolean().optional().describe("Whether players can see this timer"),
+        consequence: expiryConsequenceSchema.optional().describe("Optional: a resource delta applied automatically the moment this timer triggers"),
       },
       annotations: ANNOTATIONS.CREATE,
     },
@@ -316,7 +327,7 @@ export function registerTimeTools(server: McpServer) {
   server.registerTool(
     "modify_timer",
     {
-      description: "Modify a timer's state. Use mode 'tick' to advance by amount, or 'reset' to reset to initial state.",
+      description: "Modify a timer's state. Use mode 'tick' to advance by amount, or 'reset' to reset to initial state. If ticking crosses the timer's trigger value and it has a declared consequence, that consequence is applied automatically in this same call (see consequenceApplied on the result).",
       inputSchema: {
         timerId: z.string().max(100).describe("The timer ID"),
         mode: z.enum(["tick", "reset"]).describe("'tick' to advance/reduce, 'reset' to reset to initial state"),

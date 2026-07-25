@@ -1,7 +1,14 @@
 import { v4 as uuidv4 } from "uuid";
-import { getDatabase } from "../db/connection.js";
+import { getDatabase, withTransaction } from "../db/connection.js";
 import { validateGameExists } from "./game.js";
-import type { Timer } from "../types/index.js";
+import { updateResourceValue } from "./resource.js";
+import { safeJsonParse } from "../utils/json.js";
+import type { Timer, ExpiryConsequence } from "../types/index.js";
+
+function parseConsequence(raw: unknown): ExpiryConsequence | null {
+  if (typeof raw !== "string" || raw.length === 0) return null;
+  return safeJsonParse<ExpiryConsequence | null>(raw, null);
+}
 
 export function createTimer(params: {
   gameId: string;
@@ -14,6 +21,7 @@ export function createTimer(params: {
   triggerAt?: number;
   unit?: string;
   visibleToPlayers?: boolean;
+  consequence?: ExpiryConsequence;
 }): Timer {
   // Validate game exists to prevent orphaned records
   validateGameExists(params.gameId);
@@ -27,10 +35,11 @@ export function createTimer(params: {
   const maxValue = params.maxValue ?? (timerType === "clock" ? 6 : null);
   const currentValue = params.currentValue ?? (direction === "down" && maxValue ? maxValue : 0);
   const triggerAt = params.triggerAt ?? (direction === "down" ? 0 : maxValue);
+  const consequence = params.consequence ?? null;
 
   db.prepare(`
-    INSERT INTO timers (id, game_id, name, description, timer_type, current_value, max_value, direction, trigger_at, unit, visible_to_players, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO timers (id, game_id, name, description, timer_type, current_value, max_value, direction, trigger_at, unit, visible_to_players, created_at, consequence)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     params.gameId,
@@ -43,7 +52,8 @@ export function createTimer(params: {
     triggerAt,
     params.unit || "tick",
     params.visibleToPlayers !== false ? 1 : 0,
-    now
+    now,
+    consequence ? JSON.stringify(consequence) : null
   );
 
   return {
@@ -60,6 +70,7 @@ export function createTimer(params: {
     unit: params.unit || "tick",
     visibleToPlayers: params.visibleToPlayers !== false,
     createdAt: now,
+    consequence,
   };
 }
 
@@ -83,6 +94,7 @@ export function getTimer(id: string): Timer | null {
     unit: row.unit as string,
     visibleToPlayers: (row.visible_to_players as number) === 1,
     createdAt: row.created_at as string,
+    consequence: parseConsequence(row.consequence),
   };
 }
 
@@ -156,6 +168,7 @@ export function listTimers(gameId: string, includeTriggered = false): Timer[] {
     unit: row.unit as string,
     visibleToPlayers: (row.visible_to_players as number) === 1,
     createdAt: row.created_at as string,
+    consequence: parseConsequence(row.consequence),
   }));
 }
 
@@ -163,6 +176,10 @@ export interface TickResult {
   timer: Timer;
   previousValue: number;
   justTriggered: boolean;
+  // True only when justTriggered fired AND a declared consequence was
+  // successfully applied in this same call. False when nothing triggered,
+  // or when it triggered but no consequence was declared (opt-in feature).
+  consequenceApplied: boolean;
 }
 
 export function tickTimer(id: string, amount = 1): TickResult | null {
@@ -193,13 +210,43 @@ export function tickTimer(id: string, amount = 1): TickResult | null {
     }
   }
 
-  db.prepare(`UPDATE timers SET current_value = ?, triggered = ? WHERE id = ?`)
-    .run(newValue, justTriggered || timer.triggered ? 1 : 0, id);
+  const newTriggeredFlag = justTriggered || timer.triggered;
+  const consequence = timer.consequence;
+  const consequenceApplied = justTriggered && consequence !== null;
+
+  // The tick itself (current_value + triggered flag) and the consequence
+  // application (when this tick is the one that crosses the trigger) land
+  // in a single transaction. If the consequence fails, NOTHING about this
+  // tick commits -- current_value and triggered stay exactly as they were,
+  // so the row is never left "expired-but-unapplied", and the next call to
+  // tickTimer() will recompute from the same starting point and retry.
+  if (consequenceApplied && consequence) {
+    withTransaction(() => {
+      db.prepare(`UPDATE timers SET current_value = ?, triggered = ? WHERE id = ?`)
+        .run(newValue, newTriggeredFlag ? 1 : 0, id);
+
+      const applied = updateResourceValue({
+        resourceId: consequence.resourceId,
+        mode: "delta",
+        value: consequence.delta,
+        reason: `Expiry consequence: ${timer.name}`,
+      });
+      if (!applied) {
+        throw new Error(
+          `Resource '${consequence.resourceId}' not found for consequence of timer '${timer.name}' (${id})`
+        );
+      }
+    });
+  } else {
+    db.prepare(`UPDATE timers SET current_value = ?, triggered = ? WHERE id = ?`)
+      .run(newValue, newTriggeredFlag ? 1 : 0, id);
+  }
 
   return {
-    timer: { ...timer, currentValue: newValue, triggered: justTriggered || timer.triggered },
+    timer: { ...timer, currentValue: newValue, triggered: newTriggeredFlag },
     previousValue,
     justTriggered,
+    consequenceApplied,
   };
 }
 
@@ -234,6 +281,7 @@ export function modifyTimerState(
       timer: resetResult,
       previousValue: timer.currentValue,
       justTriggered: false,
+      consequenceApplied: false,
     };
   }
 
