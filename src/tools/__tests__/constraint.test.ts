@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { setupTestDb, teardownTestDb } from "./testDb.js";
+import { createTestDb, destroyTestDb } from "../../db/__tests__/testDb.js";
 import { createGame } from "../game.js";
 import { createResource } from "../resource.js";
 import {
@@ -16,12 +16,12 @@ describe("resource constraint registry", () => {
   let gameId: string;
 
   beforeEach(() => {
-    setupTestDb();
+    createTestDb();
     gameId = createGame({ name: "Test Game", setting: "test", style: "test" }).id;
   });
 
   afterEach(() => {
-    teardownTestDb();
+    destroyTestDb();
   });
 
   describe("bounded", () => {

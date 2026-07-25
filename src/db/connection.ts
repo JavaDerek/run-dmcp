@@ -43,22 +43,38 @@ function resolveDataPath(): { dataDir: string; dbPath: string } {
   return { dataDir: fallbackDataDir, dbPath: fallbackDbPath };
 }
 
-const { dataDir: DATA_DIR, dbPath: DB_PATH } = resolveDataPath();
-
+// Resolved lazily (on first getDatabase() call after startup, or after every
+// closeDatabase()) rather than once at module-import time. This makes
+// DMCP_DB_PATH re-readable at any point before the first real connection is
+// opened -- in particular it lets tests point each database at a fresh
+// in-memory instance without fighting ES module caching.
 let db: Database.Database | null = null;
+let DATA_DIR: string | undefined;
+let DB_PATH: string | undefined;
+
+function ensurePathsResolved(): { dataDir: string; dbPath: string } {
+  if (DATA_DIR === undefined || DB_PATH === undefined) {
+    const resolved = resolveDataPath();
+    DATA_DIR = resolved.dataDir;
+    DB_PATH = resolved.dbPath;
+  }
+  return { dataDir: DATA_DIR, dbPath: DB_PATH };
+}
 
 export function getDatabase(): Database.Database {
   if (!db) {
-    // Ensure data directory exists
-    if (!existsSync(DATA_DIR)) {
-      mkdirSync(DATA_DIR, { recursive: true });
-      log.info("Created data directory", { path: DATA_DIR });
+    const { dataDir, dbPath } = ensurePathsResolved();
+
+    // In-memory databases have no directory or file to create on disk.
+    if (dbPath !== ":memory:" && !existsSync(dataDir)) {
+      mkdirSync(dataDir, { recursive: true });
+      log.info("Created data directory", { path: dataDir });
     }
 
-    db = new Database(DB_PATH);
+    db = new Database(dbPath);
     db.pragma("journal_mode = WAL");
     db.pragma("foreign_keys = ON");
-    log.info("Database connection established", { path: DB_PATH });
+    log.info("Database connection established", { path: dbPath });
   }
   return db;
 }
@@ -69,11 +85,22 @@ export function closeDatabase(): void {
     db = null;
     log.info("Database connection closed");
   }
+  // Forget the resolved paths too, so a subsequent getDatabase() call
+  // re-reads DMCP_DB_PATH instead of reusing a stale value. This is what
+  // lets tests swap DMCP_DB_PATH between runs and get an isolated database.
+  DATA_DIR = undefined;
+  DB_PATH = undefined;
 }
 
 /**
- * Execute multiple operations atomically within a transaction.
- * Automatically rolls back on error.
+ * Execute multiple operations atomically within a single SQLite transaction.
+ *
+ * better-sqlite3 transactions are synchronous: `fn` must not be `async` and
+ * must not contain `await`. Pass a plain function that only performs
+ * synchronous statement executions. If `fn` throws, better-sqlite3 rolls
+ * back everything it did and the original error propagates -- no partial
+ * writes are left behind. If `fn` returns normally, the transaction commits
+ * and its return value is passed through.
  */
 export function withTransaction<T>(fn: () => T): T {
   const database = getDatabase();
@@ -84,12 +111,12 @@ export function withTransaction<T>(fn: () => T): T {
  * Get the current database path (useful for debugging/logging).
  */
 export function getDatabasePath(): string {
-  return DB_PATH;
+  return ensurePathsResolved().dbPath;
 }
 
 /**
  * Get the current data directory (for images and other media).
  */
 export function getDataDir(): string {
-  return DATA_DIR;
+  return ensurePathsResolved().dataDir;
 }

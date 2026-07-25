@@ -2,7 +2,7 @@
 // constraints, and does it leave unconstrained resources exactly as they
 // behaved before this feature existed?
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { setupTestDb, teardownTestDb } from "./testDb.js";
+import { createTestDb, destroyTestDb } from "../../db/__tests__/testDb.js";
 import { createGame } from "../game.js";
 import { createResource, getResource, updateResourceValue } from "../resource.js";
 import {
@@ -15,12 +15,12 @@ describe("constraint enforcement on updateResourceValue", () => {
   let gameId: string;
 
   beforeEach(() => {
-    setupTestDb();
+    createTestDb();
     gameId = createGame({ name: "Test Game", setting: "test", style: "test" }).id;
   });
 
   afterEach(() => {
-    teardownTestDb();
+    destroyTestDb();
   });
 
   describe("no constraint declared (baseline, must be unchanged)", () => {

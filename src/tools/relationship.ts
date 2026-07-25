@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import { getDatabase } from "../db/connection.js";
+import { getDatabase, withTransaction } from "../db/connection.js";
 import { validateGameExists } from "./game.js";
 import type { Relationship, RelationshipChange } from "../types/index.js";
 
@@ -204,15 +204,20 @@ export function modifyRelationship(params: {
 
   const now = new Date().toISOString();
 
-  db.prepare(`UPDATE relationships SET value = ?, updated_at = ? WHERE id = ?`)
-    .run(newValue, now, params.relationshipId);
+  // The value update and its history row must land together -- otherwise a
+  // failure between the two leaves a changed relationship value with no
+  // audit trail explaining why it changed.
+  const change = withTransaction(() => {
+    db.prepare(`UPDATE relationships SET value = ?, updated_at = ? WHERE id = ?`)
+      .run(newValue, now, params.relationshipId);
 
-  const change = logRelationshipChange(
-    params.relationshipId,
-    previousValue,
-    newValue,
-    params.reason || null
-  );
+    return logRelationshipChange(
+      params.relationshipId,
+      previousValue,
+      newValue,
+      params.reason || null
+    );
+  });
 
   return {
     relationship: { ...relationship, value: newValue, updatedAt: now },
@@ -355,22 +360,26 @@ export function updateRelationshipValue(params: {
   const newLabel = params.label !== undefined ? params.label : relationship.label;
   const newNotes = params.notes ?? relationship.notes;
 
-  db.prepare(`
-    UPDATE relationships
-    SET relationship_type = ?, value = ?, label = ?, notes = ?, updated_at = ?
-    WHERE id = ?
-  `).run(newType, newValue, newLabel, newNotes, now, params.relationshipId);
+  // The value/metadata update and its (conditional) history row must land
+  // together, for the same reason as modifyRelationship() above.
+  const change = withTransaction((): RelationshipChange | null => {
+    db.prepare(`
+      UPDATE relationships
+      SET relationship_type = ?, value = ?, label = ?, notes = ?, updated_at = ?
+      WHERE id = ?
+    `).run(newType, newValue, newLabel, newNotes, now, params.relationshipId);
 
-  // Log to history if value changed
-  let change: RelationshipChange | null = null;
-  if (newValue !== previousValue) {
-    change = logRelationshipChange(
-      params.relationshipId,
-      previousValue,
-      newValue,
-      params.reason || null
-    );
-  }
+    // Log to history if value changed
+    if (newValue !== previousValue) {
+      return logRelationshipChange(
+        params.relationshipId,
+        previousValue,
+        newValue,
+        params.reason || null
+      );
+    }
+    return null;
+  });
 
   return {
     relationship: {
@@ -410,29 +419,34 @@ export function createBidirectionalRelationship(params: {
   label?: string;
   notes?: string;
 }): [Relationship, Relationship] {
-  const relA = createRelationship({
-    gameId: params.gameId,
-    sourceId: params.entityA.id,
-    sourceType: params.entityA.type,
-    targetId: params.entityB.id,
-    targetType: params.entityB.type,
-    relationshipType: params.relationshipType,
-    value: params.value,
-    label: params.label,
-    notes: params.notes,
-  });
+  // A "bidirectional" relationship is really two rows. If the second insert
+  // fails, we must not be left with a lopsided relationship where A knows
+  // about B but not vice versa -- so both inserts happen in one transaction.
+  return withTransaction(() => {
+    const relA = createRelationship({
+      gameId: params.gameId,
+      sourceId: params.entityA.id,
+      sourceType: params.entityA.type,
+      targetId: params.entityB.id,
+      targetType: params.entityB.type,
+      relationshipType: params.relationshipType,
+      value: params.value,
+      label: params.label,
+      notes: params.notes,
+    });
 
-  const relB = createRelationship({
-    gameId: params.gameId,
-    sourceId: params.entityB.id,
-    sourceType: params.entityB.type,
-    targetId: params.entityA.id,
-    targetType: params.entityA.type,
-    relationshipType: params.relationshipType,
-    value: params.value,
-    label: params.label,
-    notes: params.notes,
-  });
+    const relB = createRelationship({
+      gameId: params.gameId,
+      sourceId: params.entityB.id,
+      sourceType: params.entityB.type,
+      targetId: params.entityA.id,
+      targetType: params.entityA.type,
+      relationshipType: params.relationshipType,
+      value: params.value,
+      label: params.label,
+      notes: params.notes,
+    });
 
-  return [relA, relB];
+    return [relA, relB];
+  });
 }
