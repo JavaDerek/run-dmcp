@@ -21,7 +21,23 @@ import type { ConstraintKind, MonotonicDirection, ResourceConstraint } from "../
  *   - relationships.value (its own separate system)
  * A game author who needs a server-enforced invariant on a quantity must
  * model that quantity as a `resources` row, not one of the above.
+ *
+ * 'conserved' is fully enforced: a resource that is a member of a declared
+ * 'conserved' constraint can no longer be written directly through
+ * update_resource_value (see checkResourceConstraints() below) -- it must go
+ * through transferResourceValue() in resource.ts, which moves value between
+ * exactly two members of the same set atomically. See the comment on
+ * transferResourceValue() for why an explicit transfer, rather than a
+ * balanced multi-resource write, was chosen.
  */
+
+/** Absolute tolerance for floating-point sum comparisons on 'conserved'
+ * constraints. IEEE 754 doubles cannot represent values like 0.1 exactly,
+ * so repeated addition/subtraction across many transfers can drift by a
+ * few ULPs. This is large enough to absorb that drift over realistic
+ * transfer volumes while still catching an actual logic bug (which would
+ * typically desync the sum by a whole `amount`, not a fraction of one). */
+export const CONSERVED_SUM_EPSILON = 1e-6;
 
 export class ConstraintViolationError extends Error {
   constructor(
@@ -154,9 +170,23 @@ export function declareMonotonicConstraint(params: {
  * Register a 'conserved' constraint: a set of resources that must always
  * sum to a fixed total.
  *
- * SCOPE: this only registers the constraint. It is deliberately NOT
- * enforced in this branch -- see checkResourceConstraints() and
- * enforceConservedConstraint() below for why and where the seam is.
+ * Validation performed here, all rejecting rather than silently coercing:
+ *   - at least two distinct resources
+ *   - every resourceId must exist
+ *   - `total` must be a finite number
+ *   - no resource may already belong to another 'conserved' constraint --
+ *     a resource can be a member of at most one conserved set at a time, so
+ *     that transferResourceValue() (resource.ts) never has to guess which
+ *     set a transfer touching that resource is supposed to preserve
+ *   - the members' CURRENT values must already sum to `total`. This
+ *     constraint records an existing invariant, it does not establish one --
+ *     if the values don't already sum to `total`, that's almost always a
+ *     caller mistake (wrong total, forgot a member), and silently rewriting
+ *     resource values to make it true would hide that mistake.
+ *
+ * A resource may still separately hold a 'bounded' and/or 'monotonic'
+ * constraint alongside 'conserved' -- those are orthogonal and both remain
+ * enforced during transfers (see transferResourceValue()).
  */
 export function declareConservedConstraint(params: {
   gameId: string;
@@ -169,10 +199,33 @@ export function declareConservedConstraint(params: {
   if (uniqueIds.length < 2) {
     throw new Error("A 'conserved' constraint requires at least two distinct resources.");
   }
+  if (!Number.isFinite(params.total)) {
+    throw new Error(`'total' must be a finite number for a 'conserved' constraint; got ${params.total}.`);
+  }
+
+  let sum = 0;
   for (const resourceId of uniqueIds) {
-    if (!getResource(resourceId)) {
+    const resource = getResource(resourceId);
+    if (!resource) {
       throw new Error(`Resource '${resourceId}' not found.`);
     }
+    if (getConstraintsForResource(resourceId).some((c) => c.kind === "conserved")) {
+      throw new Error(
+        `Resource '${resourceId}' already belongs to a 'conserved' constraint. A resource may only be a ` +
+          `member of one 'conserved' set at a time -- remove the existing constraint first (remove_resource_constraint) ` +
+          `if you need to redefine the set it belongs to.`
+      );
+    }
+    sum += resource.value;
+  }
+
+  if (Math.abs(sum - params.total) > CONSERVED_SUM_EPSILON) {
+    throw new Error(
+      `Cannot declare a 'conserved' constraint with total ${params.total}: the current values of ` +
+        `[${uniqueIds.join(", ")}] sum to ${sum}, not ${params.total}. Adjust the resources' values (via ` +
+        `update_resource_value, before declaring the constraint) or the declared total so they already match -- ` +
+        `declaring this constraint does not rewrite resource values to make a mismatched total true.`
+    );
   }
 
   return insertConstraint(params.gameId, "conserved", uniqueIds, null, params.total);
@@ -215,13 +268,15 @@ export function removeConstraint(id: string): boolean {
 /**
  * Check whether an intended value change for a single resource would
  * violate any 'bounded' or 'monotonic' constraint declared on it. Throws
- * ConstraintViolationError on violation; returns void otherwise. Called
- * from updateResourceValue() in resource.ts before the row is written.
- *
- * 'conserved' constraints are deliberately NOT checked here -- see the seam
- * note on enforceConservedConstraint() below.
+ * ConstraintViolationError on violation; returns void otherwise. Shared by
+ * checkResourceConstraints() (the single-resource write path) and
+ * transferResourceValue() (resource.ts; the two-resource conserved-transfer
+ * path) -- both paths must respect 'bounded'/'monotonic' the same way.
+ * Deliberately does not look at 'conserved' constraints; callers decide
+ * separately what to do about those (see checkResourceConstraints() below
+ * and transferResourceValue()).
  */
-export function checkResourceConstraints(
+export function checkBoundedAndMonotonicConstraints(
   resourceId: string,
   previousValue: number,
   intendedValue: number,
@@ -264,40 +319,51 @@ export function checkResourceConstraints(
       }
     }
 
-    // constraint.kind === "conserved": intentionally not checked here.
+    // constraint.kind === "conserved": handled by callers, not here.
   }
 }
 
 /**
- * SEAM -- NOT IMPLEMENTED IN THIS BRANCH.
+ * Check whether an intended value change for a single resource would
+ * violate any constraint declared on it. Throws ConstraintViolationError on
+ * violation; returns void otherwise. Called from updateResourceValue() in
+ * resource.ts before the row is written.
  *
- * Enforcing a 'conserved' constraint means: when any one resource in the set
- * changes, every other member must be re-read and, if needed, adjusted (or
- * the write rejected) so the set still sums to `total`. That requires an
- * atomic multi-row read-modify-write -- otherwise two concurrent updates (or
- * even a single-threaded read-then-write with no transaction) can observe or
- * leave the set out of sync.
- *
- * `withTransaction()` (src/db/connection.ts:78-81) exists for exactly this
- * but is currently dead code: nothing in DMCP performs atomic multi-row
- * writes yet, and real transaction wiring is being added on a separate
- * branch. Faking enforcement here with sequential single-row writes would
- * produce a race-prone approximation, not the guarantee 'conserved' promises
- * -- so this function exists only to make the gap explicit rather than
- * silently doing nothing.
- *
- * To implement: once atomic multi-row writes are available, wrap a read of
- * every member's current value + the write(s) that keep them summing to
- * `total` in withTransaction(), and call this from wherever conserved-set
- * updates are meant to happen (updateResourceValue() only ever touches one
- * resource at a time, so conserved-set writes likely need their own entry
- * point rather than reusing it as-is).
+ * 'conserved' is handled specially here: ANY direct single-resource write to
+ * a conserved member is rejected, unconditionally, regardless of whether the
+ * particular delta would happen to preserve the total. The server cannot
+ * know where update_resource_value's counterpart delta should come from --
+ * writing one member without atomically adjusting another would silently
+ * break the set's invariant, which is exactly the failure this constraint
+ * exists to prevent. Use transfer_resource_value (transferResourceValue() in
+ * resource.ts) instead, which moves value between two members of the same
+ * set atomically.
  */
-export function enforceConservedConstraint(_constraintId: string): never {
-  throw new Error(
-    "'conserved' constraint enforcement is not implemented in this branch. " +
-      "Declaring the constraint (declareConservedConstraint) and listing/removing it work today; " +
-      "it requires atomic multi-row writes (see withTransaction() in src/db/connection.ts) " +
-      "which are being added on a separate branch. See the comment on this function for details."
-  );
+export function checkResourceConstraints(
+  resourceId: string,
+  previousValue: number,
+  intendedValue: number,
+  bounds: { minValue: number | null; maxValue: number | null }
+): void {
+  const constraints = getConstraintsForResource(resourceId);
+  checkBoundedAndMonotonicConstraints(resourceId, previousValue, intendedValue, bounds);
+
+  const conserved = constraints.find((c) => c.kind === "conserved");
+  if (conserved) {
+    throw new ConstraintViolationError(
+      "conserved",
+      resourceId,
+      `Resource '${resourceId}' is a member of a 'conserved' constraint (id '${conserved.id}', total ${conserved.total}) ` +
+        `and cannot be written directly via update_resource_value -- a single-resource write is ambiguous about where ` +
+        `the counterpart delta should come from, and could silently break the set's total. Use transfer_resource_value ` +
+        `to move value between two members of this set atomically instead.`
+    );
+  }
+}
+
+/** All conserved constraints (of kind 'conserved') governing a resource,
+ * i.e. zero or one (declareConservedConstraint() rejects overlapping
+ * conserved membership, so a resource can belong to at most one). */
+export function getConservedConstraintFor(resourceId: string): ResourceConstraint | null {
+  return getConstraintsForResource(resourceId).find((c) => c.kind === "conserved") ?? null;
 }

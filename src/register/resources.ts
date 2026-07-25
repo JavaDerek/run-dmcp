@@ -70,16 +70,26 @@ export function registerResourceTools(server: McpServer) {
       annotations: ANNOTATIONS.UPDATE,
     },
     async ({ resourceId, ...updates }) => {
-      const resource = resourceTools.updateResource(resourceId, updates);
-      if (!resource) {
+      try {
+        const resource = resourceTools.updateResource(resourceId, updates);
+        if (!resource) {
+          return {
+            content: [{ type: "text", text: "Resource not found" }],
+            isError: true,
+          };
+        }
         return {
-          content: [{ type: "text", text: "Resource not found" }],
+          content: [{ type: "text", text: JSON.stringify(resource, null, 2) }],
+        };
+      } catch (error) {
+        if (error instanceof constraintTools.ConstraintViolationError) {
+          return formatErrorResponse(errors.constraintViolation(error.resourceId, error.message));
+        }
+        return {
+          content: [{ type: "text", text: (error as Error).message }],
           isError: true,
         };
       }
-      return {
-        content: [{ type: "text", text: JSON.stringify(resource, null, 2) }],
-      };
     }
   );
 
@@ -93,11 +103,21 @@ export function registerResourceTools(server: McpServer) {
       annotations: ANNOTATIONS.DESTRUCTIVE,
     },
     async ({ resourceId }) => {
-      const success = resourceTools.deleteResource(resourceId);
-      return {
-        content: [{ type: "text", text: success ? "Resource deleted" : "Resource not found" }],
-        isError: !success,
-      };
+      try {
+        const success = resourceTools.deleteResource(resourceId);
+        return {
+          content: [{ type: "text", text: success ? "Resource deleted" : "Resource not found" }],
+          isError: !success,
+        };
+      } catch (error) {
+        if (error instanceof constraintTools.ConstraintViolationError) {
+          return formatErrorResponse(errors.constraintViolation(error.resourceId, error.message));
+        }
+        return {
+          content: [{ type: "text", text: (error as Error).message }],
+          isError: true,
+        };
+      }
     }
   );
 
@@ -160,6 +180,46 @@ export function registerResourceTools(server: McpServer) {
     }
   );
 
+  // ============================================================================
+  // TRANSFER RESOURCE VALUE - the only write path for a 'conserved' member
+  // ============================================================================
+  server.registerTool(
+    "transfer_resource_value",
+    {
+      description:
+        "Move an amount from one resource to another, atomically, keeping their combined total unchanged. " +
+        "This is the ONLY way to change the value of a resource that belongs to a declared 'conserved' constraint -- " +
+        "update_resource_value rejects direct writes to such resources because a single-resource write can't say " +
+        "where the offsetting change should come from. fromResourceId and toResourceId must both already be members " +
+        "of the SAME declared 'conserved' constraint (see declare_resource_constraint). amount must be >= 0; swap " +
+        "fromResourceId/toResourceId to reverse direction. Never clamps -- if either side would cross its own " +
+        "minValue/maxValue, the whole transfer is rejected rather than applying an uneven amount to each side.",
+      inputSchema: {
+        fromResourceId: z.string().max(100).describe("Resource to subtract the amount from"),
+        toResourceId: z.string().max(100).describe("Resource to add the amount to"),
+        amount: z.number().min(0).describe("Amount to move (must be >= 0)"),
+        reason: z.string().max(LIMITS.DESCRIPTION_MAX).optional().describe("Reason for the transfer (logged to history on both sides)"),
+      },
+      annotations: ANNOTATIONS.UPDATE,
+    },
+    async ({ fromResourceId, toResourceId, amount, reason }) => {
+      try {
+        const result = resourceTools.transferResourceValue({ fromResourceId, toResourceId, amount, reason });
+        return {
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (error) {
+        if (error instanceof constraintTools.ConstraintViolationError) {
+          return formatErrorResponse(errors.constraintViolation(error.resourceId, error.message));
+        }
+        return {
+          content: [{ type: "text", text: (error as Error).message }],
+          isError: true,
+        };
+      }
+    }
+  );
+
   server.registerTool(
     "get_resource_history",
     {
@@ -189,7 +249,7 @@ export function registerResourceTools(server: McpServer) {
         "Declare a server-enforced invariant on one or more resources, so update_resource_value cannot write a value that violates it. " +
         "'bounded': the resource must already have minValue and/or maxValue set (via create_resource/update_resource) -- once declared, writes outside those bounds are REJECTED instead of the default silent clamp. " +
         "'monotonic': the resource's value may only move in one direction ('increasing' = never decreases, 'decreasing' = never increases); holding steady is always allowed. " +
-        "'conserved': registers a set of 2+ resources that must always sum to a fixed total -- NOTE: this only records the invariant. Enforcement is NOT implemented yet (it needs atomic multi-row writes); declaring it does not currently stop the set from drifting off-total.",
+        "'conserved': declares a set of 2+ resources that must always sum to a fixed total -- the members' current values must already sum to `total` (this does not rewrite them to match). Once declared, update_resource_value REJECTS direct writes to any member (ambiguous -- it can't know where the offsetting change comes from); use transfer_resource_value to move value between two members of the set atomically instead. A resource can belong to at most one 'conserved' set at a time.",
       inputSchema: {
         gameId: z.string().max(100).describe("The game ID"),
         kind: z.enum(["bounded", "monotonic", "conserved"]).describe("Constraint kind"),

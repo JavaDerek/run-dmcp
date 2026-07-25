@@ -9,7 +9,6 @@ import {
   listConstraints,
   getConstraintsForResource,
   removeConstraint,
-  enforceConservedConstraint,
 } from "../constraint.js";
 
 describe("resource constraint registry", () => {
@@ -108,8 +107,12 @@ describe("resource constraint registry", () => {
     });
   });
 
-  describe("conserved (registry only -- enforcement is deferred)", () => {
-    it("registers a conserved constraint across a set of resources", () => {
+  // Full enforcement (transfer_resource_value, the ambiguous-single-write
+  // rejection, delete/update guards, atomicity, float drift, etc.) is
+  // covered exhaustively in conserved.test.ts. This block covers only
+  // declare-time validation of the registry entry itself.
+  describe("conserved: declaration validation", () => {
+    it("registers a conserved constraint across a set of resources whose values already sum to total", () => {
       const a = createResource({ gameId, ownerType: "game", name: "grain", value: 40 });
       const b = createResource({ gameId, ownerType: "game", name: "reserve_grain", value: 60 });
 
@@ -122,6 +125,21 @@ describe("resource constraint registry", () => {
       expect(constraint.kind).toBe("conserved");
       expect(constraint.resourceIds.sort()).toEqual([a.id, b.id].sort());
       expect(constraint.total).toBe(100);
+      expect(constraint.direction).toBeNull();
+    });
+
+    it("registers a conserved constraint across 3+ resources", () => {
+      const a = createResource({ gameId, ownerType: "game", name: "grain", value: 20 });
+      const b = createResource({ gameId, ownerType: "game", name: "reserve_grain", value: 30 });
+      const c = createResource({ gameId, ownerType: "game", name: "seed_grain", value: 50 });
+
+      const constraint = declareConservedConstraint({
+        gameId,
+        resourceIds: [a.id, b.id, c.id],
+        total: 100,
+      });
+
+      expect(constraint.resourceIds.sort()).toEqual([a.id, b.id, c.id].sort());
     });
 
     it("rejects a conserved constraint with fewer than two resources", () => {
@@ -132,22 +150,118 @@ describe("resource constraint registry", () => {
       ).toThrow();
     });
 
-    // SCOPE: 'conserved' enforcement requires atomic multi-row writes.
-    // withTransaction() (src/db/connection.ts:78-81) is currently dead code;
-    // real transactions land on a separate branch. Enforcing this
-    // non-atomically (read-check-write per row) would be a race-prone fake,
-    // not a real guarantee, so it is explicitly not implemented here.
-    // This test documents and pins that gap rather than faking it.
-    it.todo(
-      "enforces the conserved total atomically once real transactions land (see enforceConservedConstraint)"
-    );
+    it("rejects a conserved constraint with an empty resource list", () => {
+      expect(() =>
+        declareConservedConstraint({ gameId, resourceIds: [], total: 0 })
+      ).toThrow();
+    });
 
-    it("enforceConservedConstraint is an explicit not-implemented seam, not a silent no-op", () => {
+    it("rejects when a listed resource does not exist", () => {
+      const a = createResource({ gameId, ownerType: "game", name: "grain", value: 40 });
+
+      expect(() =>
+        declareConservedConstraint({ gameId, resourceIds: [a.id, "does-not-exist"], total: 40 })
+      ).toThrow();
+    });
+
+    it("rejects when the game does not exist", () => {
       const a = createResource({ gameId, ownerType: "game", name: "grain", value: 40 });
       const b = createResource({ gameId, ownerType: "game", name: "reserve_grain", value: 60 });
-      const constraint = declareConservedConstraint({ gameId, resourceIds: [a.id, b.id], total: 100 });
 
-      expect(() => enforceConservedConstraint(constraint.id)).toThrow(/not implemented/i);
+      expect(() =>
+        declareConservedConstraint({ gameId: "does-not-exist", resourceIds: [a.id, b.id], total: 100 })
+      ).toThrow();
+    });
+
+    it("rejects a declaration whose members' current values do not already sum to the declared total", () => {
+      const a = createResource({ gameId, ownerType: "game", name: "grain", value: 40 });
+      const b = createResource({ gameId, ownerType: "game", name: "reserve_grain", value: 60 });
+
+      expect(() =>
+        declareConservedConstraint({ gameId, resourceIds: [a.id, b.id], total: 999 })
+      ).toThrow(/sum/i);
+
+      // Must NOT have silently "fixed" either resource's value to make it true.
+      expect(a.value).toBe(40);
+      expect(b.value).toBe(60);
+    });
+
+    it("does not silently adjust resource values when the declared total is wrong", () => {
+      const a = createResource({ gameId, ownerType: "game", name: "grain", value: 40 });
+      const b = createResource({ gameId, ownerType: "game", name: "reserve_grain", value: 60 });
+
+      expect(() =>
+        declareConservedConstraint({ gameId, resourceIds: [a.id, b.id], total: 50 })
+      ).toThrow();
+
+      expect(getConstraintsForResource(a.id)).toEqual([]);
+      expect(getConstraintsForResource(b.id)).toEqual([]);
+    });
+
+    it("rejects a non-finite total (NaN)", () => {
+      const a = createResource({ gameId, ownerType: "game", name: "grain", value: 40 });
+      const b = createResource({ gameId, ownerType: "game", name: "reserve_grain", value: 60 });
+
+      expect(() =>
+        declareConservedConstraint({ gameId, resourceIds: [a.id, b.id], total: NaN })
+      ).toThrow();
+    });
+
+    it("rejects a non-finite total (Infinity)", () => {
+      const a = createResource({ gameId, ownerType: "game", name: "grain", value: 40 });
+      const b = createResource({ gameId, ownerType: "game", name: "reserve_grain", value: 60 });
+
+      expect(() =>
+        declareConservedConstraint({ gameId, resourceIds: [a.id, b.id], total: Infinity })
+      ).toThrow();
+    });
+
+    it("dedupes a repeated resourceId in the input and validates the sum against the unique set", () => {
+      const a = createResource({ gameId, ownerType: "game", name: "grain", value: 40 });
+      const b = createResource({ gameId, ownerType: "game", name: "reserve_grain", value: 60 });
+
+      const constraint = declareConservedConstraint({
+        gameId,
+        resourceIds: [a.id, b.id, a.id],
+        total: 100,
+      });
+
+      expect(constraint.resourceIds.sort()).toEqual([a.id, b.id].sort());
+    });
+
+    it("rejects declaring a second conserved constraint that overlaps membership with an existing one", () => {
+      const a = createResource({ gameId, ownerType: "game", name: "grain", value: 40 });
+      const b = createResource({ gameId, ownerType: "game", name: "reserve_grain", value: 60 });
+      const c = createResource({ gameId, ownerType: "game", name: "seed_grain", value: 10 });
+      declareConservedConstraint({ gameId, resourceIds: [a.id, b.id], total: 100 });
+
+      // 'a' is already a member of a conserved set -- a second, overlapping
+      // conserved set would make it ambiguous which set a transfer touching
+      // 'a' is supposed to preserve.
+      expect(() =>
+        declareConservedConstraint({ gameId, resourceIds: [a.id, c.id], total: 50 })
+      ).toThrow(/already belongs to a 'conserved' constraint/i);
+    });
+
+    it("allows a resource with a 'bounded' constraint to also join a 'conserved' set", () => {
+      const a = createResource({ gameId, ownerType: "game", name: "grain", value: 40, minValue: 0, maxValue: 100 });
+      const b = createResource({ gameId, ownerType: "game", name: "reserve_grain", value: 60 });
+      declareBoundedConstraint({ gameId, resourceId: a.id });
+
+      const constraint = declareConservedConstraint({ gameId, resourceIds: [a.id, b.id], total: 100 });
+      expect(constraint.kind).toBe("conserved");
+
+      const forA = getConstraintsForResource(a.id).map((c) => c.kind).sort();
+      expect(forA).toEqual(["bounded", "conserved"]);
+    });
+
+    it("allows a resource with a 'monotonic' constraint to also join a 'conserved' set", () => {
+      const a = createResource({ gameId, ownerType: "game", name: "grain", value: 40 });
+      const b = createResource({ gameId, ownerType: "game", name: "reserve_grain", value: 60 });
+      declareMonotonicConstraint({ gameId, resourceId: a.id, direction: "increasing" });
+
+      const constraint = declareConservedConstraint({ gameId, resourceIds: [a.id, b.id], total: 100 });
+      expect(constraint.kind).toBe("conserved");
     });
   });
 
