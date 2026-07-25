@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import { getDatabase, getDataDir } from "../db/connection.js";
+import { getDatabase, getDataDir, withTransaction } from "../db/connection.js";
 import {
   writeFileSync,
   readFileSync,
@@ -468,20 +468,26 @@ export function deleteImage(imageId: string): boolean {
 }
 
 export function setPrimaryImage(imageId: string): StoredImage | null {
-  const db = getDatabase();
   const image = getImage(imageId);
   if (!image) return null;
 
-  // Unset current primary
-  db.prepare(
-    `
-    UPDATE stored_images SET is_primary = 0
-    WHERE entity_id = ? AND entity_type = ?
-  `
-  ).run(image.entityId, image.entityType);
+  // Unsetting the old primary and setting the new one must happen
+  // together -- a failure between the two could otherwise leave the entity
+  // with zero primaries, or briefly with two.
+  withTransaction(() => {
+    const db = getDatabase();
 
-  // Set new primary
-  db.prepare(`UPDATE stored_images SET is_primary = 1 WHERE id = ?`).run(imageId);
+    // Unset current primary
+    db.prepare(
+      `
+      UPDATE stored_images SET is_primary = 0
+      WHERE entity_id = ? AND entity_type = ?
+    `
+    ).run(image.entityId, image.entityType);
+
+    // Set new primary
+    db.prepare(`UPDATE stored_images SET is_primary = 1 WHERE id = ?`).run(imageId);
+  });
 
   return { ...image, isPrimary: true };
 }

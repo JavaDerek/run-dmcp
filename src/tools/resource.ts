@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import { getDatabase } from "../db/connection.js";
+import { getDatabase, withTransaction } from "../db/connection.js";
 import { validateGameExists } from "./game.js";
 import type { Resource, ResourceChange } from "../types/index.js";
 
@@ -249,16 +249,21 @@ export function updateResourceValue(params: {
     );
   }
 
-  const db = getDatabase();
-  const stmt = db.prepare(`UPDATE resources SET value = ? WHERE id = ?`);
-  stmt.run(newValue, params.resourceId);
+  // The value update and its resource_history row must land together --
+  // otherwise a failure between the two leaves a changed value with no
+  // audit trail explaining why it changed.
+  const change = withTransaction(() => {
+    const db = getDatabase();
+    const stmt = db.prepare(`UPDATE resources SET value = ? WHERE id = ?`);
+    stmt.run(newValue, params.resourceId);
 
-  const change = logChange(
-    params.resourceId,
-    previousValue,
-    newValue,
-    params.reason || null
-  );
+    return logChange(
+      params.resourceId,
+      previousValue,
+      newValue,
+      params.reason || null
+    );
+  });
 
   return {
     resource: { ...resource, value: newValue },
