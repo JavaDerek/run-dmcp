@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import { getDatabase } from "../db/connection.js";
 import { validateGameExists } from "./game.js";
+import { checkResourceConstraints } from "./constraint.js";
 import type { Resource, ResourceChange } from "../types/index.js";
 
 function clampValue(
@@ -233,21 +234,20 @@ export function updateResourceValue(params: {
   if (!resource) return null;
 
   const previousValue = resource.value;
-  let newValue: number;
+  const intendedValue =
+    params.mode === "delta" ? previousValue + params.value : params.value;
 
-  if (params.mode === "delta") {
-    newValue = clampValue(
-      previousValue + params.value,
-      resource.minValue,
-      resource.maxValue
-    );
-  } else {
-    newValue = clampValue(
-      params.value,
-      resource.minValue,
-      resource.maxValue
-    );
-  }
+  // Opt-in constraint enforcement: throws ConstraintViolationError and
+  // leaves the row untouched if this resource has a declared 'bounded' or
+  // 'monotonic' constraint that `intendedValue` would violate. Resources
+  // with no declared constraint are unaffected by this call and fall
+  // through to the existing clamp behavior below, unchanged.
+  checkResourceConstraints(params.resourceId, previousValue, intendedValue, {
+    minValue: resource.minValue,
+    maxValue: resource.maxValue,
+  });
+
+  const newValue = clampValue(intendedValue, resource.minValue, resource.maxValue);
 
   const db = getDatabase();
   const stmt = db.prepare(`UPDATE resources SET value = ? WHERE id = ?`);

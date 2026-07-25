@@ -50,6 +50,11 @@ const ERROR_SUGGESTIONS: Record<string, string[]> = {
     'Check the input schema for required fields',
     'Verify all IDs reference existing entities',
   ],
+  CONSTRAINT_VIOLATION: [
+    'Use get_resource to check the current value and its min/max bounds',
+    'Use list_resource_constraints to see what constraint is declared and why the write was rejected',
+    'Choose a value that satisfies the constraint, or remove it with remove_resource_constraint if it no longer applies',
+  ],
   PERMISSION_DENIED: [
     'Check if the entity belongs to the current game',
     'Verify the character has permission for this action',
@@ -150,4 +155,10 @@ export const errors = {
 
   invalidInput: (message: string, additionalSuggestions?: string[]) =>
     createError('INVALID_INPUT', message, { additionalSuggestions }),
+
+  constraintViolation: (resourceId: string, message: string) =>
+    createError('CONSTRAINT_VIOLATION', message, {
+      entityType: 'resource',
+      entityId: resourceId,
+    }),
 };

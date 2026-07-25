@@ -1,8 +1,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import * as resourceTools from "../tools/resource.js";
+import * as constraintTools from "../tools/constraint.js";
 import { LIMITS } from "../utils/validation.js";
 import { ANNOTATIONS } from "../utils/tool-annotations.js";
+import { errors, formatErrorResponse } from "../utils/errors.js";
 
 export function registerResourceTools(server: McpServer) {
   server.registerTool(
@@ -135,16 +137,26 @@ export function registerResourceTools(server: McpServer) {
       annotations: ANNOTATIONS.UPDATE,
     },
     async ({ resourceId, mode, value, reason }) => {
-      const result = resourceTools.updateResourceValue({ resourceId, mode, value, reason });
-      if (!result) {
+      try {
+        const result = resourceTools.updateResourceValue({ resourceId, mode, value, reason });
+        if (!result) {
+          return {
+            content: [{ type: "text", text: "Resource not found" }],
+            isError: true,
+          };
+        }
         return {
-          content: [{ type: "text", text: "Resource not found" }],
+          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        };
+      } catch (error) {
+        if (error instanceof constraintTools.ConstraintViolationError) {
+          return formatErrorResponse(errors.constraintViolation(error.resourceId, error.message));
+        }
+        return {
+          content: [{ type: "text", text: (error as Error).message }],
           isError: true,
         };
       }
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
     }
   );
 
@@ -162,6 +174,93 @@ export function registerResourceTools(server: McpServer) {
       const history = resourceTools.getResourceHistory(resourceId, limit);
       return {
         content: [{ type: "text", text: JSON.stringify(history, null, 2) }],
+      };
+    }
+  );
+
+  // ============================================================================
+  // RESOURCE CONSTRAINTS - optional, server-enforced invariants (opt-in; a
+  // resource with no declared constraint is unaffected -- see src/tools/constraint.ts)
+  // ============================================================================
+  server.registerTool(
+    "declare_resource_constraint",
+    {
+      description:
+        "Declare a server-enforced invariant on one or more resources, so update_resource_value cannot write a value that violates it. " +
+        "'bounded': the resource must already have minValue and/or maxValue set (via create_resource/update_resource) -- once declared, writes outside those bounds are REJECTED instead of the default silent clamp. " +
+        "'monotonic': the resource's value may only move in one direction ('increasing' = never decreases, 'decreasing' = never increases); holding steady is always allowed. " +
+        "'conserved': registers a set of 2+ resources that must always sum to a fixed total -- NOTE: this only records the invariant. Enforcement is NOT implemented yet (it needs atomic multi-row writes); declaring it does not currently stop the set from drifting off-total.",
+      inputSchema: {
+        gameId: z.string().max(100).describe("The game ID"),
+        kind: z.enum(["bounded", "monotonic", "conserved"]).describe("Constraint kind"),
+        resourceId: z.string().max(100).optional().describe("Required for 'bounded' or 'monotonic': the resource to constrain"),
+        resourceIds: z.array(z.string().max(100)).optional().describe("Required for 'conserved': 2 or more resource IDs that must sum to `total`"),
+        direction: z.enum(["increasing", "decreasing"]).optional().describe("Required for 'monotonic': the only direction the value may move"),
+        total: z.number().optional().describe("Required for 'conserved': the fixed sum the resource set must maintain"),
+      },
+      annotations: ANNOTATIONS.CREATE,
+    },
+    async ({ gameId, kind, resourceId, resourceIds, direction, total }) => {
+      try {
+        let constraint;
+        if (kind === "bounded") {
+          if (!resourceId) throw new Error("resourceId is required for a 'bounded' constraint");
+          constraint = constraintTools.declareBoundedConstraint({ gameId, resourceId });
+        } else if (kind === "monotonic") {
+          if (!resourceId || !direction) {
+            throw new Error("resourceId and direction are required for a 'monotonic' constraint");
+          }
+          constraint = constraintTools.declareMonotonicConstraint({ gameId, resourceId, direction });
+        } else {
+          if (!resourceIds || total === undefined) {
+            throw new Error("resourceIds and total are required for a 'conserved' constraint");
+          }
+          constraint = constraintTools.declareConservedConstraint({ gameId, resourceIds, total });
+        }
+        return {
+          content: [{ type: "text", text: JSON.stringify(constraint, null, 2) }],
+        };
+      } catch (error) {
+        return {
+          content: [{ type: "text", text: (error as Error).message }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.registerTool(
+    "list_resource_constraints",
+    {
+      description: "List declared resource constraints for a game, optionally filtered to those governing one resource.",
+      inputSchema: {
+        gameId: z.string().max(100).describe("The game ID"),
+        resourceId: z.string().max(100).optional().describe("Filter to constraints governing this resource"),
+      },
+      annotations: ANNOTATIONS.READ_ONLY,
+    },
+    async ({ gameId, resourceId }) => {
+      const constraints = constraintTools.listConstraints(gameId, resourceId);
+      return {
+        content: [{ type: "text", text: JSON.stringify(constraints, null, 2) }],
+      };
+    }
+  );
+
+  server.registerTool(
+    "remove_resource_constraint",
+    {
+      description: "Remove a declared resource constraint by id. The resource(s) it governed revert to unconstrained (default clamp) behavior.",
+      inputSchema: {
+        constraintId: z.string().max(100).describe("The constraint ID"),
+      },
+      annotations: ANNOTATIONS.DESTRUCTIVE,
+    },
+    async ({ constraintId }) => {
+      const success = constraintTools.removeConstraint(constraintId);
+      return {
+        content: [{ type: "text", text: success ? "Constraint removed" : "Constraint not found" }],
+        isError: !success,
       };
     }
   );
