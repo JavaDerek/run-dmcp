@@ -1,17 +1,17 @@
 {
-  "name": "dmcp",
+  "name": "run-dmcp",
   "version": "0.1.0",
-  "description": "MCP service for AI-powered dungeon mastering in text RPGs",
+  "description": "An MCP server for LLM-run interactive fiction where the server owns what is true - including when it was true. A continuation of DMCP.",
   "license": "MIT",
-  "author": "Shawn Rushefsky",
+  "author": "Derek Ferguson",
   "repository": {
     "type": "git",
-    "url": "https://github.com/shawnrushefsky/dmcp.git"
+    "url": "https://github.com/JavaDerek/run-dmcp.git"
   },
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "dmcp": "dist/index.js"
+    "run-dmcp": "dist/index.js"
   },
   "scripts": {
     "build": "tsc && npm run build:client",
@@ -54,5 +54,22 @@
     "typescript": "^5.0.0",
     "typescript-eslint": "^8.51.0",
     "vitest": "^4.0.16"
-  }
+  },
+  "contributors": [
+    "Shawn Rushefsky (DMCP, the project this continues)"
+  ],
+  "keywords": [
+    "mcp",
+    "interactive-fiction",
+    "narrative",
+    "timeline",
+    "event-sourcing",
+    "llm",
+    "rpg"
+  ],
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ]
 }

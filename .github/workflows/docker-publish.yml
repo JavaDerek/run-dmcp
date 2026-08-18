@@ -1,11 +1,11 @@
 name: Build and Publish Docker Image
 
+# Inherited from DMCP and deliberately manual-only for now: nothing about this
+# project's current phase wants a container image pushed on every commit. Flip
+# the push/pull_request triggers back on when there is a release worth shipping
+# that way.
 on:
-  push:
-    branches: [main]
-    tags: ['v*']
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
