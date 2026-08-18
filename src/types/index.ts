@@ -674,6 +674,15 @@ export interface GameTime {
   calendarConfig: CalendarConfig;
 }
 
+// A declared, structured on-expiry consequence. When present on a
+// scheduled event or timer, the server applies it itself -- via
+// updateResourceValue() in the same call that marks the thing expired --
+// with no LLM in the loop. Opt-in: omit it and behavior is unchanged.
+export interface ExpiryConsequence {
+  resourceId: string;
+  delta: number;
+}
+
 export interface ScheduledEvent {
   id: string;
   gameId: string;
@@ -683,6 +692,7 @@ export interface ScheduledEvent {
   recurring: string | null;
   triggered: boolean;
   metadata: Record<string, unknown>;
+  consequence: ExpiryConsequence | null;
 }
 
 // Timer types
@@ -700,6 +710,7 @@ export interface Timer {
   unit: string;
   visibleToPlayers: boolean;
   createdAt: string;
+  consequence: ExpiryConsequence | null;
 }
 
 // Random table types

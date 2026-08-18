@@ -1016,6 +1016,7 @@ export function getResumeContext(gameId: string): ResumeContext | null {
     unit: row.unit as string,
     visibleToPlayers: Boolean(row.visible_to_players),
     createdAt: row.created_at as string,
+    consequence: row.consequence ? safeJsonParse(row.consequence as string, null) : null,
   }));
 
   // Get pending scheduled events
@@ -1034,6 +1035,7 @@ export function getResumeContext(gameId: string): ResumeContext | null {
     recurring: row.recurring as string | null,
     triggered: false,
     metadata: JSON.parse((row.metadata as string) || "{}"),
+    consequence: row.consequence ? safeJsonParse(row.consequence as string, null) : null,
   }));
 
   // Generate narrative summary from recent events

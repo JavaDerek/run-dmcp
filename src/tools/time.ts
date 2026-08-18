@@ -1,7 +1,16 @@
 import { v4 as uuidv4 } from "uuid";
-import { getDatabase } from "../db/connection.js";
+import { getDatabase, withTransaction } from "../db/connection.js";
 import { safeJsonParse } from "../utils/json.js";
-import type { GameTime, GameDateTime, CalendarConfig, ScheduledEvent } from "../types/index.js";
+import { updateResourceValue } from "./resource.js";
+import { createLogger } from "../utils/logger.js";
+import type { GameTime, GameDateTime, CalendarConfig, ScheduledEvent, ExpiryConsequence } from "../types/index.js";
+
+const log = createLogger("time");
+
+function parseConsequence(raw: unknown): ExpiryConsequence | null {
+  if (typeof raw !== "string" || raw.length === 0) return null;
+  return safeJsonParse<ExpiryConsequence | null>(raw, null);
+}
 
 // Default calendar (fantasy-style)
 const DEFAULT_CALENDAR: CalendarConfig = {
@@ -121,10 +130,18 @@ export function setTime(gameId: string, time: GameDateTime): GameTime | null {
   return { ...gameTime, currentTime: time };
 }
 
+export interface ConsequenceFailure {
+  eventId: string;
+  eventName: string;
+  consequence: ExpiryConsequence;
+  error: string;
+}
+
 export interface AdvanceResult {
   previousTime: GameDateTime;
   newTime: GameDateTime;
   triggeredEvents: ScheduledEvent[];
+  consequenceFailures: ConsequenceFailure[];
 }
 
 export function advanceTime(
@@ -146,7 +163,10 @@ export function advanceTime(
 
   const newTime = minutesToDateTime(totalMinutes, calendarConfig);
 
-  // Update time
+  // Update time. This happens unconditionally and outside any per-event
+  // transaction below -- the clock is global state, not tied to any one
+  // event's consequence, so a broken consequence on one event must never
+  // block time from moving for everyone else.
   db.prepare(`UPDATE game_time SET current_time = ? WHERE game_id = ?`)
     .run(JSON.stringify(newTime), gameId);
 
@@ -157,6 +177,7 @@ export function advanceTime(
   `).all(gameId) as Record<string, unknown>[];
 
   const triggeredEvents: ScheduledEvent[] = [];
+  const consequenceFailures: ConsequenceFailure[] = [];
 
   for (const row of events) {
     const triggerTime = safeJsonParse<GameDateTime>(row.trigger_time as string, { year: 1, month: 1, day: 1, hour: 0, minute: 0 });
@@ -166,33 +187,76 @@ export function advanceTime(
       compareDateTime(triggerTime, previousTime, calendarConfig) >= 0 &&
       compareDateTime(triggerTime, newTime, calendarConfig) <= 0
     ) {
-      const event: ScheduledEvent = {
-        id: row.id as string,
+      const eventId = row.id as string;
+      const eventName = row.name as string;
+      const recurring = row.recurring as string | null;
+      const consequence = parseConsequence(row.consequence);
+
+      // Recurring events reschedule instead of being marked triggered=1.
+      const newTrigger = recurring ? rescheduleEvent(triggerTime, recurring, calendarConfig) : null;
+
+      // The row mutation (triggered=1, or reschedule to the next
+      // occurrence) and the consequence application must land together or
+      // not at all -- otherwise a failed consequence could leave the event
+      // permanently marked "handled" with its effect never applied, and
+      // exactly-once would be broken forever with no way to retry.
+      try {
+        withTransaction(() => {
+          if (newTrigger) {
+            db.prepare(`UPDATE scheduled_events SET trigger_time = ? WHERE id = ?`)
+              .run(JSON.stringify(newTrigger), eventId);
+          } else {
+            db.prepare(`UPDATE scheduled_events SET triggered = 1 WHERE id = ?`)
+              .run(eventId);
+          }
+
+          if (consequence) {
+            const applied = updateResourceValue({
+              resourceId: consequence.resourceId,
+              mode: "delta",
+              value: consequence.delta,
+              reason: `Expiry consequence: ${eventName}`,
+            });
+            if (!applied) {
+              throw new Error(
+                `Resource '${consequence.resourceId}' not found for consequence of scheduled event '${eventName}' (${eventId})`
+              );
+            }
+          }
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        log.error("Failed to apply expiry consequence for scheduled event; leaving it pending", {
+          gameId,
+          eventId,
+          eventName,
+          consequence,
+          error: message,
+        });
+        if (consequence) {
+          consequenceFailures.push({ eventId, eventName, consequence, error: message });
+        }
+        // Transaction rolled back: the row is untouched, so the event stays
+        // pending (not triggered, not rescheduled) and is excluded from
+        // triggeredEvents below -- no expired-but-unapplied state.
+        continue;
+      }
+
+      triggeredEvents.push({
+        id: eventId,
         gameId: row.game_id as string,
-        name: row.name as string,
+        name: eventName,
         description: row.description as string || "",
         triggerTime,
-        recurring: row.recurring as string | null,
-        triggered: true,
+        recurring,
+        triggered: !newTrigger,
         metadata: safeJsonParse<Record<string, unknown>>(row.metadata as string || "{}", {}),
-      };
-
-      triggeredEvents.push(event);
-
-      // Mark as triggered or reschedule if recurring
-      if (event.recurring) {
-        // Reschedule
-        const newTrigger = rescheduleEvent(triggerTime, event.recurring, calendarConfig);
-        db.prepare(`UPDATE scheduled_events SET trigger_time = ? WHERE id = ?`)
-          .run(JSON.stringify(newTrigger), event.id);
-      } else {
-        db.prepare(`UPDATE scheduled_events SET triggered = 1 WHERE id = ?`)
-          .run(event.id);
-      }
+        consequence,
+      });
     }
   }
 
-  return { previousTime, newTime, triggeredEvents };
+  return { previousTime, newTime, triggeredEvents, consequenceFailures };
 }
 
 function rescheduleEvent(current: GameDateTime, recurring: string, config: CalendarConfig): GameDateTime {
@@ -225,13 +289,15 @@ export function scheduleEvent(params: {
   triggerTime: GameDateTime;
   recurring?: string;
   metadata?: Record<string, unknown>;
+  consequence?: ExpiryConsequence;
 }): ScheduledEvent {
   const db = getDatabase();
   const id = uuidv4();
+  const consequence = params.consequence ?? null;
 
   db.prepare(`
-    INSERT INTO scheduled_events (id, game_id, name, description, trigger_time, recurring, metadata)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO scheduled_events (id, game_id, name, description, trigger_time, recurring, metadata, consequence)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     params.gameId,
@@ -239,7 +305,8 @@ export function scheduleEvent(params: {
     params.description || "",
     JSON.stringify(params.triggerTime),
     params.recurring || null,
-    JSON.stringify(params.metadata || {})
+    JSON.stringify(params.metadata || {}),
+    consequence ? JSON.stringify(consequence) : null
   );
 
   return {
@@ -251,6 +318,7 @@ export function scheduleEvent(params: {
     recurring: params.recurring || null,
     triggered: false,
     metadata: params.metadata || {},
+    consequence,
   };
 }
 
@@ -274,6 +342,7 @@ export function listScheduledEvents(gameId: string, includeTriggered = false): S
     recurring: row.recurring as string | null,
     triggered: (row.triggered as number) === 1,
     metadata: safeJsonParse<Record<string, unknown>>(row.metadata as string || "{}", {}),
+    consequence: parseConsequence(row.consequence),
   }));
 }
 
