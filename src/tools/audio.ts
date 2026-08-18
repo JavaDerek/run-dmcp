@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import { getDatabase, getDataDir } from "../db/connection.js";
+import { getDatabase, getDataDir, withTransaction } from "../db/connection.js";
 import {
   writeFileSync,
   readFileSync,
@@ -381,20 +381,26 @@ export function deleteAudio(audioId: string): boolean {
 }
 
 export function setPrimaryAudio(audioId: string): StoredAudio | null {
-  const db = getDatabase();
   const audio = getAudio(audioId);
   if (!audio) return null;
 
-  // Unset current primary
-  db.prepare(
-    `
-    UPDATE stored_audio SET is_primary = 0
-    WHERE entity_id = ? AND entity_type = ?
-  `
-  ).run(audio.entityId, audio.entityType);
+  // Unsetting the old primary and setting the new one must happen
+  // together -- a failure between the two could otherwise leave the entity
+  // with zero primaries, or briefly with two.
+  withTransaction(() => {
+    const db = getDatabase();
 
-  // Set new primary
-  db.prepare(`UPDATE stored_audio SET is_primary = 1 WHERE id = ?`).run(audioId);
+    // Unset current primary
+    db.prepare(
+      `
+      UPDATE stored_audio SET is_primary = 0
+      WHERE entity_id = ? AND entity_type = ?
+    `
+    ).run(audio.entityId, audio.entityType);
+
+    // Set new primary
+    db.prepare(`UPDATE stored_audio SET is_primary = 1 WHERE id = ?`).run(audioId);
+  });
 
   return { ...audio, isPrimary: true };
 }

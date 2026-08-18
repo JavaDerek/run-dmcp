@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import { getDatabase } from "../db/connection.js";
+import { getDatabase, withTransaction } from "../db/connection.js";
 import { safeJsonParse } from "../utils/json.js";
 import { gameEvents } from "../events/emitter.js";
 import { validateGameExists } from "./game.js";
@@ -176,31 +176,38 @@ export function connectLocations(params: {
   );
   fromLocation.properties.exits.push(exitFromTo);
 
-  updateLocation(params.fromLocationId, {
-    properties: fromLocation.properties,
-  });
-
   let reverseExitCreated: Exit | null = null;
+  const bidirectional = params.bidirectional !== false;
 
-  // If bidirectional, add reverse exit
-  if (params.bidirectional !== false) {
-    const exitToFrom: Exit = {
-      direction: params.toDirection,
-      destinationId: params.fromLocationId,
-      description: params.description,
-    };
-
-    toLocation.properties.exits = toLocation.properties.exits.filter(
-      (e) => e.direction !== params.toDirection
-    );
-    toLocation.properties.exits.push(exitToFrom);
-
-    updateLocation(params.toLocationId, {
-      properties: toLocation.properties,
+  // Both updateLocation() calls below (the forward exit, and -- when
+  // bidirectional -- the reverse exit) must either both land or neither
+  // does. Otherwise a mid-operation failure leaves a one-way exit that the
+  // caller never asked for.
+  withTransaction(() => {
+    updateLocation(params.fromLocationId, {
+      properties: fromLocation.properties,
     });
 
-    reverseExitCreated = exitToFrom;
-  }
+    // If bidirectional, add reverse exit
+    if (bidirectional) {
+      const exitToFrom: Exit = {
+        direction: params.toDirection,
+        destinationId: params.fromLocationId,
+        description: params.description,
+      };
+
+      toLocation.properties.exits = toLocation.properties.exits.filter(
+        (e) => e.direction !== params.toDirection
+      );
+      toLocation.properties.exits.push(exitToFrom);
+
+      updateLocation(params.toLocationId, {
+        properties: toLocation.properties,
+      });
+
+      reverseExitCreated = exitToFrom;
+    }
+  });
 
   return {
     success: true,
@@ -208,7 +215,7 @@ export function connectLocations(params: {
     toLocation: { id: toLocation.id, name: toLocation.name },
     exitCreated: exitFromTo,
     reverseExitCreated,
-    bidirectional: params.bidirectional !== false,
+    bidirectional,
   };
 }
 

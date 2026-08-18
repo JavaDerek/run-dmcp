@@ -620,6 +620,36 @@ export interface ResourceChange {
   timestamp: string;
 }
 
+// ============================================================================
+// Resource constraints -- optional, server-enforced invariants on resource
+// values. Opt-in: a resource with no declared constraint behaves exactly as
+// it always has (see clampValue() in src/tools/resource.ts). Covers only the
+// `resources` table -- factions.resources, characters.attributes, and
+// relationships.value are separate numeric write paths this layer does not
+// touch (see src/tools/constraint.ts header comment).
+// ============================================================================
+
+export type ConstraintKind = "bounded" | "monotonic" | "conserved";
+
+/** For 'monotonic': the only direction the value is allowed to move. */
+export type MonotonicDirection = "increasing" | "decreasing";
+
+export interface ResourceConstraint {
+  id: string;
+  gameId: string;
+  kind: ConstraintKind;
+  // The resource(s) this constraint governs. Exactly one for 'bounded' and
+  // 'monotonic'; two or more for 'conserved'.
+  resourceIds: string[];
+  // 'monotonic' only; null for 'bounded' and 'conserved'.
+  direction: MonotonicDirection | null;
+  // 'conserved' only; null for 'bounded' and 'monotonic'. The fixed sum the
+  // resourceIds set must maintain. Registered but NOT enforced in this
+  // branch -- see src/tools/constraint.ts.
+  total: number | null;
+  createdAt: string;
+}
+
 // Time/Calendar types
 export interface GameDateTime {
   year: number;

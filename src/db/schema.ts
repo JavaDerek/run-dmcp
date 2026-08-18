@@ -249,6 +249,35 @@ export function initializeSchema(): void {
     )
   `);
 
+  // Resource constraints table -- optional, server-enforced invariants on
+  // resource values (see src/tools/constraint.ts). Opt-in: a resource with
+  // no row here (directly or via resource_constraint_members) behaves
+  // exactly as before this feature existed.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS resource_constraints (
+      id TEXT PRIMARY KEY,
+      game_id TEXT NOT NULL,
+      kind TEXT NOT NULL CHECK (kind IN ('bounded', 'monotonic', 'conserved')),
+      direction TEXT CHECK (direction IN ('increasing', 'decreasing')),
+      total REAL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
+    )
+  `);
+
+  // Members of a resource constraint. 'bounded' and 'monotonic' constraints
+  // have exactly one member (the resource they govern); 'conserved'
+  // constraints have two or more (the set that must sum to a fixed total).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS resource_constraint_members (
+      constraint_id TEXT NOT NULL,
+      resource_id TEXT NOT NULL,
+      PRIMARY KEY (constraint_id, resource_id),
+      FOREIGN KEY (constraint_id) REFERENCES resource_constraints(id) ON DELETE CASCADE,
+      FOREIGN KEY (resource_id) REFERENCES resources(id) ON DELETE CASCADE
+    )
+  `);
+
   // Game time table (one per game)
   db.exec(`
     CREATE TABLE IF NOT EXISTS game_time (
@@ -680,6 +709,8 @@ export function initializeSchema(): void {
     CREATE INDEX IF NOT EXISTS idx_resources_owner ON resources(owner_id, owner_type);
     CREATE INDEX IF NOT EXISTS idx_resources_category ON resources(category);
     CREATE INDEX IF NOT EXISTS idx_resource_history_resource ON resource_history(resource_id);
+    CREATE INDEX IF NOT EXISTS idx_resource_constraints_game ON resource_constraints(game_id);
+    CREATE INDEX IF NOT EXISTS idx_resource_constraint_members_resource ON resource_constraint_members(resource_id);
     CREATE INDEX IF NOT EXISTS idx_scheduled_events_game ON scheduled_events(game_id);
     CREATE INDEX IF NOT EXISTS idx_scheduled_events_trigger ON scheduled_events(trigger_time);
     CREATE INDEX IF NOT EXISTS idx_timers_game ON timers(game_id);

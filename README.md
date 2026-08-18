@@ -421,7 +421,7 @@ Available presets: `dark-fantasy`, `cyberpunk`, `cosmic-horror`, `high-fantasy`,
 
 ---
 
-## Available Tools (170 total)
+## Available Tools (173 total)
 
 ### Game Management (8 tools)
 | Tool | Description |
@@ -523,7 +523,7 @@ Available presets: `dark-fantasy`, `cyberpunk`, `cosmic-horror`, `high-fantasy`,
 | `present_choices` | Show choices with multi-select & free-form |
 | `record_choice` | Log player's decision |
 
-### Resources (7 tools)
+### Resources (10 tools)
 | Tool | Description |
 |------|-------------|
 | `create_resource` | Create custom resource (currency, reputation, etc.) |
@@ -533,6 +533,19 @@ Available presets: `dark-fantasy`, `cyberpunk`, `cosmic-horror`, `high-fantasy`,
 | `list_resources` | List resources with filters |
 | `update_resource_value` | Set or adjust value (mode: delta/set) with history |
 | `get_resource_history` | Get change history |
+| `declare_resource_constraint` | **Opt-in.** Declare a server-enforced invariant (`bounded`, `monotonic`, or `conserved`) on a resource; see below |
+| `list_resource_constraints` | List declared constraints for a game or resource |
+| `remove_resource_constraint` | Remove a declared constraint (resource reverts to default unconstrained behavior) |
+
+#### Resource constraints (opt-in, off by default)
+
+By default a resource has no server-enforced rules: writes to `minValue`/`maxValue` bounds are *silently clamped*, and nothing stops a value from moving in any direction. `declare_resource_constraint` lets a game author opt a specific resource into a stricter, server-enforced contract instead of relying on the calling LLM to self-police:
+
+- **`bounded`** -- the resource must already have `minValue` and/or `maxValue` set. Once declared, `update_resource_value` calls that would go out of bounds are **rejected** (the write does not happen) instead of clamped.
+- **`monotonic`** -- the value may only move in one declared `direction`: `increasing` (never decreases) or `decreasing` (never increases). Holding steady is always allowed. Out-of-direction writes are rejected.
+- **`conserved`** -- registers a set of 2+ resources that must always sum to a fixed `total`. **This is currently registry-only: declaring it records the invariant, but nothing enforces it yet.** Enforcing a multi-resource invariant correctly requires an atomic multi-row write, which DMCP does not yet have on this branch; see `src/tools/constraint.ts` for the tracked seam.
+
+**Scope:** this layer validates writes made through the `resources` table only (i.e. through `update_resource_value`). Three other numeric fields bypass it entirely and are *not* covered: `factions.resources` (a JSON blob with no bounds or history), `characters.attributes` (arbitrary numeric JSON), and `relationships.value` (its own separate system). If a quantity needs a server-enforced invariant, model it as a `resources` row, not one of these.
 
 ### Time & Calendar (7 tools)
 | Tool | Description |
