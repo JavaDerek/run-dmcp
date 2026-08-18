@@ -295,8 +295,10 @@ provenance. Both are worth having; they are not the same guarantee.
 
 ### 5.3 The constraint family, now including time
 
-The engine already has declarative, opt-in constraints: `bounded`, `monotonic`, `resolve_only`, and
-conserved sets with atomic transfer. **`irreversible` joins them as a fourth.**
+The engine has declarative, opt-in constraints: `bounded`, `monotonic`, and conserved sets with
+atomic transfer. (`resolve_only` belongs to the same family and was written in brink but never
+extracted — brink #31. It lands here alongside the resolve protocol in Phase 4, since a value that
+may move only through adjudication needs the adjudicator to exist first.) **`irreversible` joins them as a fourth.**
 
 That is the neatest result of the merge. Irreversibility is not a new subsystem; it is the temporal
 member of a family that already exists, declared the same way, enforced at the same choke point. An

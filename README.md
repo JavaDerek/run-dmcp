@@ -17,8 +17,10 @@ pieces of generic mechanism that were built for it and offered back to it:
 
 - **Atomicity** — `withTransaction()` wired into the multi-write operations that were running
   non-atomically.
-- **Declarative constraints** — resources can be declared `bounded`, `monotonic` or `resolve_only`,
-  and the store enforces it rather than trusting every caller.
+- **Declarative constraints** — resources can be declared `bounded` or `monotonic`, and the store
+  enforces it rather than trusting every caller. (`resolve_only` — every direct write rejected, so a
+  value can move only through an adjudicating call — exists in a downstream consumer and has not been
+  extracted here yet. It arrives with the resolve protocol; see [docs/DESIGN.md](docs/DESIGN.md) §5.2a.)
 - **Conserved resource sets** — a set of resources can be declared conserved, with an atomic transfer
   that never silently clamps.
 - **On-expiry consequences** — scheduled events and timers can carry a consequence that actually
