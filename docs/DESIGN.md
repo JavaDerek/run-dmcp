@@ -133,6 +133,10 @@ world that only ever stores *now*.
   cannot own its issue tracker.
 - **`JavaDerek/dmcp` stays as it is**, carrying the four offers. They cost nothing and remain
   mergeable. run-dmcp neither depends on nor waits for them.
+  *(Superseded 2026-08-23: the four PRs were closed unmerged on 2026-08-18 and the fork was then
+  deleted. Nothing was lost — each offer head is an ancestor of `main` here (`fa35cfb`, `8950364`,
+  `043b132`, `4fb2002`), and GitHub retains the diffs at `refs/pull/6..9/head` in
+  `shawnrushefsky/dmcp`.)*
 
 ```
   Balance of Power (1985)

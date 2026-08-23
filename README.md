@@ -37,9 +37,10 @@ commit was 2026-01-06. This repository carries its full history rather than a sq
 first commit here is his, from 2025-12-30.
 
 It is **not** a GitHub fork, deliberately — a repository inside another's fork network is discoverable
-only as "a fork of" and cannot own its issue tracker. The four offers listed above stand as open pull
-requests against the original and remain valid there; they are merged here because this project
-cannot wait on a repository that has not moved in seven months.
+only as "a fork of" and cannot own its issue tracker. The four offers listed above were opened as pull
+requests against the original ([#6](https://github.com/shawnrushefsky/dmcp/pull/6)–[#9](https://github.com/shawnrushefsky/dmcp/pull/9))
+and withdrawn on 2026-08-18 after seven months without a maintainer response; they are merged here
+instead. Their diffs remain readable upstream at `refs/pull/6..9/head`.
 
 MIT, and his copyright notice travels with the code. See [LICENSE](LICENSE).
 
