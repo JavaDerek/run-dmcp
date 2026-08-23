@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { imageGenSchema, voiceSchema } from "../schemas/index.js";
 
 /**
  * Shared output schemas for MCP tools.
@@ -102,6 +103,8 @@ export const characterOutputSchema = {
   status: characterStatusSchema,
   locationId: z.string().nullable(),
   notes: z.string(),
+  voice: voiceSchema.nullable(),
+  imageGen: imageGenSchema.nullable(),
   createdAt: z.string(),
 };
 
