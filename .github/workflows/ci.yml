@@ -9,7 +9,7 @@ on:
 jobs:
   lint-and-typecheck:
     name: Lint & Type Check
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
 
@@ -36,7 +36,7 @@ jobs:
 
   test:
     name: Tests
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
 
@@ -60,7 +60,7 @@ jobs:
 
   build:
     name: Build
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [lint-and-typecheck, test]
     steps:
       - uses: actions/checkout@v4
