@@ -197,6 +197,37 @@ export type {
   UnnamedFact,
 } from "./timeline/render.js";
 
+// The turn reader (design §12 seam 3, GitHub issue #15) -- one model call per
+// unit of progress, answering the questions a server cannot answer with code.
+//
+// The engine owns the call, the citation rule, coercion to keys that actually
+// exist, the safe-direction default and the fallback ladder; the caller owns
+// the questions and the key vocabulary they are answered in. Answers come back
+// as KEYS, never prose.
+//
+// NOTE WHAT IS NOT HERE, BECAUSE IT IS THE POINT: no transport. A
+// `ReaderTransport` is a plain async function the CALLER writes and injects,
+// so this package contains no vendor SDK, no API key, no endpoint, and no
+// network code of any kind -- enforced mechanically by
+// `src/reader/__tests__/noVendorTransports.test.ts`, which scans this
+// directory for vendor and credential tokens the way the vocabulary test
+// scans for a consumer's language. The engine is provably ignorant of what is
+// on the other end of a rung, which is also why the ladder's ORDER is the
+// caller's: it never learns which rung is local and which is hosted.
+export { createTurnReader } from "./reader/turnReader.js";
+export type {
+  TurnReader,
+  ReaderQuestion,
+  ReaderSource,
+  ReaderTransport,
+  ReadRequest,
+  TransportAnswer,
+  ReaderResult,
+  AnsweredQuestion,
+  RejectedOffer,
+  RejectionReason,
+} from "./reader/turnReader.js";
+
 // Timeline export (design §6) -- the boundary that keeps both halves honest:
 // conversational authoring upstream of a frozen artifact, deterministic
 // consumers downstream of it. These are exported as library functions first
