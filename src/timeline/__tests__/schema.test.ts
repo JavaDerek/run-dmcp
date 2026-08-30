@@ -198,13 +198,24 @@ describe("timeline schema", () => {
       // this module adds, exactly as if the code that adds it had never
       // run against this file. Children before parents: facts references
       // entities, entities references entity_kinds.
+      //
+      // Issue #2 (src/timeline/projection.ts) added generated projection
+      // triggers -- timeline_<table>_ai/_au/_ad, one set per projected
+      // table -- on top of the six guard triggers this block originally
+      // named individually. A real pre-timeline database would never have
+      // had a chance to install them, so simulating one here must drop them
+      // too; left behind, they'd still reference the tables dropped below
+      // and every domain write in this test would fail with "no such
+      // table". Swept dynamically (LIKE 'timeline_%') rather than
+      // hand-listed so this fixture doesn't need editing again the next
+      // time a projected table is added.
+      const timelineTriggers = db
+        .prepare(`SELECT name FROM sqlite_master WHERE type = 'trigger' AND name LIKE 'timeline_%'`)
+        .all() as { name: string }[];
+      for (const trigger of timelineTriggers) {
+        db.exec(`DROP TRIGGER IF EXISTS ${trigger.name}`);
+      }
       db.exec(`
-        DROP TRIGGER IF EXISTS timeline_entities_immutable;
-        DROP TRIGGER IF EXISTS timeline_facts_immutable;
-        DROP TRIGGER IF EXISTS timeline_events_immutable;
-        DROP TRIGGER IF EXISTS timeline_entities_no_delete;
-        DROP TRIGGER IF EXISTS timeline_facts_no_delete;
-        DROP TRIGGER IF EXISTS timeline_events_no_delete;
         DROP TABLE IF EXISTS facts;
         DROP TABLE IF EXISTS events;
         DROP TABLE IF EXISTS entities;

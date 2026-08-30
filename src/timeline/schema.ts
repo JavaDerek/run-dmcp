@@ -1,5 +1,6 @@
 import { getDatabase } from "../db/connection.js";
 import { ENTITY_KINDS } from "./kinds.js";
+import { installProjectionTriggers, reconcileTimeline } from "./projection.js";
 
 /**
  * The timeline substrate (design §5.1): `entities`, `facts`, `events`, and
@@ -200,4 +201,11 @@ export function initializeTimelineSchema(): void {
       SELECT RAISE(ABORT, 'timeline: events are append-only; rows are never deleted');
     END;
   `);
+
+  // Issue #2: the projection layer. Triggers first, so every write from
+  // here on appends by construction; reconciliation second, so it backfills
+  // against triggers that are already live rather than a stale set. See
+  // projection.ts for what each does and why reconciliation must run last.
+  installProjectionTriggers();
+  reconcileTimeline();
 }
