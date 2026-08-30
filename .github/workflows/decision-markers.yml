@@ -1,0 +1,124 @@
+# A decision recorded in the code reaches the issue it answers to.
+#
+# WHY THIS EXISTS. Issue #21 predicted its own first signal would fire during
+# #7's implementation, and instructed that the decision "gets made
+# deliberately and recorded here instead of being made implicitly in a
+# function body". Half of that happened. The decision was made deliberately,
+# argued well, and written down -- in a schema comment and a test, inside a
+# function body, exactly as warned. The issue never heard about it, and it
+# took a fresh read of the tree months later to notice.
+#
+# That is not a discipline problem. Nobody was careless: the decision WAS
+# recorded, in the place a reader of that code most needed it. The gap is
+# that source and issue tracker are two stores with no path between them, and
+# the human is the only path. So this workflow is the path.
+#
+# WHAT IT DOES. On a push to main, it finds `DECISION(#N):` markers ADDED by
+# that push and posts one comment per referenced issue, naming the statement,
+# the file and line, and the commit. `src/__tests__/deferredDecisions.test.ts`
+# is the other half: it keeps existing markers from being silently deleted and
+# every marker well-formed, so what this workflow propagates is real.
+#
+# IT NEVER DECIDES ANYTHING, and that is deliberate -- the same rule the
+# engine itself follows (design §5.5, root CLAUDE.md hard rule 2). It does not
+# close issues, apply labels, or judge whether the decision was right. It
+# reports that a decision was recorded and where. What to do about it stays
+# with the person reading the issue.
+name: Decision markers
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  propagate:
+    name: Propagate decision markers to their issues
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: the diff below is between two arbitrary commits, and
+          # a shallow clone would make `git diff` fail on a push whose base is
+          # older than the fetch depth.
+          fetch-depth: 0
+
+      - name: Collect markers added by this push
+        id: collect
+        shell: bash
+        run: |
+          set -euo pipefail
+          BEFORE='${{ github.event.before }}'
+          AFTER='${{ github.event.after }}'
+
+          # A new branch, a force-push whose base is gone, or any base this
+          # clone does not have: report nothing rather than guessing at a
+          # range. Silence is the correct output here -- inventing a base
+          # would re-announce every marker in the tree's history.
+          if [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            echo "no usable base commit ($BEFORE); nothing to propagate"
+            echo "markers=[]" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # --unified=0 so only changed lines appear, and the `+++ b/<path>`
+          # headers give the file each addition belongs to. The collector is
+          # a real file rather than inline python: the first version WAS
+          # inline, and its opening line at column 0 silently ended this
+          # block scalar and made the whole workflow unparseable.
+          git diff --unified=0 "$BEFORE" "$AFTER" -- '*.ts' '*.md' '*.yml' \
+            | python3 .github/scripts/collect_decision_markers.py > markers.json
+
+          echo "markers=$(cat markers.json)" >> "$GITHUB_OUTPUT"
+          echo "Found $(python3 -c 'import json;print(len(json.load(open("markers.json"))))') marker(s)."
+
+      - name: Comment on each referenced issue
+        if: steps.collect.outputs.markers != '[]'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const markers = JSON.parse(process.env.MARKERS);
+            const sha = context.sha;
+            const short = sha.slice(0, 7);
+
+            const byIssue = new Map();
+            for (const m of markers) {
+              if (!byIssue.has(m.issue)) byIssue.set(m.issue, []);
+              byIssue.get(m.issue).push(m);
+            }
+
+            for (const [issue, entries] of byIssue) {
+              const lines = entries.map(
+                (e) => `- **${e.statement}**\n  \`${e.file}\` — [\`${short}\`](https://github.com/${context.repo.owner}/${context.repo.repo}/commit/${sha})`
+              );
+              const body = [
+                `### A decision citing this issue landed in the tree`,
+                ``,
+                ...lines,
+                ``,
+                `Posted by \`.github/workflows/decision-markers.yml\`, which exists because this`,
+                `repository has already lost one decision to the gap between a function body and an`,
+                `issue. It reports, and decides nothing: whether this changes the issue's status is`,
+                `for a reader to say.`,
+              ].join("\n");
+
+              // A failure to comment on one issue (deleted, locked, or a
+              // transposed number in a marker) must not swallow the rest.
+              try {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue,
+                  body,
+                });
+                core.info(`Commented on #${issue} (${entries.length} marker(s)).`);
+              } catch (error) {
+                core.warning(`Could not comment on #${issue}: ${error.message}`);
+              }
+            }
+        env:
+          MARKERS: ${{ steps.collect.outputs.markers }}

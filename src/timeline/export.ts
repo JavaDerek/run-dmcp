@@ -31,6 +31,8 @@ import type { EntityKind } from "./kinds.js";
  * artifact contains no `file_path` anywhere and that those rows
  * contributed nothing (not even an extra entity).
  *
+ * DECISION(#18): the frozen artifact carries no per-principal projection.
+ *
  * No visibility filtering either, and the same "requirement, not omission"
  * applies (issue #18): the artifact is the omniscient timeline. Whether a
  * per-principal export should exist is not a small question deferred for

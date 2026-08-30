@@ -89,6 +89,8 @@ const ALIVE_AT_T = "e.created_at_t <= ? AND (e.destroyed_at_t IS NULL OR e.destr
  * defeats better-sqlite3's prepared-statement cache. Fixed SQL, two binds
  * of `t`, regardless of how many entities exist.
  *
+ * DECISION(#18): replay() applies no visibility filtering, by decision rather than omission.
+ *
  * OMNISCIENT, DELIBERATELY (issue #18). This returns every fact valid at
  * `t`, for every entity alive at `t`, with no visibility filtering of any
  * kind. That is a decision, not an omission: per-principal visibility is
