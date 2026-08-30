@@ -34,7 +34,7 @@ import { registerMcpResources } from "./register/mcp-resources.js";
 import { registerMcpPrompts } from "./register/mcp-prompts.js";
 
 export const SERVER_NAME = "dmcp";
-export const SERVER_VERSION = "0.1.0";
+export const SERVER_VERSION = "0.1.1";
 
 /**
  * Build an MCP server with every tool, resource and prompt this engine serves.

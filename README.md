@@ -12,7 +12,7 @@ holds full adjudication discretion over a world that only ever stores *now*.
 
 ## Status
 
-**0.1.0 — the foundation, not the thesis.** What ships today is the predecessor's engine plus four
+**0.1.1 — the foundation, not the thesis.** What ships today is the predecessor's engine plus four
 pieces of generic mechanism that were built for it and offered back to it:
 
 - **Atomicity** — `withTransaction()` wired into the multi-write operations that were running
@@ -25,6 +25,10 @@ pieces of generic mechanism that were built for it and offered back to it:
   that never silently clamps.
 - **On-expiry consequences** — scheduled events and timers can carry a consequence that actually
   lands when they expire, rather than expiring into nothing.
+
+0.1.1 adds the packaging half of that: importing the library starts nothing, the database resolves to
+the consuming application rather than into `node_modules`, and a consumer can bring up its own tables
+through the migration hook below.
 
 The timeline that gives this project its reason to exist — interval-versioned facts, `replay(t)`,
 irreversibility, `changes_within` — is designed and accepted but **not yet built**. See
