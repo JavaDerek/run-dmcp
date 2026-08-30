@@ -308,7 +308,7 @@ describe("timeline schema", () => {
       expect(db.prepare("SELECT id FROM entities WHERE id = ?").get(id)).toBeDefined();
     });
 
-    it("timeline_facts_immutable rejects rewriting value, key, entity_id, id, valid_from_t and irreversible", () => {
+    it("timeline_facts_immutable rejects rewriting value, key, entity_id, id and valid_from_t", () => {
       const entityId = insertEntity(db, { gameId });
       const factId = insertFact(db, entityId, { key: "value", value: "50" });
 
@@ -327,9 +327,51 @@ describe("timeline schema", () => {
       expect(() =>
         db.prepare("UPDATE facts SET valid_from_t = ? WHERE id = ?").run(5, factId)
       ).toThrow();
+    });
+
+    /**
+     * `irreversible` is the one column on `facts` that may ever change, and
+     * it may change exactly one way: 0 -> 1, once (issue #7, design §5.3).
+     * That is why it is no longer in the flat list above.
+     *
+     * This test is what documents the latch, so it asserts BOTH directions
+     * that stay illegal rather than only the flip that became legal --
+     * a test that checked only 0 -> 1 succeeding would pass just as happily
+     * against a trigger that had stopped guarding the column at all.
+     */
+    it("timeline_facts_immutable makes irreversible a one-way latch: 0 -> 1 only", () => {
+      const entityId = insertEntity(db, { gameId });
+      const factId = insertFact(db, entityId, { key: "value", value: "50" });
+
+      // Anything other than 1 is refused, even from 0 -- the latch has one
+      // destination, not "any truthy value".
+      expect(() =>
+        db.prepare("UPDATE facts SET irreversible = 5 WHERE id = ?").run(factId)
+      ).toThrow();
+
       expect(() =>
         db.prepare("UPDATE facts SET irreversible = 1 WHERE id = ?").run(factId)
+      ).not.toThrow();
+      expect(
+        (db.prepare("SELECT irreversible FROM facts WHERE id = ?").get(factId) as {
+          irreversible: number;
+        }).irreversible
+      ).toBe(1);
+
+      // The half that makes it a latch rather than a toggle: irreversibility
+      // cannot be withdrawn. If this ever stops throwing, a fact declared
+      // irreversible can be quietly un-declared and then contradicted, which
+      // is the whole failure §5.3 exists to prevent.
+      expect(() =>
+        db.prepare("UPDATE facts SET irreversible = 0 WHERE id = ?").run(factId)
       ).toThrow();
+
+      // Re-asserting the value it already holds is not a change, so it never
+      // reaches the guard -- this is what makes declareIrreversible()
+      // idempotent with a single UPDATE and no "already set" check.
+      expect(() =>
+        db.prepare("UPDATE facts SET irreversible = 1 WHERE id = ?").run(factId)
+      ).not.toThrow();
     });
 
     it("permits valid_to_t NULL -> value exactly once, and rejects a second change", () => {

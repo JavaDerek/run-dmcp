@@ -51,6 +51,20 @@ export { compareT, assertT } from "./timeline/t.js";
 export type { T, TimeAxis } from "./timeline/t.js";
 export { timelineDivergences } from "./timeline/checkpoint.js";
 export type { Divergence } from "./timeline/checkpoint.js";
+
+// `irreversible` (design §5.3) -- the temporal member of the constraint family.
+// Exported because the enforcement is structural (triggers on `facts`), which
+// means an application never calls a checker: it declares, and later
+// contradictions are refused at the write that attempts them. What it does need
+// from here is the declaration itself, and the ability to ask which facts carry
+// it -- with the one hop of provenance (§5.2c) that makes a refusal reviewable
+// rather than merely obeyed.
+export {
+  declareIrreversible,
+  irreversibleFactFor,
+  listIrreversibleFacts,
+} from "./timeline/irreversible.js";
+export type { IrreversibleFact } from "./timeline/irreversible.js";
 export { ENTITY_KINDS } from "./timeline/kinds.js";
 export type { EntityKind } from "./timeline/kinds.js";
 

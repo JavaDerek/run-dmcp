@@ -150,6 +150,15 @@ export function initializeTimelineSchema(): void {
     END;
   `);
 
+  // `irreversible` is itself a one-way latch: 0 -> 1 exactly once, never
+  // 1 -> 0, never to any other value. The clause below aborts whenever the
+  // column changed at all (`NEW.irreversible IS NOT OLD.irreversible`)
+  // UNLESS that change is precisely OLD=0, NEW=1 -- so 0 -> 5 still aborts
+  // (NEW is not 1), 1 -> 0 still aborts (OLD is not 0), and 1 -> 1 never
+  // reaches this branch in the first place because the column didn't
+  // change. declareIrreversible() (irreversible.ts) relies on that last
+  // case to make re-declaring idempotent with a single UPDATE and no
+  // separate "already set" check.
   db.exec(`
     DROP TRIGGER IF EXISTS timeline_facts_immutable;
     CREATE TRIGGER timeline_facts_immutable
@@ -159,10 +168,11 @@ export function initializeTimelineSchema(): void {
       OR NEW.key IS NOT OLD.key
       OR NEW.value IS NOT OLD.value
       OR NEW.valid_from_t IS NOT OLD.valid_from_t
-      OR NEW.irreversible IS NOT OLD.irreversible
+      OR (NEW.irreversible IS NOT OLD.irreversible
+          AND (OLD.irreversible IS NOT 0 OR NEW.irreversible IS NOT 1))
       OR (OLD.valid_to_t IS NOT NULL AND NEW.valid_to_t IS NOT OLD.valid_to_t)
     BEGIN
-      SELECT RAISE(ABORT, 'timeline: facts are append-only; valid_from_t cannot be rewritten, and valid_to_t may only be closed once');
+      SELECT RAISE(ABORT, 'timeline: facts are append-only; valid_from_t cannot be rewritten, valid_to_t may only be closed once, and irreversible may only move 0 -> 1');
     END;
   `);
 
@@ -199,6 +209,62 @@ export function initializeTimelineSchema(): void {
     BEFORE DELETE ON events
     BEGIN
       SELECT RAISE(ABORT, 'timeline: events are append-only; rows are never deleted');
+    END;
+  `);
+
+  // Issue #7 / design §5.3: `irreversible` is the temporal member of the
+  // constraint family (bounded, monotonic, conserved sets). Rule: once a
+  // fact F = (entity_id, key, value) has irreversible = 1 at valid_from_t
+  // tF, no INSERT for the same entity_id/key with a DIFFERENT value and
+  // valid_from_t >= tF is permitted -- "for all t' > t", stated at the row
+  // level as `>=` because valid_from_t IS the instant the new value would
+  // take effect. `f.value IS NOT NEW.value` (not `<>`) for the same reason
+  // every other comparison in this file uses IS NOT: a NULL operand would
+  // otherwise make the WHEN clause silently not fire, and `value` can never
+  // legitimately be NULL here regardless (see the `facts` table comment)
+  // but this keeps the idiom uniform rather than relying on that.
+  //
+  // Deliberately an INSERT guard, not an UPDATE guard: facts are append-only
+  // (see timeline_facts_immutable above), so every new value for a key
+  // arrives as a fresh INSERT, never an UPDATE to an existing row's value.
+  //
+  // Closing an interval is NOT a contradiction and is NOT blocked here --
+  // `UPDATE facts SET valid_to_t = ...` never reaches this trigger at all,
+  // it is a different table event. This matters concretely: the projection
+  // layer's `_ad` delete trigger (projection.ts) closes every open fact for
+  // a destroyed entity via that same UPDATE path, and if closing were
+  // treated as a contradiction, any entity carrying an irreversible fact
+  // would become impossible to delete -- a policy this engine has no
+  // business imposing (see hard rule 2). Reopening the key afterward with a
+  // DIFFERENT value is still refused, because the WHEN clause below matches
+  // every irreversible row for the key, open or closed, not only the
+  // currently-open one.
+  //
+  // Because SQLite's RAISE(ABORT) backs out every change made by the firing
+  // statement -- including everything every trigger it invoked did, not
+  // just the INSERT this trigger body itself guards -- a refused reopen
+  // attempted from inside the projection layer's own AFTER UPDATE trigger
+  // (buildUpdateTrigger in projection.ts, which closes the old fact and
+  // then attempts to insert the new one in the same firing statement) rolls
+  // the close back too. The fact stays open, the live column stays
+  // unwritten, and the game's clock (also advanced earlier in that same
+  // trigger body) does not advance either. irreversible.test.ts's
+  // "real tool path" tests exercise this rollback directly, through
+  // updateResourceValue -> `UPDATE resources SET value = ...`.
+  db.exec(`
+    DROP TRIGGER IF EXISTS timeline_facts_irreversible;
+    CREATE TRIGGER timeline_facts_irreversible
+    BEFORE INSERT ON facts
+    WHEN EXISTS (
+      SELECT 1 FROM facts f
+       WHERE f.entity_id = NEW.entity_id
+         AND f.key = NEW.key
+         AND f.irreversible = 1
+         AND f.value IS NOT NEW.value
+         AND NEW.valid_from_t >= f.valid_from_t
+    )
+    BEGIN
+      SELECT RAISE(ABORT, 'timeline: an irreversible fact holds for key ''' || NEW.key || ''' on this entity as of its valid_from_t; a contradicting value is refused from that point onward');
     END;
   `);
 

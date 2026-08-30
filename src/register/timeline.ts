@@ -4,6 +4,7 @@ import { ANNOTATIONS } from "../utils/tool-annotations.js";
 import { createLogger } from "../utils/logger.js";
 import { replay } from "../timeline/replay.js";
 import { declareTimeAxis, setStoryTime, currentStoryTime } from "../timeline/clock.js";
+import { declareIrreversible, listIrreversibleFacts } from "../timeline/irreversible.js";
 
 const log = createLogger("timeline");
 
@@ -161,6 +162,70 @@ export function registerTimelineTools(server: McpServer) {
         return { content: [{ type: "text", text: JSON.stringify(storyTime, null, 2) }] };
       } catch (error) {
         log.error("set_story_time failed", { gameId, t, error: (error as Error).message });
+        return {
+          content: [{ type: "text", text: JSON.stringify({ error: (error as Error).message }) }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.registerTool(
+    "declare_fact_irreversible",
+    {
+      description:
+        "Mark the fact currently open for one entity and key as irreversible: from its valid_from_t onward, the engine refuses any later assertion of a different value under that key. The temporal member of the same constraint family as bounded, monotonic and conserved sets. Closing the fact, and deleting the entity, both remain legal -- ending a record is not asserting its opposite -- but reopening the key at a different value is still refused. Irreversibility cannot be withdrawn once declared. Because the flag is per-fact, a property you intend to declare irreversible must live under its own key: declaring it locks the whole value stored under that key.",
+      inputSchema: {
+        entityId: z
+          .string()
+          .max(100)
+          .describe("The entity ID -- the same id as the row it was projected from (e.g. a resource ID)"),
+        key: z
+          .string()
+          .max(200)
+          .describe("The fact key, i.e. the column name the fact was projected from (e.g. 'value')"),
+      },
+      annotations: ANNOTATIONS.IDEMPOTENT_UPDATE,
+    },
+    async ({ entityId, key }) => {
+      try {
+        const fact = declareIrreversible({ entityId, key });
+        return { content: [{ type: "text", text: JSON.stringify(fact, null, 2) }] };
+      } catch (error) {
+        log.error("declare_fact_irreversible failed", {
+          entityId,
+          key,
+          error: (error as Error).message,
+        });
+        return {
+          content: [{ type: "text", text: JSON.stringify({ error: (error as Error).message }) }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.registerTool(
+    "list_irreversible_facts",
+    {
+      description:
+        "List every fact declared irreversible in a game, optionally narrowed to one entity. Each row carries the fact, its valid_from_t, and the event that opened it -- one hop of provenance, so a reviewer meeting a refusal can tell whether the fact is wrong or the claim is. Returns rows, never a verdict.",
+      inputSchema: {
+        gameId: z.string().max(100).describe("The game ID"),
+        entityId: z.string().max(100).optional().describe("Narrow the listing to one entity"),
+      },
+      annotations: ANNOTATIONS.READ_ONLY,
+    },
+    async ({ gameId, entityId }) => {
+      try {
+        const facts = listIrreversibleFacts({ gameId, entityId });
+        return { content: [{ type: "text", text: JSON.stringify(facts, null, 2) }] };
+      } catch (error) {
+        log.error("list_irreversible_facts failed", {
+          gameId,
+          entityId,
+          error: (error as Error).message,
+        });
         return {
           content: [{ type: "text", text: JSON.stringify({ error: (error as Error).message }) }],
           isError: true,

@@ -29,6 +29,21 @@ import type { ConstraintKind, MonotonicDirection, ResourceConstraint } from "../
  * exactly two members of the same set atomically. See the comment on
  * transferResourceValue() for why an explicit transfer, rather than a
  * balanced multi-resource write, was chosen.
+ *
+ * `irreversible` (design §5.3) is this family's fourth, temporal member --
+ * `bounded`/`monotonic` constrain a value's range and direction, 'conserved'
+ * constrains a set's total, and `irreversible` constrains what may be
+ * asserted about a value after a point in time. It is declared per-FACT
+ * (src/timeline/irreversible.ts's declareIrreversible()), not as a row in
+ * `resource_constraints` here, and enforced by triggers on the timeline's
+ * `facts` table (src/timeline/schema.ts) rather than by
+ * checkResourceConstraints() below. The two families live on different
+ * substrates -- this one on `resources`/`resource_constraints`, that one on
+ * the timeline's interval-versioned `facts` -- until design §5.4's option
+ * (C) merges them at Phase 3 (`resources` becomes a constrained kind of
+ * fact). Forcing an `irreversible` row into `resource_constraints` now would
+ * build that merge early, against the wrong table, before the substrate
+ * decision it depends on has actually landed.
  */
 
 /** Absolute tolerance for floating-point sum comparisons on 'conserved'

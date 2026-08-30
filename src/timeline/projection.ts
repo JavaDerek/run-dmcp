@@ -309,6 +309,15 @@ function reconcileTable(db: Database.Database, row: ProjectedTable): void {
   //    timeline-architecture.md on why comparing a fact value in JS
   //    manufactures divergences that are not real.
   for (const col of liveColumns(db, table)) {
+    // `AND facts.irreversible = 0`: an irreversible fact is deliberately
+    // left alone here, even when it has diverged from the live column --
+    // see the doc comment above for why. Without this clause, a divergence
+    // against an irreversible fact would close it and then fail to reopen
+    // it (timeline_facts_irreversible in schema.ts refuses the contradicting
+    // INSERT below), throwing this whole reconciliation -- and therefore
+    // initializeSchema() itself -- out at startup. With it, the close is
+    // simply skipped, the divergence persists for timelineDivergences()
+    // (checkpoint.ts) to report, and the server still boots.
     db.prepare(
       `
       UPDATE facts SET valid_to_t = (
@@ -320,6 +329,7 @@ function reconcileTable(db: Database.Database, row: ProjectedTable): void {
           AND valid_to_t IS NULL
           AND entity_id IN (SELECT id FROM ${table})
           AND CAST((SELECT ${col} FROM ${table} WHERE id = facts.entity_id) AS TEXT) IS NOT value
+          AND facts.irreversible = 0
     `
     ).run(col);
 
