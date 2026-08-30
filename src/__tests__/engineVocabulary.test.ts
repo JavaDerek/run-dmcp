@@ -42,9 +42,39 @@ const REPO_ROOT = resolve(__dirname, "..", "..");
  */
 const EXCLUDED_PATHS = new Set(["docs/DESIGN.md"]);
 
+/**
+ * Tracked files alone are the wrong scope, and the gap is not academic: a
+ * violation is authored into a file *before* anyone runs `git add`, which
+ * is exactly the window `git ls-files` alone cannot see. A tracked-only
+ * scan is therefore strongest against code nobody is touching right now and
+ * weakest against code someone is actively writing -- backwards from what a
+ * guard against authoring a violation needs to be. "CI will catch it after
+ * the commit" is not a fix for that: by the time it fires, the offending
+ * line is already in the history this project deliberately keeps legible,
+ * which is the failure root CLAUDE.md names outright -- a check that cannot
+ * fail during the activity it governs is worse than no check.
+ *
+ * So this unions `git ls-files` (tracked) with
+ * `git ls-files --others --exclude-standard` (untracked-but-not-ignored) --
+ * new files nobody has staged yet, scanned the moment they exist on disk.
+ * `--exclude-standard` is load-bearing, not decoration: it applies
+ * `.gitignore` and `.git/info/exclude`, so `node_modules`, build output
+ * (`dist/`) and a developer's own ignored scratch files stay out, while
+ * anything that would actually reach a commit is in scope. The two lists
+ * cannot overlap today (a path is tracked or it isn't), but the dedup below
+ * does not lean on that -- a `Set` costs nothing and removes the need to
+ * reason about it ever staying true. Every other filter (exclusion list,
+ * self-exclusion, lockfile, binary extensions) runs once, over the union,
+ * so both halves get exactly the same treatment.
+ */
 function scannedFiles(): string[] {
-  return execFileSync("git", ["ls-files"], { cwd: REPO_ROOT, encoding: "utf8" })
-    .split("\n")
+  const tracked = execFileSync("git", ["ls-files"], { cwd: REPO_ROOT, encoding: "utf8" }).split("\n");
+  const untracked = execFileSync("git", ["ls-files", "--others", "--exclude-standard"], {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+  }).split("\n");
+
+  return [...new Set([...tracked, ...untracked])]
     .filter(Boolean)
     .filter((f) => !EXCLUDED_PATHS.has(f))
     .filter((f) => basename(f) !== "engineVocabulary.test.ts")
@@ -121,12 +151,27 @@ const FORBIDDEN: Array<{ pattern: RegExp; what: string; why: string }> = [
     what: "the domain of one consumer",
     why: "if the engine describes itself by one client's genre, the second client is already a guest.",
   },
+  {
+    pattern: /\bbrink\b|\bvideo client\b/i,
+    what: "a consumer's proper name",
+    why:
+      "every entry above catches a consumer's DOMAIN VOCABULARY -- DEFCON, prestige, lyrics, " +
+      "chunk_id, and so on. A domain word is a symptom of one client shaping the engine's " +
+      "self-description; a consumer's own NAME in the engine is the disease those symptoms are " +
+      "warning about, and the most direct form of it -- there is no more unambiguous way to " +
+      "write 'this engine belongs to one client' than to write that client's name. Describe " +
+      "consumers structurally instead, the way root CLAUDE.md's own opening does: 'one " +
+      "consumer's world advances a turn at a time and has a player making uncertain decisions; " +
+      "the other has no player at all, its units have duration and everything is known in " +
+      "advance.' That argument survives the substitution intact, and says more, because it says " +
+      "WHY the two differ rather than just which is which.",
+  },
 ];
 
 describe("no client's vocabulary reaches the engine", () => {
   const files = scannedFiles();
 
-  it("scans a meaningful number of tracked files (guard against a vacuous pass)", () => {
+  it("scans a meaningful number of files -- tracked and untracked-but-not-ignored alike (guard against a vacuous pass)", () => {
     expect(files.length).toBeGreaterThan(50);
   });
 
