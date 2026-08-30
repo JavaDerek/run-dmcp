@@ -266,7 +266,9 @@ export function initializeSchema(options?: { migrations?: readonly SchemaMigrati
     )
   `);
 
-  // Resource history table (tracks all changes)
+  // Resource history table (tracks all changes) -- FROZEN, see the trigger
+  // immediately below. Kept for existing rows only; nothing writes here any
+  // more.
   db.exec(`
     CREATE TABLE IF NOT EXISTS resource_history (
       id TEXT PRIMARY KEY,
@@ -278,6 +280,44 @@ export function initializeSchema(options?: { migrations?: readonly SchemaMigrati
       timestamp TEXT NOT NULL,
       FOREIGN KEY (resource_id) REFERENCES resources(id) ON DELETE CASCADE
     )
+  `);
+
+  // Design §5.4 option (C) / issue #9, Phase 3: `resource_history` stops
+  // being a mechanism. Interval-versioned `facts` (via the timeline's one
+  // choke point, writeConstrainedValue/transferConstrainedValue in
+  // src/timeline/constrained.ts) are now the ONLY record of what a
+  // resource's value used to be -- see valueHistory() there, and
+  // getResourceHistory() in src/tools/resource.ts, which reads through it.
+  // This trigger makes the second write path this project spent its whole
+  // history accumulating (see engineVocabulary.test.ts's epigraph on
+  // resource_history/relationship_history) UNCONSTRUCTABLE rather than
+  // merely undocumented: any INSERT here -- from old code nobody rewrote,
+  // from a copy-pasted query, from anything -- aborts loudly instead of
+  // silently reintroducing a second history.
+  //
+  // The table is frozen, not dropped. This project has no down-migrations
+  // (root CLAUDE.md) and no framework beyond "idempotent DDL runs on every
+  // startup" -- a migration that DROPped this table would destroy rows a
+  // user's existing database may still hold, permanently, the first time
+  // they upgraded, which is a strictly worse outcome than a table that
+  // simply stops growing. Nothing reads it (getResourceHistory() no longer
+  // does) and nothing writes it (this trigger); the rows already on disk
+  // are inert history, not a mechanism.
+  //
+  // DROP TRIGGER IF EXISTS then CREATE, not CREATE TRIGGER IF NOT EXISTS --
+  // the same reasoning src/timeline/schema.ts's append-only guards give for
+  // their own triggers: IF NOT EXISTS would freeze whatever guard first
+  // shipped for a given on-disk database forever, so a later fix to this
+  // trigger's logic or message would silently never reach a database that
+  // already had an older version installed. Dropping and recreating on
+  // every startup keeps the guard a database actually has in sync with the
+  // guard this build believes it deployed.
+  db.exec(`
+    DROP TRIGGER IF EXISTS resource_history_frozen;
+    CREATE TRIGGER resource_history_frozen BEFORE INSERT ON resource_history
+    BEGIN
+      SELECT RAISE(ABORT, 'resource_history is frozen -- interval-versioned facts are now the only record of what a resource value used to be (design section 5.4 option C); write through writeConstrainedValue in src/timeline/constrained.ts instead');
+    END;
   `);
 
   // Resource constraints table -- optional, server-enforced invariants on
@@ -295,6 +335,29 @@ export function initializeSchema(options?: { migrations?: readonly SchemaMigrati
       FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
     )
   `);
+
+  // Add fact_key column to resource_constraints (migration, Phase 3 / issue
+  // #9 step 1, design §5.4 option (C)). A constraint governs a numeric
+  // *fact key* on an entity, not an entire row -- once the generic
+  // (entityId, factKey) choke point this column exists to prepare for
+  // lands, an entity can carry more than one numeric fact, and a constraint
+  // must say which one it governs or it would silently apply to all of
+  // them. 'value' is the default because every constraint that exists
+  // today (declared through declareBoundedConstraint/declareMonotonicConstraint/
+  // declareConservedConstraint in src/tools/constraint.ts) governs
+  // `resources.value` -- the sole numeric fact key any of them has ever
+  // constrained -- so defaulting means an existing database needs no data
+  // migration to keep reading its own constraints correctly. This column belongs on
+  // resource_constraints (the constraint), NOT on resource_constraint_members
+  // below: a 'conserved' set's members all share one key by construction
+  // (they are summed against a single total), and putting it on the member
+  // row would permit a set whose members are constrained on different
+  // keys -- a generality nothing has asked for.
+  try {
+    db.exec(`ALTER TABLE resource_constraints ADD COLUMN fact_key TEXT NOT NULL DEFAULT 'value'`);
+  } catch {
+    // Column already exists
+  }
 
   // Members of a resource constraint. 'bounded' and 'monotonic' constraints
   // have exactly one member (the resource they govern); 'conserved'
@@ -426,7 +489,8 @@ export function initializeSchema(options?: { migrations?: readonly SchemaMigrati
     )
   `);
 
-  // Relationship history table
+  // Relationship history table -- FROZEN, see the trigger immediately below.
+  // Kept for existing rows only; nothing writes here any more.
   db.exec(`
     CREATE TABLE IF NOT EXISTS relationship_history (
       id TEXT PRIMARY KEY,
@@ -437,6 +501,26 @@ export function initializeSchema(options?: { migrations?: readonly SchemaMigrati
       timestamp TEXT NOT NULL,
       FOREIGN KEY (relationship_id) REFERENCES relationships(id) ON DELETE CASCADE
     )
+  `);
+
+  // Design §5.4 option (C) / issue #9, Phase 3 step 3: `relationship_history`
+  // stops being a mechanism, same as `resource_history` immediately above --
+  // see that trigger's comment for the shared reasoning (why frozen and not
+  // dropped, why DROP-then-CREATE on every startup). The one thing specific
+  // here: `relationships` was already a `PROJECTED_TABLES` row (projection.ts)
+  // before this trigger existed, so its `value` column was already being
+  // dual-written into interval-versioned `facts` -- this freeze is what makes
+  // that the ONLY record, by routing every relationship value write through
+  // writeConstrainedValue() (src/timeline/constrained.ts) and cutting off the
+  // second path this table represented. See valueHistory() there, and
+  // getRelationshipHistory() in src/tools/relationship.ts, which reads
+  // through it.
+  db.exec(`
+    DROP TRIGGER IF EXISTS relationship_history_frozen;
+    CREATE TRIGGER relationship_history_frozen BEFORE INSERT ON relationship_history
+    BEGIN
+      SELECT RAISE(ABORT, 'relationship_history is frozen -- interval-versioned facts are now the only record of what a relationship value used to be (design section 5.4 option C); write through writeConstrainedValue in src/timeline/constrained.ts instead');
+    END;
   `);
 
   // Factions table

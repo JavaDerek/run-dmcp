@@ -631,6 +631,12 @@ export interface ResourceChange {
 
 export type ConstraintKind = "bounded" | "monotonic" | "conserved";
 
+/** The four members of design §5.3's constraint family. `irreversible` is
+ * never a row in `resource_constraints` -- it is a flag on a fact -- so it is
+ * not a `ConstraintKind`, but it IS something a violation can be reported
+ * for. */
+export type DeclaredConstraintKind = ConstraintKind | "irreversible";
+
 /** For 'monotonic': the only direction the value is allowed to move. */
 export type MonotonicDirection = "increasing" | "decreasing";
 
@@ -647,6 +653,13 @@ export interface ResourceConstraint {
   // resourceIds set must maintain. Registered but NOT enforced in this
   // branch -- see src/tools/constraint.ts.
   total: number | null;
+  // The numeric fact key on each governed entity/resource that this
+  // constraint applies to (design §5.4 option (C); `resource_constraints.
+  // fact_key` in src/db/schema.ts). Always 'value' today, because
+  // `resources` exposes exactly one numeric fact key -- present now so the
+  // registry (src/timeline/registry.ts) is keyed on (entityId, factKey)
+  // ahead of the generic writer that will make more than one key possible.
+  factKey: string;
   createdAt: string;
 }
 

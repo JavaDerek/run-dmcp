@@ -1,13 +1,14 @@
 import { v4 as uuidv4 } from "uuid";
-import { getDatabase, withTransaction } from "../db/connection.js";
+import { getDatabase } from "../db/connection.js";
 import { validateGameExists } from "./game.js";
+import { ConstraintViolationError, conservedConstraintFor } from "../timeline/registry.js";
 import {
-  checkResourceConstraints,
-  checkBoundedAndMonotonicConstraints,
-  getConservedConstraintFor,
-  ConstraintViolationError,
-  CONSERVED_SUM_EPSILON,
-} from "./constraint.js";
+  assertConstraintsAllow,
+  writeConstrainedValue,
+  transferConstrainedValue,
+  valueHistory,
+  type ValueTransition,
+} from "../timeline/constrained.js";
 import type { Resource, ResourceChange } from "../types/index.js";
 
 function clampValue(
@@ -22,36 +23,27 @@ function clampValue(
 }
 
 /**
- * Reject (never clamp) a transfer leg that would push `resource` outside
- * its own minValue/maxValue. Used only by transferResourceValue() -- see
- * the doc comment there for why a transfer never clamps, even when the
- * resource has no separately-declared 'bounded' constraint.
+ * Maps a timeline `ValueTransition` (src/timeline/constrained.ts) onto the
+ * public `ResourceChange` shape every existing caller of
+ * updateResourceValue()/transferResourceValue()/getResourceHistory() already
+ * expects. `id` prefers the annotation event's id, falling back to the fact
+ * id for a transition no constrained write annotated (a direct column
+ * write, a bounds re-clamp, a startup reconciliation) -- either is a real,
+ * unique identifier for the row, and a transition can never lack both.
+ * `timestamp` prefers the wall-clock `at` the choke point stamped; an
+ * unannotated transition has no wall-clock moment to report, so its
+ * timeline coordinate `t` is the honest answer instead of inventing one.
  */
-function assertWithinBoundsForTransfer(
-  resource: Resource,
-  intendedValue: number,
-  role: "source" | "destination"
-): void {
-  if (resource.minValue !== null && intendedValue < resource.minValue) {
-    throw new ConstraintViolationError(
-      "conserved",
-      resource.id,
-      `Transfer rejected: '${resource.name}' (${resource.id}) would go below its minimum value ` +
-        `(${resource.minValue}) as the ${role} of this transfer. transfer_resource_value never clamps -- ` +
-        `clamping one side of a transfer would apply an uneven delta and silently create or destroy value. ` +
-        `Choose a smaller amount.`
-    );
-  }
-  if (resource.maxValue !== null && intendedValue > resource.maxValue) {
-    throw new ConstraintViolationError(
-      "conserved",
-      resource.id,
-      `Transfer rejected: '${resource.name}' (${resource.id}) would exceed its maximum value ` +
-        `(${resource.maxValue}) as the ${role} of this transfer. transfer_resource_value never clamps -- ` +
-        `clamping one side of a transfer would apply an uneven delta and silently create or destroy value. ` +
-        `Choose a smaller amount.`
-    );
-  }
+function transitionToResourceChange(transition: ValueTransition): ResourceChange {
+  return {
+    id: transition.eventId ?? transition.factId ?? "",
+    resourceId: transition.entityId,
+    previousValue: transition.previousValue,
+    newValue: transition.newValue,
+    delta: transition.delta,
+    reason: transition.reason,
+    timestamp: transition.at ?? String(transition.t),
+  };
 }
 
 export function createResource(params: {
@@ -163,18 +155,29 @@ export function updateResource(
   // its own -- silently, with no counterpart adjustment -- which is exactly
   // the kind of isolated write that breaks the set's total. Reject instead;
   // the caller can still change bounds that don't affect the current value.
+  //
+  // Routed through assertConstraintsAllow() (src/timeline/constrained.ts) --
+  // the single site the whole constraint family (monotonic/bounded/conserved)
+  // is evaluated -- rather than throwing directly, so this is not a second
+  // place the 'conserved' rule is written down. `context` carries this
+  // guard's own explanation so the thrown message still names update_resource
+  // (what this caller actually did), not a generic mention of
+  // update_resource_value. No `bounds` is passed: this call is not itself
+  // testing this resource's own min/max against a declared 'bounded'
+  // constraint (updateResourceValue does that); it exists only to refuse an
+  // isolated conserved-member value change.
   if (newValue !== current.value) {
-    const conserved = getConservedConstraintFor(id);
-    if (conserved) {
-      throw new ConstraintViolationError(
-        "conserved",
-        id,
-        `Resource '${id}' is a member of a 'conserved' constraint (id '${conserved.id}', total ${conserved.total}) ` +
-          `and its value cannot be changed by update_resource, including indirectly by narrowing minValue/maxValue ` +
-          `so the current value would be reclamped. Rejected instead of silently changing the value -- use ` +
-          `transfer_resource_value if the value itself needs to move, or choose bounds that don't affect the current value.`
-      );
-    }
+    assertConstraintsAllow({
+      entityId: id,
+      key: "value",
+      previousValue: current.value,
+      intendedValue: newValue,
+      conservedMemberWrite: "reject",
+      context:
+        `and its value cannot be changed by update_resource, including indirectly by narrowing minValue/maxValue ` +
+        `so the current value would be reclamped. Rejected instead of silently changing the value -- use ` +
+        `transfer_resource_value if the value itself needs to move, or choose bounds that don't affect the current value.`,
+    });
   }
 
   const stmt = db.prepare(`
@@ -202,7 +205,12 @@ export function deleteResource(id: string): boolean {
   // CASCADE on resource_constraint_members, would silently remove it from
   // the set rather than raise any error). Reject instead: the caller must
   // remove_resource_constraint first if the set itself is being redefined.
-  const conserved = getConservedConstraintFor(id);
+  //
+  // This is not a value-change check -- deleting a resource doesn't move
+  // any number -- so it reads the registry directly (conservedConstraintFor,
+  // key-scoped to 'value') rather than going through assertConstraintsAllow,
+  // which exists to evaluate an INTENDED value change.
+  const conserved = conservedConstraintFor(id, "value");
   if (conserved) {
     throw new ConstraintViolationError(
       "conserved",
@@ -267,38 +275,17 @@ export function listResources(
   }));
 }
 
-function logChange(
-  resourceId: string,
-  previousValue: number,
-  newValue: number,
-  reason: string | null
-): ResourceChange {
-  const db = getDatabase();
-  const id = uuidv4();
-  const now = new Date().toISOString();
-  const delta = newValue - previousValue;
-
-  const stmt = db.prepare(`
-    INSERT INTO resource_history (id, resource_id, previous_value, new_value, delta, reason, timestamp)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  stmt.run(id, resourceId, previousValue, newValue, delta, reason, now);
-
-  return {
-    id,
-    resourceId,
-    previousValue,
-    newValue,
-    delta,
-    reason,
-    timestamp: now,
-  };
-}
-
 /**
  * Update a resource's value - either by delta or absolute set.
  * Use mode: "delta" to add/subtract, mode: "set" to set an absolute value.
+ *
+ * Delegates entirely to writeConstrainedValue() (src/timeline/constrained.ts)
+ * -- the resolve/check/clamp/write/annotate sequence, and the atomicity of
+ * the write and its audit trail, all live there now. This function's own job
+ * is narrower than it used to be: translate the resource-shaped call into
+ * the generic (entityId, factKey) one, and translate the generic
+ * ValueTransition result back into the Resource/ResourceChange shapes every
+ * existing caller already expects.
  */
 export function updateResourceValue(params: {
   resourceId: string;
@@ -309,50 +296,27 @@ export function updateResourceValue(params: {
   const resource = getResource(params.resourceId);
   if (!resource) return null;
 
-  const previousValue = resource.value;
-  const intendedValue =
-    params.mode === "delta" ? previousValue + params.value : params.value;
-
-  // Opt-in constraint enforcement: throws ConstraintViolationError and
-  // leaves the row untouched if this resource has a declared 'bounded' or
-  // 'monotonic' constraint that `intendedValue` would violate. Resources
-  // with no declared constraint are unaffected by this call and fall
-  // through to the existing clamp behavior below, unchanged.
-  checkResourceConstraints(params.resourceId, previousValue, intendedValue, {
-    minValue: resource.minValue,
-    maxValue: resource.maxValue,
-  });
-
-  const newValue = clampValue(intendedValue, resource.minValue, resource.maxValue);
-
-  // The value update and its resource_history row must land together --
-  // otherwise a failure between the two leaves a changed value with no
-  // audit trail explaining why it changed.
-  const change = withTransaction(() => {
-    const db = getDatabase();
-    const stmt = db.prepare(`UPDATE resources SET value = ? WHERE id = ?`);
-    stmt.run(newValue, params.resourceId);
-
-    return logChange(
-      params.resourceId,
-      previousValue,
-      newValue,
-      params.reason || null
-    );
+  const transition = writeConstrainedValue({
+    entityId: params.resourceId,
+    key: "value",
+    mode: params.mode,
+    value: params.value,
+    reason: params.reason ?? null,
+    bounds: { minValue: resource.minValue, maxValue: resource.maxValue },
   });
 
   return {
-    resource: { ...resource, value: newValue },
-    change,
+    resource: { ...resource, value: transition.newValue },
+    change: transitionToResourceChange(transition),
   };
 }
 
 /**
  * Move `amount` from one resource to another, atomically. This is the ONLY
  * write path for a resource that is a member of a declared 'conserved'
- * constraint -- checkResourceConstraints() (constraint.ts) rejects
- * update_resource_value against such a resource specifically because a
- * single-resource write can't express where the counterpart delta comes
+ * constraint -- assertConstraintsAllow() (src/timeline/constrained.ts)
+ * rejects update_resource_value against such a resource specifically because
+ * a single-resource write can't express where the counterpart delta comes
  * from. This function is that counterpart-carrying write.
  *
  * WHY AN EXPLICIT TRANSFER TOOL, NOT A BALANCED MULTI-RESOURCE WRITE:
@@ -379,15 +343,22 @@ export function updateResourceValue(params: {
  * be members of the SAME declared 'conserved' constraint. This is not a
  * general "move value between any two resources" tool -- for anything not
  * under a 'conserved' constraint, update_resource_value remains the right
- * tool (see checkResourceConstraints()). Keeping the two write paths
- * mutually exclusive per resource means which one to use is never
- * ambiguous.
+ * tool (see assertConstraintsAllow() in src/timeline/constrained.ts). Keeping
+ * the two write paths mutually exclusive per resource means which one to use
+ * is never ambiguous.
  *
  * Never clamps. Clamping one side of a transfer would apply an uneven delta
  * -- the source would lose less (or the destination gain less) than the
  * other side moved by, silently creating or destroying value -- so any
  * bound violation on either side rejects the whole transfer instead,
  * regardless of whether a 'bounded' constraint is separately declared.
+ *
+ * Keeps its own argument validation (self-transfer, non-finite, negative,
+ * not-found) -- that is about resource IDENTITY, not about the declared
+ * constraint family, so it stays here rather than moving into
+ * transferConstrainedValue() (src/timeline/constrained.ts), which delegates
+ * the actual membership check, the bounded/monotonic checks, the never-clamp
+ * bounds rejection, and both atomic writes.
  */
 export function transferResourceValue(params: {
   fromResourceId: string;
@@ -419,106 +390,39 @@ export function transferResourceValue(params: {
     throw new Error(`Resource '${params.toResourceId}' not found.`);
   }
 
-  const fromConstraint = getConservedConstraintFor(from.id);
-  const toConstraint = getConservedConstraintFor(to.id);
-  if (!fromConstraint || !toConstraint || fromConstraint.id !== toConstraint.id) {
-    const details: string[] = [];
-    if (!fromConstraint) details.push(`'${from.name}' (${from.id}) is not a member of any 'conserved' constraint.`);
-    if (!toConstraint) details.push(`'${to.name}' (${to.id}) is not a member of any 'conserved' constraint.`);
-    if (fromConstraint && toConstraint && fromConstraint.id !== toConstraint.id) {
-      details.push(
-        `They belong to different 'conserved' constraints ('${fromConstraint.id}' and '${toConstraint.id}').`
-      );
-    }
-    throw new ConstraintViolationError(
-      "conserved",
-      from.id,
-      `transfer_resource_value requires fromResourceId and toResourceId to both be members of the same declared ` +
-        `'conserved' constraint -- moving value between resources outside a shared conserved set would change ` +
-        `each side's total independently, which is what update_resource_value is for. ${details.join(" ")}`
-    );
-  }
-
-  const fromPrev = from.value;
-  const toPrev = to.value;
-  const fromIntended = fromPrev - params.amount;
-  const toIntended = toPrev + params.amount;
-
-  // Bounded/monotonic constraints, if separately declared, apply during a
-  // transfer exactly as they do during a direct write.
-  checkBoundedAndMonotonicConstraints(from.id, fromPrev, fromIntended, {
-    minValue: from.minValue,
-    maxValue: from.maxValue,
+  const { from: fromTransition, to: toTransition } = transferConstrainedValue({
+    fromEntityId: from.id,
+    toEntityId: to.id,
+    key: "value",
+    amount: params.amount,
+    reason: params.reason ?? null,
+    fromBounds: { minValue: from.minValue, maxValue: from.maxValue },
+    toBounds: { minValue: to.minValue, maxValue: to.maxValue },
+    fromLabel: from.name,
+    toLabel: to.name,
   });
-  checkBoundedAndMonotonicConstraints(to.id, toPrev, toIntended, {
-    minValue: to.minValue,
-    maxValue: to.maxValue,
-  });
-  // Never clamp (see doc comment above): reject outright if either side's
-  // own minValue/maxValue would be violated, even without a declared
-  // 'bounded' constraint.
-  assertWithinBoundsForTransfer(from, fromIntended, "source");
-  assertWithinBoundsForTransfer(to, toIntended, "destination");
 
-  const reason = params.reason || null;
-  const constraintId = fromConstraint.id;
-  const declaredTotal = fromConstraint.total ?? 0;
-  const memberIds = fromConstraint.resourceIds;
-
-  return withTransaction(() => {
-    const db = getDatabase();
-    db.prepare(`UPDATE resources SET value = ? WHERE id = ?`).run(fromIntended, from.id);
-    db.prepare(`UPDATE resources SET value = ? WHERE id = ?`).run(toIntended, to.id);
-
-    const fromChange = logChange(from.id, fromPrev, fromIntended, reason);
-    const toChange = logChange(to.id, toPrev, toIntended, reason);
-
-    // Defense in depth: re-read every member of the set (inside this same
-    // transaction, so this sees the writes above) and assert it still sums
-    // to the declared total. The primary guarantee is structural (an equal
-    // and opposite delta, above) -- this turns any future bug in this
-    // function, or a schema change that opens another write path around it,
-    // into a loud rollback instead of a silently wrong total.
-    const currentSum = memberIds.reduce((sum, id) => sum + (getResource(id)?.value ?? 0), 0);
-    if (Math.abs(currentSum - declaredTotal) > CONSERVED_SUM_EPSILON) {
-      throw new Error(
-        `Invariant check failed after transfer: conserved constraint '${constraintId}' members now sum to ` +
-          `${currentSum}, expected ${declaredTotal}. Rolling back.`
-      );
-    }
-
-    return {
-      from: { ...from, value: fromIntended },
-      to: { ...to, value: toIntended },
-      fromChange,
-      toChange,
-    };
-  });
+  return {
+    from: { ...from, value: fromTransition.newValue },
+    to: { ...to, value: toTransition.newValue },
+    fromChange: transitionToResourceChange(fromTransition),
+    toChange: transitionToResourceChange(toTransition),
+  };
 }
 
+/**
+ * Every recorded change to a resource's value, newest first. Built entirely
+ * from the timeline (valueHistory() in src/timeline/constrained.ts) -- there
+ * is no `resource_history` table backing this any more (design §5.4 option
+ * (C); see the freeze trigger in src/db/schema.ts). This is a strict
+ * superset of what `resource_history` ever held: it also surfaces
+ * transitions no constrained write annotated (a direct column write, a
+ * bounds re-clamp, a startup reconciliation), which the old table simply
+ * never recorded.
+ */
 export function getResourceHistory(
   resourceId: string,
   limit?: number
 ): ResourceChange[] {
-  const db = getDatabase();
-  let query = `SELECT * FROM resource_history WHERE resource_id = ? ORDER BY timestamp DESC`;
-  const params: (string | number)[] = [resourceId];
-
-  if (limit !== undefined) {
-    query += ` LIMIT ?`;
-    params.push(limit);
-  }
-
-  const stmt = db.prepare(query);
-  const rows = stmt.all(...params) as Record<string, unknown>[];
-
-  return rows.map((row) => ({
-    id: row.id as string,
-    resourceId: row.resource_id as string,
-    previousValue: row.previous_value as number,
-    newValue: row.new_value as number,
-    delta: row.delta as number,
-    reason: row.reason as string | null,
-    timestamp: row.timestamp as string,
-  }));
+  return valueHistory(resourceId, "value", limit).map(transitionToResourceChange);
 }

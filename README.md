@@ -31,8 +31,15 @@ the consuming application rather than into `node_modules`, and a consumer can br
 through the migration hook below.
 
 The timeline that gives this project its reason to exist — interval-versioned facts, `replay(t)`,
-irreversibility, `changes_within` — is designed and accepted but **not yet built**. See
-[docs/DESIGN.md](docs/DESIGN.md), which is the authority, and §11 for the order things land in.
+irreversibility, timeline export, `changes_within` — is built, and every write of world state appends
+to it in the same transaction, through generated triggers rather than edited write sites.
+
+**There is one versioning substrate, and it is the timeline.** A resource's value is a constrained
+numeric fact: declared constraints (`bounded`, `monotonic`, conserved sets, `irreversible`) are
+checked at a single choke point, and "what did this value used to be" is answered by the fact
+intervals rather than by a history table beside them. The former `resource_history` and
+`relationship_history` tables no longer accept writes. See [docs/DESIGN.md](docs/DESIGN.md), which is
+the authority, §5.4 for that decision and §11 for the order the rest lands in.
 
 ## Running it, and depending on it
 

@@ -57,6 +57,13 @@ a starter set.
 6. **`t` is the axis that stays invariant when a caller re-segments its own units.** A timestamp or a
    turn counter qualifies; an index into re-cuttable units does not. Choosing wrong raises no error —
    it silently attaches one unit's content to another's (§5.1, §14).
+7. **One versioning substrate, one choke point.** A constrained numeric value changes through
+   `writeConstrainedValue` / `transferConstrainedValue` (`src/timeline/constrained.ts`) and nowhere
+   else, and all four constraint kinds are evaluated there — `irreversible` is enforced by its
+   trigger on `facts` and *translated* on the failure path, never re-checked in JS. "What did this
+   value used to be" is answered by fact intervals: `resource_history` and `relationship_history` are
+   frozen by `BEFORE INSERT` triggers so a second history is unconstructable rather than merely
+   discouraged. Never add a table that versions something `facts` already versions (§5.4, option C).
 
 ## Testing
 

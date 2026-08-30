@@ -74,6 +74,32 @@ export {
 } from "./timeline/irreversible.js";
 export type { IrreversibleFact } from "./timeline/irreversible.js";
 
+// The constrained-write choke point (design §5.4 option (C)) -- the one place
+// a constrained numeric fact key changes, and the reason there is no longer a
+// `resource_history` table beside the timeline answering the same question.
+// Exported because an application that keeps invariant-bearing numbers here
+// has to be able to write them, and writing them anywhere else is precisely
+// the second path option (C) exists to close: a direct UPDATE still lands in
+// `facts` (the projection triggers see to that), but it arrives unchecked and
+// unannotated.
+//
+// `valueHistory` is the read half, and it is deliberately not a separate
+// mechanism -- it is `facts` and `events`, assembled. It returns rows and
+// never a verdict.
+//
+// `ConstraintViolationError` is exported because a refusal is only reviewable
+// if the caller can tell it apart from a failure. For the `irreversible`
+// member it carries §5.2c's one hop -- the contradicted fact, its
+// `valid_from_t`, and the event that opened it -- so a reviewer can answer
+// "is the fact wrong, or is the claim wrong", which is undecidable without it.
+export {
+  writeConstrainedValue,
+  transferConstrainedValue,
+  valueHistory,
+} from "./timeline/constrained.js";
+export type { ValueTransition } from "./timeline/constrained.js";
+export { ConstraintViolationError, constraintsFor, conservedConstraintFor } from "./timeline/registry.js";
+
 // Timeline export (design §6) -- the boundary that keeps both halves honest:
 // conversational authoring upstream of a frozen artifact, deterministic
 // consumers downstream of it. These are exported as library functions first

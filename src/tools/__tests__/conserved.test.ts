@@ -408,15 +408,21 @@ describe("conserved constraint enforcement", () => {
     it("leaves NO partial write when the second resource's history insert fails mid-operation", () => {
       const { a, b } = makePair(40, 60);
 
-      // Fault injection: fail the resource_history insert specifically for
+      // Fault injection: fail the annotation-event insert specifically for
       // the destination resource, simulating a failure after the source's
-      // update (and possibly its history row) has already been applied
-      // in-transaction.
+      // update (and possibly its annotation event) has already been
+      // applied in-transaction. This used to target `resource_history`
+      // directly (`WHEN NEW.resource_id = '${b.id}'`), but that table no
+      // longer receives inserts (design §5.4 option (C)) -- the audit trail
+      // now lands as a `value.changed` event whose `causes` JSON names the
+      // entity it's about, so the WHEN clause matches that instead. The
+      // property under test -- a failure on b's side rolls back BOTH legs
+      // -- is unchanged; only the injection point moved.
       const db = getDatabase();
       db.exec(`
         CREATE TRIGGER fail_history_for_b
-        BEFORE INSERT ON resource_history
-        WHEN NEW.resource_id = '${b.id}'
+        BEFORE INSERT ON events
+        WHEN NEW.kind = 'value.changed' AND json_extract(NEW.causes, '$.entity_id') = '${b.id}'
         BEGIN
           SELECT RAISE(ABORT, 'simulated failure');
         END;

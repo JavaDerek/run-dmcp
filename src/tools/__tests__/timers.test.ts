@@ -408,10 +408,19 @@ describe('timer tools', () => {
         consequence: { resourceId: resource.id, delta: -10 },
       })
 
+      // Fault injection: used to target `resource_history` directly; that
+      // table no longer receives inserts (design §5.4 option (C) --
+      // interval-versioned facts are the history now, written by
+      // writeConstrainedValue's single annotation-event insert into
+      // `events`). The property under test -- that the consequence's value
+      // write and its audit trail land together with the timer's own
+      // value/triggered-flag change, or not at all -- is unchanged; only
+      // the injection point moved.
       const db = getDatabase()
       db.exec(`
         CREATE TRIGGER fail_resource_history_insert_timer
-        BEFORE INSERT ON resource_history
+        BEFORE INSERT ON events
+        WHEN NEW.kind = 'value.changed'
         BEGIN
           SELECT RAISE(ABORT, 'simulated failure');
         END;

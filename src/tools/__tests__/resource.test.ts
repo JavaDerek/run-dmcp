@@ -220,13 +220,22 @@ describe('updateResourceValue', () => {
     it('leaves NO partial write when the resource_history insert fails mid-operation', () => {
       const resource = createResource({ gameId, ownerType: 'game', name: 'grain', value: 10 })
 
-      // Fault injection: make the resource_history INSERT fail after the
-      // resources UPDATE has already run, simulating a mid-operation
-      // failure such as a disk error or constraint violation.
+      // Fault injection: make the write's annotation event INSERT fail
+      // after the resources UPDATE has already run, simulating a
+      // mid-operation failure such as a disk error or constraint
+      // violation. This used to target `resource_history` directly, but
+      // that table no longer receives inserts (design §5.4 option (C) --
+      // interval-versioned facts are the history now, written by
+      // writeConstrainedValue's single annotation-event insert into
+      // `events`). The property under test -- that the value write and its
+      // audit trail land together or not at all -- is unchanged; only the
+      // table carrying the audit trail moved, so the injection point moves
+      // with it.
       const db = getDatabase()
       db.exec(`
         CREATE TRIGGER fail_resource_history_insert
-        BEFORE INSERT ON resource_history
+        BEFORE INSERT ON events
+        WHEN NEW.kind = 'value.changed'
         BEGIN
           SELECT RAISE(ABORT, 'simulated failure');
         END;

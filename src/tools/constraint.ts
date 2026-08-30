@@ -3,6 +3,19 @@ import { getDatabase } from "../db/connection.js";
 import { validateGameExists } from "./game.js";
 import { getResource } from "./resource.js";
 import type { ConstraintKind, MonotonicDirection, ResourceConstraint } from "../types/index.js";
+import {
+  ConstraintViolationError,
+  CONSERVED_SUM_EPSILON,
+  constraintsFor,
+  allConstraintsForEntity,
+  type ConstraintRow,
+  rowToConstraint,
+} from "../timeline/registry.js";
+
+// Re-exported so every existing importer (src/tools/resource.ts,
+// src/register/resources.ts) keeps working unchanged -- these two now live
+// in src/timeline/registry.js; see the paragraph below on why.
+export { ConstraintViolationError, CONSERVED_SUM_EPSILON };
 
 /**
  * Declarative, opt-in, server-enforced invariants on `resources` rows.
@@ -24,11 +37,12 @@ import type { ConstraintKind, MonotonicDirection, ResourceConstraint } from "../
  *
  * 'conserved' is fully enforced: a resource that is a member of a declared
  * 'conserved' constraint can no longer be written directly through
- * update_resource_value (see checkResourceConstraints() below) -- it must go
- * through transferResourceValue() in resource.ts, which moves value between
- * exactly two members of the same set atomically. See the comment on
- * transferResourceValue() for why an explicit transfer, rather than a
- * balanced multi-resource write, was chosen.
+ * update_resource_value (see assertConstraintsAllow() in
+ * src/timeline/constrained.ts) -- it must go through transferResourceValue()
+ * in resource.ts, which moves value between exactly two members of the same
+ * set atomically. See the comment on transferResourceValue() for why an
+ * explicit transfer, rather than a balanced multi-resource write, was
+ * chosen.
  *
  * `irreversible` (design §5.3) is this family's fourth, temporal member --
  * `bounded`/`monotonic` constrain a value's range and direction, 'conserved'
@@ -37,77 +51,39 @@ import type { ConstraintKind, MonotonicDirection, ResourceConstraint } from "../
  * (src/timeline/irreversible.ts's declareIrreversible()), not as a row in
  * `resource_constraints` here, and enforced by triggers on the timeline's
  * `facts` table (src/timeline/schema.ts) rather than by
- * checkResourceConstraints() below. The two families live on different
+ * assertConstraintsAllow(). The two families still live on different
  * substrates -- this one on `resources`/`resource_constraints`, that one on
- * the timeline's interval-versioned `facts` -- until design §5.4's option
- * (C) merges them at Phase 3 (`resources` becomes a constrained kind of
- * fact). Forcing an `irreversible` row into `resource_constraints` now would
- * build that merge early, against the wrong table, before the substrate
- * decision it depends on has actually landed.
+ * the timeline's interval-versioned `facts`.
+ *
+ * Design §5.4's option (C) merge (Phase 3) is complete for `bounded`/
+ * `monotonic`/`conserved`: this file declares constraints (insertConstraint
+ * and the declare*() functions below) and reads them back for display
+ * (listConstraints/getConstraintsForResource); EVALUATING a declared
+ * constraint against an intended value change happens in exactly one place,
+ * assertConstraintsAllow() (src/timeline/constrained.ts), which every
+ * constrained write (writeConstrainedValue/transferConstrainedValue, and
+ * through them updateResourceValue/transferResourceValue/updateResource in
+ * resource.ts) goes through. Nothing in this file evaluates a constraint
+ * against a value any more -- grep for `constraint.kind === "bounded"` or
+ * `constraint.direction ===` and constrained.ts is the only hit outside a
+ * test.
  */
-
-/** Absolute tolerance for floating-point sum comparisons on 'conserved'
- * constraints. IEEE 754 doubles cannot represent values like 0.1 exactly,
- * so repeated addition/subtraction across many transfers can drift by a
- * few ULPs. This is large enough to absorb that drift over realistic
- * transfer volumes while still catching an actual logic bug (which would
- * typically desync the sum by a whole `amount`, not a fraction of one). */
-export const CONSERVED_SUM_EPSILON = 1e-6;
-
-export class ConstraintViolationError extends Error {
-  constructor(
-    public readonly constraintKind: ConstraintKind,
-    public readonly resourceId: string,
-    message: string
-  ) {
-    super(message);
-    this.name = "ConstraintViolationError";
-  }
-}
-
-interface ConstraintRow {
-  id: string;
-  game_id: string;
-  kind: ConstraintKind;
-  direction: MonotonicDirection | null;
-  total: number | null;
-  created_at: string;
-}
-
-function memberIdsFor(constraintId: string): string[] {
-  const db = getDatabase();
-  const rows = db
-    .prepare(`SELECT resource_id FROM resource_constraint_members WHERE constraint_id = ? ORDER BY rowid`)
-    .all(constraintId) as { resource_id: string }[];
-  return rows.map((r) => r.resource_id);
-}
-
-function rowToConstraint(row: ConstraintRow): ResourceConstraint {
-  return {
-    id: row.id,
-    gameId: row.game_id,
-    kind: row.kind,
-    resourceIds: memberIdsFor(row.id),
-    direction: row.direction,
-    total: row.total,
-    createdAt: row.created_at,
-  };
-}
 
 function insertConstraint(
   gameId: string,
   kind: ConstraintKind,
   resourceIds: string[],
   direction: MonotonicDirection | null,
-  total: number | null
+  total: number | null,
+  factKey: string = "value"
 ): ResourceConstraint {
   const db = getDatabase();
   const id = uuidv4();
   const now = new Date().toISOString();
 
   db.prepare(
-    `INSERT INTO resource_constraints (id, game_id, kind, direction, total, created_at) VALUES (?, ?, ?, ?, ?, ?)`
-  ).run(id, gameId, kind, direction, total, now);
+    `INSERT INTO resource_constraints (id, game_id, kind, direction, total, fact_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).run(id, gameId, kind, direction, total, factKey, now);
 
   const memberStmt = db.prepare(
     `INSERT INTO resource_constraint_members (constraint_id, resource_id) VALUES (?, ?)`
@@ -123,6 +99,7 @@ function insertConstraint(
     resourceIds,
     direction,
     total,
+    factKey,
     createdAt: now,
   };
 }
@@ -131,7 +108,8 @@ function insertConstraint(
  * Declare a 'bounded' constraint: the resource's value must stay within its
  * existing minValue/maxValue (set via create_resource/update_resource).
  * Once declared, out-of-bounds writes through updateResourceValue() are
- * REJECTED instead of silently clamped -- see checkResourceConstraints().
+ * REJECTED instead of silently clamped -- see assertConstraintsAllow()
+ * (src/timeline/constrained.ts).
  */
 export function declareBoundedConstraint(params: {
   gameId: string;
@@ -150,11 +128,11 @@ export function declareBoundedConstraint(params: {
         `set at least one bound with update_resource before declaring this constraint.`
     );
   }
-  if (getConstraintsForResource(params.resourceId).some((c) => c.kind === "bounded")) {
+  if (constraintsFor(params.resourceId, "value").some((c) => c.kind === "bounded")) {
     throw new Error(`Resource '${params.resourceId}' already has a 'bounded' constraint.`);
   }
 
-  return insertConstraint(params.gameId, "bounded", [params.resourceId], null, null);
+  return insertConstraint(params.gameId, "bounded", [params.resourceId], null, null, "value");
 }
 
 /**
@@ -174,11 +152,11 @@ export function declareMonotonicConstraint(params: {
   if (!resource) {
     throw new Error(`Resource '${params.resourceId}' not found.`);
   }
-  if (getConstraintsForResource(params.resourceId).some((c) => c.kind === "monotonic")) {
+  if (constraintsFor(params.resourceId, "value").some((c) => c.kind === "monotonic")) {
     throw new Error(`Resource '${params.resourceId}' already has a 'monotonic' constraint.`);
   }
 
-  return insertConstraint(params.gameId, "monotonic", [params.resourceId], params.direction, null);
+  return insertConstraint(params.gameId, "monotonic", [params.resourceId], params.direction, null, "value");
 }
 
 /**
@@ -224,7 +202,7 @@ export function declareConservedConstraint(params: {
     if (!resource) {
       throw new Error(`Resource '${resourceId}' not found.`);
     }
-    if (getConstraintsForResource(resourceId).some((c) => c.kind === "conserved")) {
+    if (constraintsFor(resourceId, "value").some((c) => c.kind === "conserved")) {
       throw new Error(
         `Resource '${resourceId}' already belongs to a 'conserved' constraint. A resource may only be a ` +
           `member of one 'conserved' set at a time -- remove the existing constraint first (remove_resource_constraint) ` +
@@ -243,7 +221,7 @@ export function declareConservedConstraint(params: {
     );
   }
 
-  return insertConstraint(params.gameId, "conserved", uniqueIds, null, params.total);
+  return insertConstraint(params.gameId, "conserved", uniqueIds, null, params.total, "value");
 }
 
 /** List constraints for a game, optionally filtered to ones governing a given resource. */
@@ -258,19 +236,11 @@ export function listConstraints(gameId: string, resourceId?: string): ResourceCo
   return constraints.filter((c) => c.resourceIds.includes(resourceId));
 }
 
-/** All constraints (of any kind) that govern the given resource. */
+/** All constraints (of any kind, any fact key) that govern the given
+ * resource. Delegates to the registry's allConstraintsForEntity() rather
+ * than writing its own JOIN -- see src/timeline/registry.ts. */
 export function getConstraintsForResource(resourceId: string): ResourceConstraint[] {
-  const db = getDatabase();
-  const rows = db
-    .prepare(
-      `SELECT rc.* FROM resource_constraints rc
-       JOIN resource_constraint_members rcm ON rcm.constraint_id = rc.id
-       WHERE rcm.resource_id = ?
-       ORDER BY rc.created_at`
-    )
-    .all(resourceId) as ConstraintRow[];
-
-  return rows.map(rowToConstraint);
+  return allConstraintsForEntity(resourceId);
 }
 
 /** Remove a constraint by id. Returns true if a row was deleted. */
@@ -280,105 +250,11 @@ export function removeConstraint(id: string): boolean {
   return result.changes > 0;
 }
 
-/**
- * Check whether an intended value change for a single resource would
- * violate any 'bounded' or 'monotonic' constraint declared on it. Throws
- * ConstraintViolationError on violation; returns void otherwise. Shared by
- * checkResourceConstraints() (the single-resource write path) and
- * transferResourceValue() (resource.ts; the two-resource conserved-transfer
- * path) -- both paths must respect 'bounded'/'monotonic' the same way.
- * Deliberately does not look at 'conserved' constraints; callers decide
- * separately what to do about those (see checkResourceConstraints() below
- * and transferResourceValue()).
- */
-export function checkBoundedAndMonotonicConstraints(
-  resourceId: string,
-  previousValue: number,
-  intendedValue: number,
-  bounds: { minValue: number | null; maxValue: number | null }
-): void {
-  const constraints = getConstraintsForResource(resourceId);
-
-  for (const constraint of constraints) {
-    if (constraint.kind === "monotonic") {
-      if (constraint.direction === "increasing" && intendedValue < previousValue) {
-        throw new ConstraintViolationError(
-          "monotonic",
-          resourceId,
-          `Resource '${resourceId}' is constrained to never decrease; rejected change from ${previousValue} to ${intendedValue}.`
-        );
-      }
-      if (constraint.direction === "decreasing" && intendedValue > previousValue) {
-        throw new ConstraintViolationError(
-          "monotonic",
-          resourceId,
-          `Resource '${resourceId}' is constrained to never increase; rejected change from ${previousValue} to ${intendedValue}.`
-        );
-      }
-    }
-
-    if (constraint.kind === "bounded") {
-      if (bounds.minValue !== null && intendedValue < bounds.minValue) {
-        throw new ConstraintViolationError(
-          "bounded",
-          resourceId,
-          `Resource '${resourceId}' is bounded-constrained (min ${bounds.minValue}); rejected value ${intendedValue} instead of clamping.`
-        );
-      }
-      if (bounds.maxValue !== null && intendedValue > bounds.maxValue) {
-        throw new ConstraintViolationError(
-          "bounded",
-          resourceId,
-          `Resource '${resourceId}' is bounded-constrained (max ${bounds.maxValue}); rejected value ${intendedValue} instead of clamping.`
-        );
-      }
-    }
-
-    // constraint.kind === "conserved": handled by callers, not here.
-  }
-}
-
-/**
- * Check whether an intended value change for a single resource would
- * violate any constraint declared on it. Throws ConstraintViolationError on
- * violation; returns void otherwise. Called from updateResourceValue() in
- * resource.ts before the row is written.
- *
- * 'conserved' is handled specially here: ANY direct single-resource write to
- * a conserved member is rejected, unconditionally, regardless of whether the
- * particular delta would happen to preserve the total. The server cannot
- * know where update_resource_value's counterpart delta should come from --
- * writing one member without atomically adjusting another would silently
- * break the set's invariant, which is exactly the failure this constraint
- * exists to prevent. Use transfer_resource_value (transferResourceValue() in
- * resource.ts) instead, which moves value between two members of the same
- * set atomically.
- */
-export function checkResourceConstraints(
-  resourceId: string,
-  previousValue: number,
-  intendedValue: number,
-  bounds: { minValue: number | null; maxValue: number | null }
-): void {
-  const constraints = getConstraintsForResource(resourceId);
-  checkBoundedAndMonotonicConstraints(resourceId, previousValue, intendedValue, bounds);
-
-  const conserved = constraints.find((c) => c.kind === "conserved");
-  if (conserved) {
-    throw new ConstraintViolationError(
-      "conserved",
-      resourceId,
-      `Resource '${resourceId}' is a member of a 'conserved' constraint (id '${conserved.id}', total ${conserved.total}) ` +
-        `and cannot be written directly via update_resource_value -- a single-resource write is ambiguous about where ` +
-        `the counterpart delta should come from, and could silently break the set's total. Use transfer_resource_value ` +
-        `to move value between two members of this set atomically instead.`
-    );
-  }
-}
-
-/** All conserved constraints (of kind 'conserved') governing a resource,
- * i.e. zero or one (declareConservedConstraint() rejects overlapping
- * conserved membership, so a resource can belong to at most one). */
-export function getConservedConstraintFor(resourceId: string): ResourceConstraint | null {
-  return getConstraintsForResource(resourceId).find((c) => c.kind === "conserved") ?? null;
-}
+// `getConservedConstraintFor(resourceId)` used to live here, unscoped by fact
+// key. Its callers (deleteResource/updateResource in src/tools/resource.ts)
+// now use `conservedConstraintFor(entityId, factKey)` from
+// src/timeline/registry.ts instead, and the unscoped version was left with no
+// caller at all. Deleted rather than kept: a key-blind lookup surviving beside
+// the key-scoped one is exactly the shape a future write reaches for by
+// accident, and it would silently find a constraint governing a different
+// fact key than the one being written.

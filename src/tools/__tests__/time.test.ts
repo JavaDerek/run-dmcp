@@ -457,11 +457,19 @@ describe('time tools', () => {
 
       // Fault injection: simulate a failure deep inside updateResourceValue's
       // own nested transaction (e.g. a disk error), after the resources
-      // UPDATE has already run but before it commits.
+      // UPDATE has already run but before it commits. Used to target
+      // `resource_history` directly; that table no longer receives inserts
+      // (design §5.4 option (C) -- interval-versioned facts are the history
+      // now, written by writeConstrainedValue's single annotation-event
+      // insert into `events`). The property under test -- that the
+      // consequence's value write and its audit trail land together with
+      // the timer/event bookkeeping, or not at all -- is unchanged; only
+      // the injection point moved.
       const db = getDatabase()
       db.exec(`
         CREATE TRIGGER fail_resource_history_insert_time
-        BEFORE INSERT ON resource_history
+        BEFORE INSERT ON events
+        WHEN NEW.kind = 'value.changed'
         BEGIN
           SELECT RAISE(ABORT, 'simulated failure');
         END;
