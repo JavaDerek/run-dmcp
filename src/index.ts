@@ -73,6 +73,37 @@ export {
   listIrreversibleFacts,
 } from "./timeline/irreversible.js";
 export type { IrreversibleFact } from "./timeline/irreversible.js";
+export { openingEventId } from "./timeline/provenance.js";
+export type { FactProvenance } from "./timeline/provenance.js";
+
+// The narration constraint (design §5.2b/§5.2c, GitHub issues #11 and #12)
+// -- the outbound half of authority, and the half with two consumers.
+// "Here is what is true; depict it, do not argue with it." Exported as a
+// library function FIRST, before any MCP tool wraps it (the one tool that
+// does, `narration_constraint_at`, is a thin JSON-over-stdio wrapper around
+// this same call), because the consumer that most needs it is a process
+// that must never call a model at runtime: its units have duration and
+// everything in them is already known in advance, so its narrator output
+// is generated once, reviewed by a human, committed as a file, and
+// rendered hours later by a lint over that finished artifact, with no
+// engine and no model in the loop (§6's "library functions first, MCP
+// tools second," restated here because this is the export where it matters
+// most). `contradictions` is exported alongside it for the same reason and
+// takes no database handle at all -- it is a pure function over the plain
+// object `narrationConstraintAt` returns, so a caller can serialize a
+// constraint once, hand the JSON to an entirely separate process, and run
+// the check there hours or days later. Prohibitions in the returned shape
+// are derived and structural, never authored and lexical (hard rule 5): the
+// engine records that a fact holds and lets a claim disagree or not,
+// exactly the way `changes_within` (§5.5) records transitions rather than a
+// verdict -- there is no `mustNotSay`, no severity, nothing this project's
+// four recorded negative-prompt failures would recognise.
+export {
+  narrationConstraintAt,
+  contradictions,
+  NARRATION_CONSTRAINT_FORMAT_VERSION,
+} from "./timeline/narration.js";
+export type { NarrationConstraint, ConstraintFact, Claim, Contradiction } from "./timeline/narration.js";
 
 // The constrained-write choke point (design §5.4 option (C)) -- the one place
 // a constrained numeric fact key changes, and the reason there is no longer a

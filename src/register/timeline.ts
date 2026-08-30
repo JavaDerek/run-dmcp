@@ -7,6 +7,7 @@ import { declareTimeAxis, setStoryTime, currentStoryTime } from "../timeline/clo
 import { declareIrreversible, listIrreversibleFacts } from "../timeline/irreversible.js";
 import { exportTimelineToFile, importTimelineFromFile } from "../timeline/export.js";
 import { changesWithin } from "../timeline/changes.js";
+import { narrationConstraintAt } from "../timeline/narration.js";
 
 const log = createLogger("timeline");
 
@@ -331,6 +332,42 @@ export function registerTimelineTools(server: McpServer) {
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } catch (error) {
         log.error("import_timeline failed", { filePath, error: (error as Error).message });
+        return {
+          content: [{ type: "text", text: JSON.stringify({ error: (error as Error).message }) }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.registerTool(
+    "narration_constraint_at",
+    {
+      description:
+        "Return what IS true for a game at t, and nothing else: every fact valid then on an entity alive then, plus every irreversible fact from valid_from_t onward even if it has since closed or its entity has been destroyed. Each fact carries one hop of causality -- the event that opened it, if any is recorded -- so a reviewer can tell whether a disputed fact or a disputed claim is the one that's wrong. This tool does not check anything and returns no verdict: it hands back the serialized constraint so a caller can run its own check (a live one now, or an offline lint over the saved JSON hours later) -- see the library-exported `contradictions` function for that half, which takes no database and is not exposed as a tool because wrapping a pure function in a tool call would defeat the point of it being callable offline.",
+      inputSchema: {
+        gameId: z.string().max(100).describe("The game ID"),
+        t: tSchema,
+        entityIds: z
+          .array(z.string().max(100))
+          .optional()
+          .describe(
+            "Narrow the constraint to only these entities. Omit for the whole game; an empty array narrows to nothing."
+          ),
+      },
+      annotations: ANNOTATIONS.READ_ONLY,
+    },
+    async ({ gameId, t, entityIds }) => {
+      try {
+        const constraint = narrationConstraintAt({ gameId, t, entityIds });
+        return { content: [{ type: "text", text: JSON.stringify(constraint, null, 2) }] };
+      } catch (error) {
+        log.error("narration_constraint_at failed", {
+          gameId,
+          t,
+          entityIds,
+          error: (error as Error).message,
+        });
         return {
           content: [{ type: "text", text: JSON.stringify({ error: (error as Error).message }) }],
           isError: true,
