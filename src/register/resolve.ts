@@ -11,7 +11,7 @@ const log = createLogger("resolve");
 /**
  * The MCP surface for the resolve protocol (design §5.2a, issue #10) --
  * `resolve` and `list_mechanics`. Registered ONLY when a caller supplies a
- * non-empty `mechanics` array to `createMcpServer` (src/mcp-server.ts): an
+ * non-empty `mechanics` array to `createCoreMcpServer` (src/mcp-server.ts): an
  * engine with no mechanics has no resolve surface, and that is the correct
  * shape rather than a resolve tool that could only ever answer
  * "unknown-mechanic" and a list_mechanics that could only ever answer `[]`.
@@ -103,7 +103,7 @@ export function registerResolveTools(server: McpServer, resolver: Resolver) {
     {
       description:
         "List every mechanic name registered with this resolver. The engine holds these names; it never " +
-        "reads meaning into them -- they are exactly what a caller handed to createMcpServer's mechanics option.",
+        "reads meaning into them -- they are exactly what a caller handed to createCoreMcpServer's mechanics option.",
       inputSchema: {},
       annotations: ANNOTATIONS.READ_ONLY,
     },

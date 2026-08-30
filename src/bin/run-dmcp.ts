@@ -15,7 +15,11 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { closeDatabase } from "../db/connection.js";
 import { initializeSchema } from "../db/schema.js";
 import { startHttpServer } from "../http/server.js";
-import { createMcpServer } from "../mcp-server.js";
+// The full assembly -- core plus the RPG layer -- now lives one layer up
+// (design §8, issue #17). The application always served the full surface,
+// so it reaches for it here rather than the core-only `createCoreMcpServer`
+// in ../mcp-server.js.
+import { createMcpServer } from "../rpg/index.js";
 import { httpPortFromEnv, setHttpPort, webUiEnabled } from "../utils/webui.js";
 import { createLogger } from "../utils/logger.js";
 

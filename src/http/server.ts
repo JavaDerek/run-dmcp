@@ -19,7 +19,7 @@ import {
   listGameImages,
 } from "../tools/images.js";
 import { getInventory, getItem, listGameItems } from "../tools/inventory.js";
-import { listQuests, getQuest } from "../tools/quest.js";
+import { listQuests, getQuest } from "../rpg/tools/quest.js";
 import { getHistory } from "../tools/narrative.js";
 import {
   getDisplayConfig,
@@ -30,11 +30,11 @@ import { listFactions, getFaction } from "../tools/faction.js";
 import { listResources, getResource } from "../tools/resource.js";
 import { listNotes, getNote } from "../tools/notes.js";
 import { listRelationships } from "../tools/relationship.js";
-import { listAbilities, getAbility } from "../tools/ability.js";
+import { listAbilities, getAbility } from "../rpg/tools/ability.js";
 import { listTimers, getTimer } from "../tools/timers.js";
 import { listSecrets } from "../tools/secrets.js";
 import { getTime } from "../tools/time.js";
-import { getActiveCombat } from "../tools/combat.js";
+import { getActiveCombat } from "../rpg/tools/combat.js";
 import { gameEvents } from "../events/emitter.js";
 import type { Character, Location, Faction, Quest, Resource, Note, Item } from "../types/index.js";
 

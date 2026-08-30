@@ -1,12 +1,12 @@
 import { v4 as uuidv4 } from "uuid";
-import { getDatabase } from "../db/connection.js";
-import { safeJsonParse } from "../utils/json.js";
-import { gameEvents } from "../events/emitter.js";
-import { validateGameExists } from "./game.js";
-import type { Combat, CombatParticipant } from "../types/index.js";
-import { getCharacter } from "./character.js";
+import { getDatabase } from "../../db/connection.js";
+import { safeJsonParse } from "../../utils/json.js";
+import { gameEvents } from "../../events/emitter.js";
+import { validateGameExists } from "../../tools/game.js";
+import type { Combat, CombatParticipant } from "../../types/index.js";
+import { getCharacter } from "../../tools/character.js";
 import { roll } from "./dice.js";
-import { getRules } from "./rules.js";
+import { getRules } from "../../tools/rules.js";
 
 export function startCombat(params: {
   gameId: string;

@@ -12,7 +12,21 @@
 // anyone remembering to enumerate what must not start.
 //
 // Starting things is src/bin/run-dmcp.ts, which is what `bin` points at.
-export { createMcpServer, SERVER_NAME, SERVER_VERSION } from "./mcp-server.js";
+//
+// THIS PACKAGE ROOT IS THE CORE (design §8, issue #17): entities, facts,
+// events, the timeline, and the entity/property domains a consumer cannot
+// lose without losing its own spine -- resources, relationships, factions,
+// secrets, locations, items. Dice, combat, abilities, status effects, random
+// tables and quests are genuinely game-shaped, and they are an OPTIONAL
+// layer above this, not part of it: import "run-dmcp/rpg" for
+// `createMcpServer`, the full assembly this package used to export under
+// that name. That is design §8's line, not an inversion of it -- the core
+// stays importable, buildable and useful with nothing above it, and the
+// layer stays free to depend down into the core without the core ever
+// depending up into it. `src/__tests__/layerBoundary.test.ts` walks the
+// static import graph from this file and fails if anything under `src/rpg/`
+// is reachable from it.
+export { createCoreMcpServer, SERVER_NAME, SERVER_VERSION } from "./mcp-server.js";
 
 // The database, and where it lives. The path resolves against the consuming
 // application (DMCP_DB_PATH, else an existing XDG data directory, else the
@@ -251,8 +265,11 @@ export type {
 export { ENTITY_KINDS } from "./timeline/kinds.js";
 export type { EntityKind } from "./timeline/kinds.js";
 
-// The web UI. An application opts into serving it; importing this never does.
-export { createHttpServer, startHttpServer } from "./http/server.js";
+// The web UI's port helpers -- no RPG dependency, so they stay here. The web
+// UI server itself (`createHttpServer`/`startHttpServer`) imports quest,
+// ability and combat tools and is exported from "run-dmcp/rpg" instead
+// (src/rpg/index.ts), even though the file that implements it stays at
+// src/http/server.ts on disk.
 export {
   DEFAULT_HTTP_PORT,
   httpPortFromEnv,

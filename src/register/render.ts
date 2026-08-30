@@ -9,7 +9,7 @@ const log = createLogger("render");
 /**
  * The MCP surface for the engine's state-to-text projection (design §7,
  * §8, GitHub issue #16) -- one tool, `render_state_at`. Registered ONLY
- * when a caller supplies a `StateRenderer` to `createMcpServer`
+ * when a caller supplies a `StateRenderer` to `createCoreMcpServer`
  * (src/mcp-server.ts), itself built by `createStateRenderer({ vocabulary
  * })` (timeline/render.ts) over a caller-injected, caller-owned vocabulary.
  * An engine with no injected vocabulary has nothing to name and registers

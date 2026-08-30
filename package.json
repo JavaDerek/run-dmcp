@@ -16,6 +16,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./rpg": {
+      "types": "./dist/rpg/index.d.ts",
+      "default": "./dist/rpg/index.js"
+    },
     "./package.json": "./package.json"
   },
   "bin": {

@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import * as questTools from "../tools/quest.js";
-import { LIMITS } from "../utils/validation.js";
-import { ANNOTATIONS } from "../utils/tool-annotations.js";
+import { LIMITS } from "../../utils/validation.js";
+import { ANNOTATIONS } from "../../utils/tool-annotations.js";
 
 export function registerQuestTools(server: McpServer) {
   server.registerTool(

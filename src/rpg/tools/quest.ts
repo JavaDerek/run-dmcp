@@ -1,9 +1,9 @@
 import { v4 as uuidv4 } from "uuid";
-import { getDatabase } from "../db/connection.js";
-import { safeJsonParse } from "../utils/json.js";
-import { gameEvents } from "../events/emitter.js";
-import { validateGameExists } from "./game.js";
-import type { Quest, QuestObjective } from "../types/index.js";
+import { getDatabase } from "../../db/connection.js";
+import { safeJsonParse } from "../../utils/json.js";
+import { gameEvents } from "../../events/emitter.js";
+import { validateGameExists } from "../../tools/game.js";
+import type { Quest, QuestObjective } from "../../types/index.js";
 
 export function createQuest(params: {
   gameId: string;

@@ -1,12 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import * as gameTools from "../tools/game.js";
-import * as characterTools from "../tools/character.js";
-import * as narrativeTools from "../tools/narrative.js";
-import * as pauseTools from "../tools/pause.js";
-import * as worldTools from "../tools/world.js";
+import * as gameTools from "../../tools/game.js";
+import * as characterTools from "../../tools/character.js";
+import * as narrativeTools from "../../tools/narrative.js";
+import * as pauseTools from "../../tools/pause.js";
+import * as worldTools from "../../tools/world.js";
 import * as questTools from "../tools/quest.js";
-import * as relationshipTools from "../tools/relationship.js";
+import * as relationshipTools from "../../tools/relationship.js";
 
 export function registerMcpPrompts(server: McpServer) {
   // ============================================================================

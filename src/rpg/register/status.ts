@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import * as statusTools from "../tools/status.js";
-import { LIMITS } from "../utils/validation.js";
-import { ANNOTATIONS } from "../utils/tool-annotations.js";
+import { LIMITS } from "../../utils/validation.js";
+import { ANNOTATIONS } from "../../utils/tool-annotations.js";
 
 export function registerStatusTools(server: McpServer) {
   server.registerTool(

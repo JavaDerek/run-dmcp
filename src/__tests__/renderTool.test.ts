@@ -2,7 +2,7 @@
 //
 // design §7's line is "mechanism in core, vocabulary injected by each
 // caller", and this file is where that line becomes observable from outside
-// the engine rather than a claim inside a doc comment. `createMcpServer()`
+// the engine rather than a claim inside a doc comment. `createCoreMcpServer()`
 // with no `vocabulary` registers NO `render_state_at` tool at all -- not a
 // tool that answers "no vocabulary configured", which would be a default
 // vocabulary of one unhelpful string and would still put the engine in the
@@ -16,7 +16,7 @@
 // to first use is validation that fires in front of a user instead of in
 // front of a developer.
 import { describe, it, expect } from "vitest";
-import { createMcpServer } from "../mcp-server.js";
+import { createCoreMcpServer } from "../mcp-server.js";
 import type { RenderVocabulary } from "../timeline/render.js";
 
 /** grain, treasury, population -- a throwaway fixture vocabulary for
@@ -38,21 +38,21 @@ function toolNames(server: unknown): string[] {
 }
 
 describe("render_state_at is registered only when a vocabulary is injected", () => {
-  it("registers no render tool when createMcpServer is called with nothing at all", () => {
-    expect(toolNames(createMcpServer())).not.toContain("render_state_at");
+  it("registers no render tool when createCoreMcpServer is called with nothing at all", () => {
+    expect(toolNames(createCoreMcpServer())).not.toContain("render_state_at");
   });
 
   it("registers no render tool when options are supplied but carry no vocabulary", () => {
-    expect(toolNames(createMcpServer({ mechanics: [] }))).not.toContain("render_state_at");
+    expect(toolNames(createCoreMcpServer({ mechanics: [] }))).not.toContain("render_state_at");
   });
 
   it("registers the render tool when a vocabulary is injected", () => {
-    expect(toolNames(createMcpServer({ vocabulary: FIXTURE_VOCABULARY }))).toContain("render_state_at");
+    expect(toolNames(createCoreMcpServer({ vocabulary: FIXTURE_VOCABULARY }))).toContain("render_state_at");
   });
 
   it("leaves every other tool exactly as it was -- injecting a vocabulary ADDS one tool and changes nothing else", () => {
-    const without = new Set(toolNames(createMcpServer()));
-    const with_ = toolNames(createMcpServer({ vocabulary: FIXTURE_VOCABULARY }));
+    const without = new Set(toolNames(createCoreMcpServer()));
+    const with_ = toolNames(createCoreMcpServer({ vocabulary: FIXTURE_VOCABULARY }));
 
     const added = with_.filter((name) => !without.has(name));
     expect(added).toEqual(["render_state_at"]);
@@ -63,9 +63,9 @@ describe("render_state_at is registered only when a vocabulary is injected", () 
 });
 
 describe("a malformed vocabulary is refused when the SERVER is built, not at first render", () => {
-  it("throws from createMcpServer on an entry carrying a field other than noun/adjectives", () => {
+  it("throws from createCoreMcpServer on an entry carrying a field other than noun/adjectives", () => {
     expect(() =>
-      createMcpServer({
+      createCoreMcpServer({
         // The exact regression this guards: a forbidden field bolted onto a
         // vocabulary entry (hard rules 3/4, design §7). It must never reach a
         // running server, and the refusal must name the offending field.
@@ -76,9 +76,9 @@ describe("a malformed vocabulary is refused when the SERVER is built, not at fir
     ).toThrow(/avoid/);
   });
 
-  it("throws from createMcpServer on an empty-string noun", () => {
+  it("throws from createCoreMcpServer on an empty-string noun", () => {
     expect(() =>
-      createMcpServer({ vocabulary: { grain: { full: { noun: "   " } } } })
+      createCoreMcpServer({ vocabulary: { grain: { full: { noun: "   " } } } })
     ).toThrow(/noun/);
   });
 });

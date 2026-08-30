@@ -1,8 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import * as tableTools from "../tools/tables.js";
-import { LIMITS } from "../utils/validation.js";
-import { ANNOTATIONS } from "../utils/tool-annotations.js";
+import { LIMITS } from "../../utils/validation.js";
+import { ANNOTATIONS } from "../../utils/tool-annotations.js";
 
 const tableEntrySchema = z.object({
   minRoll: z.number().describe("Minimum roll to get this result"),

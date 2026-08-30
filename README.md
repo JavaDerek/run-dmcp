@@ -54,8 +54,16 @@ server it cannot close squats a port.
 all: the entry point is exports, and the application lives behind `bin`. A consumer decides when the
 schema comes up, where the database lives, and whether anything listens.
 
+**The package root is the core, and the tabletop surface is a layer above it.** Dice, combat,
+abilities, status effects, random tables and quests are genuinely game-shaped — an optional
+dependency, not part of the engine (see [docs/DESIGN.md](docs/DESIGN.md) §8). A consumer that only
+needs entities, facts, events and the timeline imports `run-dmcp` and calls `createCoreMcpServer`. A
+consumer that wants the full tabletop surface imports `run-dmcp/rpg` and calls `createMcpServer` —
+same name, same options, the whole assembly this package has always served:
+
 ```ts
-import { initializeSchema, createMcpServer, type SchemaMigration } from "run-dmcp";
+import { initializeSchema, type SchemaMigration } from "run-dmcp";
+import { createMcpServer } from "run-dmcp/rpg";
 
 const migrations: SchemaMigration[] = [
   {

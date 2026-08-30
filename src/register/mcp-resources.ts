@@ -3,9 +3,28 @@ import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as gameTools from "../tools/game.js";
 import * as characterTools from "../tools/character.js";
 import * as worldTools from "../tools/world.js";
-import * as questTools from "../tools/quest.js";
 import * as narrativeTools from "../tools/narrative.js";
 import * as rulesTools from "../tools/rules.js";
+
+// Helper to create list callback for game-scoped resources. Hoisted to
+// module scope and exported (design §8, issue #17) so that
+// src/rpg/register/mcp-resources.ts's game-quests and quest resources --
+// the two RPG-shaped entries pulled out of this file -- share this one
+// implementation rather than growing a second copy of it.
+export const createGameListCallback = (
+  suffix: string,
+  nameFormatter: (g: { id: string; name: string }) => string
+) => {
+  return async () => {
+    const games = gameTools.listGames();
+    return {
+      resources: games.map((g) => ({
+        uri: `dmcp://game/${g.id}${suffix}`,
+        name: nameFormatter(g),
+      })),
+    };
+  };
+};
 
 export function registerMcpResources(server: McpServer) {
   // ============================================================================
@@ -37,19 +56,6 @@ export function registerMcpResources(server: McpServer) {
   // ============================================================================
   // GAME-SCOPED RESOURCES (templated)
   // ============================================================================
-
-  // Helper to create list callback for game-scoped resources
-  const createGameListCallback = (suffix: string, nameFormatter: (g: { id: string; name: string }) => string) => {
-    return async () => {
-      const games = gameTools.listGames();
-      return {
-        resources: games.map((g) => ({
-          uri: `dmcp://game/${g.id}${suffix}`,
-          name: nameFormatter(g),
-        })),
-      };
-    };
-  };
 
   // Game details
   server.registerResource(
@@ -212,31 +218,6 @@ export function registerMcpResources(server: McpServer) {
     }
   );
 
-  // Game quests
-  server.registerResource(
-    "game-quests",
-    new ResourceTemplate("dmcp://game/{gameId}/quests", {
-      list: createGameListCallback("/quests", (g) => `${g.name} - Quests`),
-    }),
-    {
-      description: "All quests in the game",
-      mimeType: "application/json",
-    },
-    async (uri, variables) => {
-      const gameId = variables.gameId as string;
-      const quests = questTools.listQuests(gameId);
-      return {
-        contents: [
-          {
-            uri: uri.href,
-            mimeType: "application/json",
-            text: JSON.stringify(quests, null, 2),
-          },
-        ],
-      };
-    }
-  );
-
   // Game history (recent narrative events)
   server.registerResource(
     "game-history",
@@ -368,42 +349,6 @@ export function registerMcpResources(server: McpServer) {
             uri: uri.href,
             mimeType: "application/json",
             text: JSON.stringify(location, null, 2),
-          },
-        ],
-      };
-    }
-  );
-
-  // Quest by ID
-  server.registerResource(
-    "quest",
-    new ResourceTemplate("dmcp://quest/{questId}", {
-      list: undefined, // No enumeration - access by ID only
-    }),
-    {
-      description: "Quest details with objectives",
-      mimeType: "application/json",
-    },
-    async (uri, variables) => {
-      const questId = variables.questId as string;
-      const quest = questTools.getQuest(questId);
-      if (!quest) {
-        return {
-          contents: [
-            {
-              uri: uri.href,
-              mimeType: "application/json",
-              text: JSON.stringify({ error: "Quest not found" }),
-            },
-          ],
-        };
-      }
-      return {
-        contents: [
-          {
-            uri: uri.href,
-            mimeType: "application/json",
-            text: JSON.stringify(quest, null, 2),
           },
         ],
       };
