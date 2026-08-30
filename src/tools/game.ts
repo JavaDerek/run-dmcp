@@ -1,7 +1,12 @@
 import { v4 as uuidv4 } from "uuid";
 import { getDatabase } from "../db/connection.js";
 import { safeJsonParse } from "../utils/json.js";
+import { createLogger } from "../utils/logger.js";
+import { deleteGameAudio } from "./audio.js";
+import { deleteGameImages } from "./images.js";
 import type { Game, RuleSystem, GamePreferences, ImageGenerationPreferences, ImageGenerationPreset, ImagePromptTemplate } from "../types/index.js";
+
+const log = createLogger("game");
 
 /**
  * Validates that a game exists and returns it, or throws an error if not found.
@@ -152,7 +157,35 @@ export function deleteGame(id: string): boolean {
   const db = getDatabase();
   const stmt = db.prepare(`DELETE FROM games WHERE id = ?`);
   const result = stmt.run(id);
-  return result.changes > 0;
+  if (result.changes === 0) return false;
+
+  // The stored_audio / stored_images rows went with the game by foreign key
+  // cascade, so nothing is left that knows the files on disk exist. Cleanup
+  // therefore runs here, after the delete has committed.
+  //
+  // A cleanup failure degrades to a log rather than an exception: the row is
+  // already gone and throwing cannot un-delete it, so it would trade a stale
+  // directory for a failed tool call and lose both. Each cleanup is attempted
+  // separately, so one failing does not skip the other.
+  try {
+    deleteGameAudio(id);
+  } catch (error) {
+    log.error("Failed to remove stored audio for a deleted game; files remain on disk", {
+      gameId: id,
+      error: (error as Error).message,
+    });
+  }
+
+  try {
+    deleteGameImages(id);
+  } catch (error) {
+    log.error("Failed to remove stored images for a deleted game; files remain on disk", {
+      gameId: id,
+      error: (error as Error).message,
+    });
+  }
+
+  return true;
 }
 
 export function updateGameLocation(

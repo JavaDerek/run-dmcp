@@ -15,6 +15,7 @@ import type {
   AudioListResult,
   VoiceReferenceResult,
 } from "../types/index.js";
+import { mediaDirPath, mediaFilePath, mediaPathWithin } from "../utils/media-path.js";
 import { getCharacter } from "./character.js";
 import { getLocation } from "./world.js";
 import { getFaction } from "./faction.js";
@@ -153,15 +154,15 @@ export async function storeAudio(params: StoreAudioParams): Promise<StoredAudio>
     throw new Error("Either url or filePath must be provided");
   }
 
-  // Build file path
+  // Build file path. Every segment below arrives from the caller, so the
+  // composition goes through the media-path choke point, which rejects
+  // anything that would land outside the audio directory.
   const ext = getExtension(mimeType);
-  const relativePath = join(
-    params.gameId,
-    `${params.entityType}s`,
-    params.entityId,
+  const { relativePath, fullPath } = mediaFilePath(
+    getAudioDir(),
+    [params.gameId, `${params.entityType}s`, params.entityId],
     `${id}.${ext}`
   );
-  const fullPath = join(getAudioDir(), relativePath);
 
   // Ensure directory exists and write file
   ensureDir(dirname(fullPath));
@@ -252,7 +253,7 @@ export function getAudio(audioId: string): StoredAudio | null {
 export function getAudioFilePath(audioId: string): string | null {
   const audio = getAudio(audioId);
   if (!audio) return null;
-  const fullPath = join(getAudioDir(), audio.filePath);
+  const fullPath = mediaPathWithin(getAudioDir(), audio.filePath);
   if (!existsSync(fullPath)) return null;
   return fullPath;
 }
@@ -263,7 +264,7 @@ export function getAudioData(
   const audio = getAudio(audioId);
   if (!audio) return null;
 
-  const fullPath = join(getAudioDir(), audio.filePath);
+  const fullPath = mediaPathWithin(getAudioDir(), audio.filePath);
   if (!existsSync(fullPath)) return null;
 
   const buffer = readFileSync(fullPath);
@@ -349,7 +350,7 @@ export function getCharacterVoiceReferences(
   const audioDir = getAudioDir();
   const filePaths = voiceRefs
     .map((ref) => {
-      const fullPath = join(audioDir, ref.filePath);
+      const fullPath = mediaPathWithin(audioDir, ref.filePath);
       return existsSync(fullPath) ? fullPath : null;
     })
     .filter((p): p is string => p !== null);
@@ -370,7 +371,7 @@ export function deleteAudio(audioId: string): boolean {
   if (!audio) return false;
 
   // Delete file
-  const fullPath = join(getAudioDir(), audio.filePath);
+  const fullPath = mediaPathWithin(getAudioDir(), audio.filePath);
   if (existsSync(fullPath)) {
     unlinkSync(fullPath);
   }
@@ -461,8 +462,10 @@ export function updateAudioMetadata(
 export function deleteGameAudio(gameId: string): number {
   const db = getDatabase();
 
-  // Delete files
-  const gameDir = join(getAudioDir(), gameId);
+  // Delete files. mediaDirPath rejects before the rmSync below, which is
+  // recursive and forced: an unchecked `..` here would take the whole data
+  // directory with it.
+  const gameDir = mediaDirPath(getAudioDir(), [gameId]);
   if (existsSync(gameDir)) {
     rmSync(gameDir, { recursive: true, force: true });
   }

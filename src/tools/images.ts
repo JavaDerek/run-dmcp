@@ -15,6 +15,7 @@ import type {
   StoreImageParams,
   ImageListResult,
 } from "../types/index.js";
+import { mediaDirPath, mediaFilePath, mediaPathWithin } from "../utils/media-path.js";
 import { getCharacter } from "./character.js";
 import { getLocation } from "./world.js";
 import { getItem } from "./inventory.js";
@@ -151,15 +152,15 @@ export async function storeImage(params: StoreImageParams): Promise<StoredImage>
     // If sharp can't parse it, proceed without dimensions
   }
 
-  // Build file path
+  // Build file path. Every segment below arrives from the caller, so the
+  // composition goes through the media-path choke point, which rejects
+  // anything that would land outside the images directory.
   const ext = getExtension(mimeType);
-  const relativePath = join(
-    params.gameId,
-    `${params.entityType}s`,
-    params.entityId,
+  const { relativePath, fullPath } = mediaFilePath(
+    getImagesDir(),
+    [params.gameId, `${params.entityType}s`, params.entityId],
     `${id}.${ext}`
   );
-  const fullPath = join(getImagesDir(), relativePath);
 
   // Ensure directory exists and write file
   ensureDir(dirname(fullPath));
@@ -250,7 +251,7 @@ export async function getImageData(
   const image = getImage(imageId);
   if (!image) return null;
 
-  const fullPath = join(getImagesDir(), image.filePath);
+  const fullPath = mediaPathWithin(getImagesDir(), image.filePath);
   if (!existsSync(fullPath)) return null;
 
   const originalBuffer = readFileSync(fullPath);
@@ -457,7 +458,7 @@ export function deleteImage(imageId: string): boolean {
   if (!image) return false;
 
   // Delete file
-  const fullPath = join(getImagesDir(), image.filePath);
+  const fullPath = mediaPathWithin(getImagesDir(), image.filePath);
   if (existsSync(fullPath)) {
     unlinkSync(fullPath);
   }
@@ -523,15 +524,17 @@ export function updateImageMetadata(
 
     // If entity changed, move the file
     if (newEntityId !== current.entityId || newEntityType !== current.entityType) {
-      const oldFullPath = join(getImagesDir(), current.filePath);
+      const oldFullPath = mediaPathWithin(getImagesDir(), current.filePath);
       const ext = current.filePath.split(".").pop() || "png";
-      newFilePath = join(
-        current.gameId,
-        `${newEntityType}s`,
-        newEntityId,
+      // The move recomposes the path from a caller-supplied entity id and
+      // type, so it goes through the same choke point as the original write.
+      const moved = mediaFilePath(
+        getImagesDir(),
+        [current.gameId, `${newEntityType}s`, newEntityId],
         `${imageId}.${ext}`
       );
-      const newFullPath = join(getImagesDir(), newFilePath);
+      newFilePath = moved.relativePath;
+      const newFullPath = moved.fullPath;
 
       // Ensure new directory exists
       ensureDir(dirname(newFullPath));
@@ -567,8 +570,10 @@ export function updateImageMetadata(
 export function deleteGameImages(gameId: string): number {
   const db = getDatabase();
 
-  // Delete files
-  const sessionDir = join(getImagesDir(), gameId);
+  // Delete files. mediaDirPath rejects before the rmSync below, which is
+  // recursive and forced: an unchecked `..` here would take the whole data
+  // directory with it.
+  const sessionDir = mediaDirPath(getImagesDir(), [gameId]);
   if (existsSync(sessionDir)) {
     rmSync(sessionDir, { recursive: true, force: true });
   }
