@@ -601,6 +601,39 @@ describe("projection: trigger regeneration after ALTER TABLE ADD COLUMN", () => 
     db.prepare(`UPDATE resources SET population = ? WHERE id = ?`).run("130", resource.id);
     assertColumnProjected(db, "resources", resource.id, resource.id, "population");
   });
+
+  it("a column a CONSUMER migration adds to a projected table is projected too, because the timeline is installed after those migrations run", () => {
+    // `initializeSchema({ migrations })` is the one door the engine hands a
+    // consuming application for its own DDL, and a consumer is free to point
+    // it at a projected table. The timeline hook therefore runs after
+    // `runConsumerMigrations`, not merely after the engine's own DDL -- the
+    // projection triggers are generated from a live `pragma_table_info` read,
+    // so whatever ran most recently is what they are built against. Ordered
+    // the other way, a consumer's column would be silently absent from the
+    // timeline and the checkpoint would report a divergence the consumer had
+    // no way to see coming. This test is what holds that ordering in place:
+    // swap the two calls in src/db/schema.ts and it goes red.
+    initializeSchema({
+      migrations: [
+        {
+          name: "grain-store-adds-a-column",
+          up(database) {
+            try {
+              database.exec(`ALTER TABLE factions ADD COLUMN granary TEXT`);
+            } catch {
+              // Already added -- migrations run on every startup by design.
+            }
+          },
+        },
+      ],
+    });
+
+    const game = createGame({ name: "grain depot", setting: "test", style: "test" });
+    const guild = createFaction({ gameId: game.id, name: "grain guild" });
+
+    db.prepare(`UPDATE factions SET granary = ? WHERE id = ?`).run("full", guild.id);
+    assertColumnProjected(db, "factions", guild.id, guild.id, "granary");
+  });
 });
 
 describe("projection: reconciliation", () => {

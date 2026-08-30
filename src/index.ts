@@ -1,107 +1,67 @@
-#!/usr/bin/env node
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+// The library entry point: exports, and nothing else.
+//
+// Importing this module must do nothing to the machine -- no database file, no
+// listener, no transport, no timer, no work of any kind. 0.1.0 shipped one
+// entry that was both library and application, so importing the package opened
+// a database inside node_modules and bound the web UI's port, and the listener
+// outlived the import by hours.
+//
+// The rule is asserted from the outside in src/__tests__/entrypoints.test.ts:
+// a child process imports this file and must be able to EXIT. Anything left
+// open keeps it alive and fails the test, so the guarantee does not depend on
+// anyone remembering to enumerate what must not start.
+//
+// Starting things is src/bin/run-dmcp.ts, which is what `bin` points at.
+export { createMcpServer, SERVER_NAME, SERVER_VERSION } from "./mcp-server.js";
 
-import { initializeSchema } from "./db/schema.js";
-import { closeDatabase } from "./db/connection.js";
-import { startHttpServer } from "./http/server.js";
-import { setHttpPort } from "./utils/webui.js";
+// The database, and where it lives. The path resolves against the consuming
+// application (DMCP_DB_PATH, else an existing XDG data directory, else the
+// working directory) and never against this package's install location.
+export {
+  getDatabase,
+  closeDatabase,
+  withTransaction,
+  getDatabasePath,
+  getDataDir,
+  resolveDataPathFrom,
+} from "./db/connection.js";
+export type { DataPathInputs } from "./db/connection.js";
 
-// Import registration functions
-import { registerCoreTools } from "./register/core.js";
-import { registerWorldTools } from "./register/world.js";
-import { registerCharacterTools } from "./register/character.js";
-import { registerCombatTools } from "./register/combat.js";
-import { registerInventoryTools } from "./register/inventory.js";
-import { registerQuestTools } from "./register/quests.js";
-import { registerNarrativeTools } from "./register/narrative.js";
-import { registerResourceTools } from "./register/resources.js";
-import { registerTimeTools } from "./register/time.js";
-import { registerTableTools } from "./register/tables.js";
-import { registerSecretTools } from "./register/secrets.js";
-import { registerRelationshipTools } from "./register/relationships.js";
-import { registerTagTools } from "./register/tags.js";
-import { registerStatusTools } from "./register/status.js";
-import { registerFactionTools } from "./register/factions.js";
-import { registerAbilityTools } from "./register/abilities.js";
-import { registerNoteTools } from "./register/notes.js";
-import { registerPauseTools } from "./register/pause.js";
-import { registerImageTools } from "./register/images.js";
-import { registerAudioTools } from "./register/audio.js";
-import { registerDisplayTools } from "./register/display.js";
-import { registerBatchTools } from "./register/batch.js";
-import { registerMcpResources } from "./register/mcp-resources.js";
-import { registerMcpPrompts } from "./register/mcp-prompts.js";
-import { registerTimelineTools } from "./register/timeline.js";
+// The schema, and the hook a consuming application uses to bring up its own
+// tables in the same startup pass, in the same database, under the same rules.
+export { initializeSchema } from "./db/schema.js";
+export type { SchemaMigration } from "./db/schema.js";
 
-// Initialize database
-initializeSchema();
+// The timeline (design §5.1) -- the reason this engine exists, and therefore
+// something a consuming application reaches directly rather than only through
+// a tool call. `replay` answers what the world looked like at any `t`;
+// `declareTimeAxis` is where an application says what its `t` actually is,
+// which it must do before its first write for that game if it wants its own
+// origin (see clock.ts).
+//
+// `timelineDivergences` is exported for the same reason design §13 makes it a
+// stop condition rather than a nicety: an application that keeps its world
+// here is entitled to ask, of its own database, whether the log it is trusting
+// still reproduces its live tables. It returns rows and never a verdict.
+export { replay } from "./timeline/replay.js";
+export type { Snapshot, ReplayedEntity, ReplayedFact } from "./timeline/replay.js";
+export { declareTimeAxis, setStoryTime, currentStoryTime } from "./timeline/clock.js";
+export type { StoryTime } from "./timeline/clock.js";
+export { compareT, assertT } from "./timeline/t.js";
+export type { T, TimeAxis } from "./timeline/t.js";
+export { timelineDivergences } from "./timeline/checkpoint.js";
+export type { Divergence } from "./timeline/checkpoint.js";
+export { ENTITY_KINDS } from "./timeline/kinds.js";
+export type { EntityKind } from "./timeline/kinds.js";
 
-// Create MCP server
-const server = new McpServer({
-  name: "dmcp",
-  version: "0.1.0",
-});
+// The web UI. An application opts into serving it; importing this never does.
+export { createHttpServer, startHttpServer } from "./http/server.js";
+export {
+  DEFAULT_HTTP_PORT,
+  httpPortFromEnv,
+  webUiEnabled,
+  setHttpPort,
+  getWebUiBaseUrl,
+} from "./utils/webui.js";
 
-// Register all tools by domain
-registerCoreTools(server);           // Game, Interview, Rules
-registerWorldTools(server);          // Locations, Connections, Map
-registerCharacterTools(server);      // Characters (PC/NPC)
-registerCombatTools(server);         // Combat, Dice, Checks
-registerInventoryTools(server);      // Items
-registerQuestTools(server);          // Quests, Objectives
-registerNarrativeTools(server);      // Events, History, Export, Player Choices
-registerResourceTools(server);       // Custom Resources
-registerTimeTools(server);           // Calendar, Time, Timers
-registerTableTools(server);          // Random Tables
-registerSecretTools(server);         // Secrets, Knowledge
-registerRelationshipTools(server);   // Relationships
-registerTagTools(server);            // Tags
-registerStatusTools(server);         // Status Effects
-registerFactionTools(server);        // Factions
-registerAbilityTools(server);        // Abilities/Powers
-registerNoteTools(server);           // Game Notes
-registerPauseTools(server);          // Pause/Resume, Context Snapshots, External Updates
-registerImageTools(server);          // Stored Images
-registerAudioTools(server);          // Stored Audio (TTS, Voice References)
-registerDisplayTools(server);        // Display/Theme Configuration
-registerBatchTools(server);          // Batch Operations (multi-entity, workflows)
-registerTimelineTools(server);       // replay(t), story-time axis declaration
-
-// Register MCP Resources and Prompts
-registerMcpResources(server);        // Read-only data access via URI
-registerMcpPrompts(server);          // Reusable prompt templates
-
-// ============================================================================
-// START SERVER
-// ============================================================================
-
-// HTTP server port (configurable via environment variable)
-const HTTP_PORT = parseInt(process.env.DMCP_HTTP_PORT || "3456", 10);
-
-async function main() {
-  // Start HTTP server for web UI (runs alongside MCP)
-  const actualPort = await startHttpServer(HTTP_PORT);
-  setHttpPort(actualPort);
-
-  // Start MCP server with stdio transport
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-}
-
-// Handle cleanup
-process.on("SIGINT", () => {
-  closeDatabase();
-  process.exit(0);
-});
-
-process.on("SIGTERM", () => {
-  closeDatabase();
-  process.exit(0);
-});
-
-main().catch((error) => {
-  console.error("Server error:", error);
-  closeDatabase();
-  process.exit(1);
-});
+export type * from "./types/index.js";

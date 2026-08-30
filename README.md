@@ -12,7 +12,7 @@ holds full adjudication discretion over a world that only ever stores *now*.
 
 ## Status
 
-**0.1.0 — the foundation, not the thesis.** What ships today is the predecessor's engine plus four
+**0.1.1 — the foundation, not the thesis.** What ships today is the predecessor's engine plus four
 pieces of generic mechanism that were built for it and offered back to it:
 
 - **Atomicity** — `withTransaction()` wired into the multi-write operations that were running
@@ -26,9 +26,57 @@ pieces of generic mechanism that were built for it and offered back to it:
 - **On-expiry consequences** — scheduled events and timers can carry a consequence that actually
   lands when they expire, rather than expiring into nothing.
 
+0.1.1 adds the packaging half of that: importing the library starts nothing, the database resolves to
+the consuming application rather than into `node_modules`, and a consumer can bring up its own tables
+through the migration hook below.
+
 The timeline that gives this project its reason to exist — interval-versioned facts, `replay(t)`,
 irreversibility, `changes_within` — is designed and accepted but **not yet built**. See
 [docs/DESIGN.md](docs/DESIGN.md), which is the authority, and §11 for the order things land in.
+
+## Running it, and depending on it
+
+These are two different things, and the package keeps them apart.
+
+**As an application** — `run-dmcp` (or `node dist/bin/run-dmcp.js`) serves MCP over stdio and the web
+UI alongside it. `DMCP_HTTP_PORT` moves the web UI; `DMCP_NO_HTTP=1` turns it off entirely, which is
+what a host that spawns this as a subprocess wants: a referee has no use for an admin page, and a
+server it cannot close squats a port.
+
+**As a dependency** — importing the package starts nothing. No listener, no database file, no work at
+all: the entry point is exports, and the application lives behind `bin`. A consumer decides when the
+schema comes up, where the database lives, and whether anything listens.
+
+```ts
+import { initializeSchema, createMcpServer, type SchemaMigration } from "run-dmcp";
+
+const migrations: SchemaMigration[] = [
+  {
+    name: "my-tables",
+    up(db) {
+      db.exec(`CREATE TABLE IF NOT EXISTS my_table (id TEXT PRIMARY KEY)`);
+      try {
+        db.exec(`ALTER TABLE my_table ADD COLUMN added_later TEXT`);
+      } catch {
+        // Already added -- migrations run on every startup, so they must be idempotent.
+      }
+    },
+  },
+];
+
+initializeSchema({ migrations });   // engine tables first, then yours, one pass, one database
+const server = createMcpServer();   // built, not started -- connect it to a transport yourself
+```
+
+The hook is a parameter rather than a global `register()` because a parameter cannot be registered
+too late to run. There is no framework behind it: no version table, no record of what already ran, no
+down-migrations. Every migration runs on every startup, exactly like the engine's own DDL — which is
+what forces them to be idempotent, and it is tested against an existing database, not just a fresh
+one.
+
+The database lands in the consuming application: `DMCP_DB_PATH` if set, else an existing
+`~/.local/share/dmcp`, else `./data/games.db` relative to the working directory. Never inside the
+installed package.
 
 ## Provenance
 
@@ -70,12 +118,12 @@ npm run typecheck     # tsc --noEmit
 npm run test:run      # vitest, one shot
 npm run build         # tsc + client build
 
-npm run dev           # tsx src/index.ts
+npm run dev           # tsx src/bin/run-dmcp.ts
 ```
 
 CI runs lint, typecheck, tests and build on every push, for both the server and the client.
 
-Local MCP inspection: `npx @modelcontextprotocol/inspector node dist/index.js`
+Local MCP inspection: `npx @modelcontextprotocol/inspector node dist/bin/run-dmcp.js`
 
 ## License
 
