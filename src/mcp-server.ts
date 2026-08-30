@@ -33,6 +33,8 @@ import { registerBatchTools } from "./register/batch.js";
 import { registerMcpResources } from "./register/mcp-resources.js";
 import { registerMcpPrompts } from "./register/mcp-prompts.js";
 import { registerTimelineTools } from "./register/timeline.js";
+import { registerResolveTools } from "./register/resolve.js";
+import { createResolver, type Mechanic } from "./timeline/resolve.js";
 
 export const SERVER_NAME = "dmcp";
 export const SERVER_VERSION = "0.1.1";
@@ -43,8 +45,21 @@ export const SERVER_VERSION = "0.1.1";
  * The returned server is not connected to anything. Connect it to a transport
  * yourself, and call `initializeSchema()` before serving a request -- both are
  * the caller's to decide, and neither happens on import.
+ *
+ * `mechanics` (design §5.2a, issue #10) is injection at construction, the
+ * same way `initializeSchema({ migrations })` (src/db/schema.ts) is -- there
+ * is no global resolver anywhere in this codebase, only the one a caller
+ * builds by passing its mechanics here. Every existing zero-argument call
+ * site (src/bin/run-dmcp.ts) keeps working unchanged: `options` and
+ * `options.mechanics` are both optional, and calling `createMcpServer()`
+ * with nothing at all registers every tool this engine served before this
+ * option existed, and no resolve surface. That absence is deliberate, not
+ * an oversight -- an engine with no mechanics registered has nothing a
+ * `resolve` tool could ever dispatch, so it gets no `resolve`/`list_mechanics`
+ * tools rather than a pair that could only ever answer "unknown-mechanic"
+ * and "[]".
  */
-export function createMcpServer(): McpServer {
+export function createMcpServer(options?: { mechanics?: readonly Mechanic[] }): McpServer {
   const server = new McpServer({
     name: SERVER_NAME,
     version: SERVER_VERSION,
@@ -74,6 +89,12 @@ export function createMcpServer(): McpServer {
   registerDisplayTools(server);        // Display/Theme Configuration
   registerBatchTools(server);          // Batch Operations (multi-entity, workflows)
   registerTimelineTools(server);       // replay(t), story-time axis declaration
+
+  const mechanics = options?.mechanics;
+  if (mechanics && mechanics.length > 0) {
+    const resolver = createResolver({ mechanics });
+    registerResolveTools(server, resolver); // resolve(), list_mechanics -- only when mechanics are registered
+  }
 
   // Register MCP Resources and Prompts
   registerMcpResources(server);        // Read-only data access via URI

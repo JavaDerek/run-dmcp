@@ -131,6 +131,43 @@ export {
 export type { ValueTransition } from "./timeline/constrained.js";
 export { ConstraintViolationError, constraintsFor, conservedConstraintFor } from "./timeline/registry.js";
 
+// The resolve protocol (design §5.2a, GitHub issue #10) -- the inbound half of
+// authority. The engine enforces the PROTOCOL -- resolution happens before
+// narration, writes go through the audited path, declared expectations are
+// checked -- without knowing what any particular mechanic MEANS. An application
+// registers its mechanics by passing them to `createResolver`, and the engine
+// dispatches them and never learns their names.
+//
+// Registration is injection at construction, exactly like `initializeSchema({
+// migrations })` and for exactly the same reason: a global registry would make
+// behaviour depend on module import order and on side effects at import time,
+// which is the disease the entry-point split above cured. A parameter cannot be
+// registered too late.
+//
+// NOTE WHAT IS DELIBERATELY *NOT* EXPORTED HERE: `withAdjudicationOpen` and
+// `adjudicationOpen` (./timeline/adjudication.js). `resolve_only` (issue #13)
+// means a value moves only through an adjudicating call, and the adjudication
+// window is what "adjudicating" is measured against -- so exporting the ability
+// to open one would hand every caller a one-line bypass of the constraint, and
+// the fourth member of the family would be enforced against everybody except
+// whoever read the export list. `resolver.resolve()` is the only public door to
+// a `resolve_only` value. That is the whole point of the constraint, so the
+// window stays internal to the engine that opens it.
+export { createResolver, ResolveProtocolError } from "./timeline/resolve.js";
+export type {
+  Mechanic,
+  Resolver,
+  Proposal,
+  Expectation,
+  AdjudicationInput,
+  Adjudication,
+  IntendedChange,
+  IntendedWrite,
+  IntendedTransfer,
+  Outcome,
+  ResolveRefusalReason,
+} from "./timeline/resolve.js";
+
 // Timeline export (design §6) -- the boundary that keeps both halves honest:
 // conversational authoring upstream of a frozen artifact, deterministic
 // consumers downstream of it. These are exported as library functions first
