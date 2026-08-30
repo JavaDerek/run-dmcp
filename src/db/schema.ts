@@ -1,4 +1,5 @@
 import { getDatabase } from "./connection.js";
+import { initializeTimelineSchema } from "../timeline/schema.js";
 
 export function initializeSchema(): void {
   const db = getDatabase();
@@ -767,4 +768,10 @@ export function initializeSchema(): void {
     CREATE INDEX IF NOT EXISTS idx_stored_audio_primary ON stored_audio(entity_id, entity_type, is_primary);
     CREATE INDEX IF NOT EXISTS idx_stored_audio_voice_ref ON stored_audio(game_id, is_voice_reference);
   `);
+
+  // Timeline substrate (design §5.1). Last, because its triggers reference
+  // this function's tables only by name -- not by a live pragma_table_info
+  // read -- but keeping it last still means every ALTER above has already
+  // run before anything timeline-related executes.
+  initializeTimelineSchema();
 }
