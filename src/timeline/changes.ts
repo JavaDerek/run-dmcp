@@ -156,6 +156,12 @@ function compareChanges(a: Change, b: Change): number {
  * retroactively un-happen it. Filtering these rows by aliveness would be
  * exactly the kind of policy this module isn't allowed to have an opinion
  * on (see `ChangeSet`'s doc comment).
+ *
+ * Omniscient for the same reason and by the same decision as `replay()` --
+ * see its doc comment for the argument. Every transition in the window is
+ * returned regardless of which principal could have observed it, and a
+ * later per-principal filter arrives as one predicate on the two queries
+ * below (issue #18).
  */
 export function changesWithin(params: { gameId: string; t0: T; t1: T }): ChangeSet {
   const { gameId, t0, t1 } = params;

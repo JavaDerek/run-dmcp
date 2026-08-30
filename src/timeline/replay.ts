@@ -88,6 +88,26 @@ const ALIVE_AT_T = "e.created_at_t <= ? AND (e.destroyed_at_t IS NULL OR e.destr
  * large one and make every distinct entity count its own SQL text, which
  * defeats better-sqlite3's prepared-statement cache. Fixed SQL, two binds
  * of `t`, regardless of how many entities exist.
+ *
+ * OMNISCIENT, DELIBERATELY (issue #18). This returns every fact valid at
+ * `t`, for every entity alive at `t`, with no visibility filtering of any
+ * kind. That is a decision, not an omission: per-principal visibility is
+ * deferred until a real caller makes the requirement concrete, because the
+ * expensive half of such a feature is the principal model, and inventing a
+ * principal against an imagined client is precisely what design §13 forbids.
+ *
+ * Worth stating out loud here rather than leaving to be inferred, because
+ * the predecessor's unenforced version of the same decision is legible
+ * today for exactly one reason -- `get_secret`'s own description says "DM
+ * view - shows all info" -- and a reader who finds an unfiltered query with
+ * no such sentence cannot tell a decision from a hole.
+ *
+ * A later filter is additive and needs nothing reserved for it now: it is
+ * one predicate, added here once, because this function is the single place
+ * every reader of "what was true at `t`" goes through. Do NOT add a
+ * nullable visibility column to `facts` in anticipation -- an unpopulated
+ * one reads equally well as "visible to everyone" and "visible to no one",
+ * and both readings survive review.
  */
 export function replay(params: { gameId: string; t: T }): Snapshot {
   const { gameId, t } = params;

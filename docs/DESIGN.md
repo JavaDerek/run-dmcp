@@ -487,8 +487,25 @@ without a real caller) and what keeps this from becoming a licence to build for 
 | **RPG layer** | dice, combat, abilities, status effects, random tables, quests | Genuinely game-shaped. Optional dependency. |
 | **brink** | the eight mechanics, prestige, DEFCON, flashpoints, cohesion, crises, compellence, accords, occupation, seats, GM persona, situation room, refresh pipeline | Geopolitical content. Never in the engine. |
 
-**Deferred:** per-seat visibility / fog of war. Not built (brink #16). It lands when a second consumer
+**Deferred:** per-seat visibility / fog of war. Not built (brink #16). It lands when **a real caller**
 makes the requirement concrete rather than being designed against an imagined one.
+
+*Erratum, and it matters more than a word.* This line previously read "when a second consumer" — a
+stricter bar than the rule stated four paragraphs above it, and stricter in a way that was not
+deferral but permanent refusal: the video-side consumer **structurally cannot** want fog of war (§9 —
+one traversal, no player, nobody to hide anything from), so a bar requiring two consumers is one no
+caller can ever clear no matter what it builds. The bar is the same as every other core entry: one
+real caller.
+
+**Admission criterion, both halves required.** A real caller needs it, *and* its principal **resolves
+to an entity the engine already has**. "Resolves to", not "is": a caller's principal may carry
+attributes of its own — a controller, an index, a display name — and still be admissible, so long as
+identity lands on an existing entity. What is refused is a principal that can only be *named* in the
+caller's own vocabulary, which belongs in that caller's layer and which §10's CI gate will say so
+about. And the check the feature must be stated as is structural, in §5.2b's existing shape — *if
+fact F is not visible to principal P at `t`, a claim asserting F in a payload built for P is
+prohibited* — derived from the facts, never an authored list of what may not be said, which would be
+§5.2b's rule wearing a costume.
 
 ---
 
