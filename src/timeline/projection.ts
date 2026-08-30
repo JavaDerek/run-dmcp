@@ -318,6 +318,23 @@ function reconcileTable(db: Database.Database, row: ProjectedTable): void {
     // initializeSchema() itself -- out at startup. With it, the close is
     // simply skipped, the divergence persists for timelineDivergences()
     // (checkpoint.ts) to report, and the server still boots.
+    //
+    // `AND NOT EXISTS (... resolve_only ...)` (issue #13) is the identical
+    // rule for the identical reason, one row over: a `resolve_only`
+    // constraint's whole job is to make timeline_facts_resolve_only
+    // (src/db/schema.ts) refuse an INSERT for its (entity_id, key) with no
+    // adjudication window open -- and reconciliation is not an adjudicating
+    // call, so the open-INSERT below would hit that trigger and abort for
+    // exactly the same reason a divergent irreversible fact hits
+    // timeline_facts_irreversible. Skipping the close here (so a fact this
+    // guard cannot reopen is never closed in the first place) is what keeps
+    // that abort from ever firing, and lets the divergence persist for
+    // timelineDivergences() to report instead of taking initializeSchema()
+    // down with it. The subquery mirrors timeline_facts_resolve_only's own
+    // WHEN clause exactly -- same JOIN, same predicate -- because this is
+    // the same question asked from the reconciliation side rather than the
+    // trigger side, and a second, differently-shaped query here could
+    // silently drift from what the trigger actually enforces.
     db.prepare(
       `
       UPDATE facts SET valid_to_t = (
@@ -330,9 +347,26 @@ function reconcileTable(db: Database.Database, row: ProjectedTable): void {
           AND entity_id IN (SELECT id FROM ${table})
           AND CAST((SELECT ${col} FROM ${table} WHERE id = facts.entity_id) AS TEXT) IS NOT value
           AND facts.irreversible = 0
+          AND NOT EXISTS (
+            SELECT 1 FROM resource_constraints rc
+              JOIN resource_constraint_members rcm ON rcm.constraint_id = rc.id
+             WHERE rc.kind = 'resolve_only'
+               AND rcm.resource_id = facts.entity_id
+               AND rc.fact_key = facts.key
+          )
     `
     ).run(col);
 
+    // Same guard on the open-INSERT: a resolve_only-governed key whose close
+    // above was skipped still has its OLD fact open (valid_to_t IS NULL), so
+    // `NOT EXISTS (SELECT 1 FROM facts f WHERE ...)` below is already false
+    // for it and this INSERT's own WHERE would skip that row regardless --
+    // but a resolve_only-governed key with NO fact open at all (a database
+    // predating the timeline entirely, backfilling for the first time) has
+    // no such fact to make the WHERE skip it, and the very first INSERT for
+    // that key is itself refused with no window open. Repeating the guard
+    // here, rather than trusting the close-guard's side effect, covers that
+    // case too.
     db.prepare(
       `
       INSERT INTO facts (id, entity_id, key, value, valid_from_t, valid_to_t, irreversible)
@@ -343,7 +377,14 @@ function reconcileTable(db: Database.Database, row: ProjectedTable): void {
         AND NOT EXISTS (
           SELECT 1 FROM facts f WHERE f.entity_id = src.id AND f.key = ? AND f.valid_to_t IS NULL
         )
+        AND NOT EXISTS (
+          SELECT 1 FROM resource_constraints rc
+            JOIN resource_constraint_members rcm ON rcm.constraint_id = rc.id
+           WHERE rc.kind = 'resolve_only'
+             AND rcm.resource_id = src.id
+             AND rc.fact_key = ?
+        )
     `
-    ).run(col, col);
+    ).run(col, col, col);
   }
 }

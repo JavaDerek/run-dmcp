@@ -249,18 +249,20 @@ export function registerResourceTools(server: McpServer) {
         "Declare a server-enforced invariant on one or more resources, so update_resource_value cannot write a value that violates it. " +
         "'bounded': the resource must already have minValue and/or maxValue set (via create_resource/update_resource) -- once declared, writes outside those bounds are REJECTED instead of the default silent clamp. " +
         "'monotonic': the resource's value may only move in one direction ('increasing' = never decreases, 'decreasing' = never increases); holding steady is always allowed. " +
-        "'conserved': declares a set of 2+ resources that must always sum to a fixed total -- the members' current values must already sum to `total` (this does not rewrite them to match). Once declared, update_resource_value REJECTS direct writes to any member (ambiguous -- it can't know where the offsetting change comes from); use transfer_resource_value to move value between two members of the set atomically instead. A resource can belong to at most one 'conserved' set at a time.",
+        "'conserved': declares a set of 2+ resources that must always sum to a fixed total -- the members' current values must already sum to `total` (this does not rewrite them to match). Once declared, update_resource_value REJECTS direct writes to any member (ambiguous -- it can't know where the offsetting change comes from); use transfer_resource_value to move value between two members of the set atomically instead. A resource can belong to at most one 'conserved' set at a time. " +
+        "'resolve_only': every DIRECT write to the given fact key is refused -- both update_resource_value and transfer_resource_value -- so it can move only through an adjudicating call. Scoped to one fact key (factKey, default 'value'); a resource can hold a separate 'resolve_only' declaration per fact key.",
       inputSchema: {
         gameId: z.string().max(100).describe("The game ID"),
-        kind: z.enum(["bounded", "monotonic", "conserved"]).describe("Constraint kind"),
-        resourceId: z.string().max(100).optional().describe("Required for 'bounded' or 'monotonic': the resource to constrain"),
+        kind: z.enum(["bounded", "monotonic", "conserved", "resolve_only"]).describe("Constraint kind"),
+        resourceId: z.string().max(100).optional().describe("Required for 'bounded', 'monotonic' or 'resolve_only': the resource to constrain"),
         resourceIds: z.array(z.string().max(100)).optional().describe("Required for 'conserved': 2 or more resource IDs that must sum to `total`"),
         direction: z.enum(["increasing", "decreasing"]).optional().describe("Required for 'monotonic': the only direction the value may move"),
         total: z.number().optional().describe("Required for 'conserved': the fixed sum the resource set must maintain"),
+        factKey: z.string().max(100).optional().describe("For 'resolve_only' only: the fact key the constraint governs, defaulting to 'value'"),
       },
       annotations: ANNOTATIONS.CREATE,
     },
-    async ({ gameId, kind, resourceId, resourceIds, direction, total }) => {
+    async ({ gameId, kind, resourceId, resourceIds, direction, total, factKey }) => {
       try {
         let constraint;
         if (kind === "bounded") {
@@ -271,6 +273,9 @@ export function registerResourceTools(server: McpServer) {
             throw new Error("resourceId and direction are required for a 'monotonic' constraint");
           }
           constraint = constraintTools.declareMonotonicConstraint({ gameId, resourceId, direction });
+        } else if (kind === "resolve_only") {
+          if (!resourceId) throw new Error("resourceId is required for a 'resolve_only' constraint");
+          constraint = constraintTools.declareResolveOnlyConstraint({ gameId, resourceId, factKey });
         } else {
           if (!resourceIds || total === undefined) {
             throw new Error("resourceIds and total are required for a 'conserved' constraint");

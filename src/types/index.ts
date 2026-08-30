@@ -629,9 +629,21 @@ export interface ResourceChange {
 // touch (see src/tools/constraint.ts header comment).
 // ============================================================================
 
-export type ConstraintKind = "bounded" | "monotonic" | "conserved";
+/** `resolve_only` (design §5.3, §5.2a; issue #13) is the fourth row-based
+ * member: every DIRECT write to the fact key it governs is refused, so the
+ * value can move only through an adjudicating call (issue #10's resolver,
+ * which OPENS the window `src/timeline/adjudication.ts` defines and
+ * `assertConstraintsAllow` / the `timeline_facts_resolve_only` trigger both
+ * read). Unlike `bounded`/`monotonic`/`conserved`, it carries no shape of
+ * its own to check a value against -- `direction` and `total` are always
+ * null for it, exactly as they are for whichever of the OTHER three kinds a
+ * given row isn't. It is scoped per `factKey` like every member of this
+ * family (`resource_constraints.fact_key`, design §5.4 option (C)): a
+ * `resolve_only` constraint declared on one fact key of an entity never
+ * reaches a write to a different fact key of that same entity. */
+export type ConstraintKind = "bounded" | "monotonic" | "conserved" | "resolve_only";
 
-/** The four members of design §5.3's constraint family. `irreversible` is
+/** The five members of design §5.3's constraint family. `irreversible` is
  * never a row in `resource_constraints` -- it is a flag on a fact -- so it is
  * not a `ConstraintKind`, but it IS something a violation can be reported
  * for. */
@@ -644,21 +656,25 @@ export interface ResourceConstraint {
   id: string;
   gameId: string;
   kind: ConstraintKind;
-  // The resource(s) this constraint governs. Exactly one for 'bounded' and
-  // 'monotonic'; two or more for 'conserved'.
+  // The resource(s) this constraint governs. Exactly one for 'bounded',
+  // 'monotonic' and 'resolve_only'; two or more for 'conserved'.
   resourceIds: string[];
-  // 'monotonic' only; null for 'bounded' and 'conserved'.
+  // 'monotonic' only; null for 'bounded', 'conserved' and 'resolve_only'.
   direction: MonotonicDirection | null;
-  // 'conserved' only; null for 'bounded' and 'monotonic'. The fixed sum the
-  // resourceIds set must maintain. Registered but NOT enforced in this
-  // branch -- see src/tools/constraint.ts.
+  // 'conserved' only; null for 'bounded', 'monotonic' and 'resolve_only'.
+  // The fixed sum the resourceIds set must maintain. Registered but NOT
+  // enforced in this branch -- see src/tools/constraint.ts.
   total: number | null;
-  // The numeric fact key on each governed entity/resource that this
-  // constraint applies to (design §5.4 option (C); `resource_constraints.
-  // fact_key` in src/db/schema.ts). Always 'value' today, because
-  // `resources` exposes exactly one numeric fact key -- present now so the
-  // registry (src/timeline/registry.ts) is keyed on (entityId, factKey)
-  // ahead of the generic writer that will make more than one key possible.
+  // The fact key on each governed entity/resource that this constraint
+  // applies to (design §5.4 option (C); `resource_constraints.fact_key` in
+  // src/db/schema.ts). Effectively always 'value' for 'bounded'/'monotonic'/
+  // 'conserved' today, because `resources` exposes exactly one numeric fact
+  // key those three ever govern -- present now so the registry
+  // (src/timeline/registry.ts) is keyed on (entityId, factKey) ahead of the
+  // generic writer that made more than one key possible. 'resolve_only'
+  // (issue #13) is the first kind a caller can point at a NON-default fact
+  // key: declareResolveOnlyConstraint (src/tools/constraint.ts) takes an
+  // explicit, optional factKey for exactly that reason.
   factKey: string;
   createdAt: string;
 }

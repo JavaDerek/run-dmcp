@@ -7,6 +7,7 @@ import { PROJECTED_TABLES, liveColumns } from "./projection.js";
 import type { EntityKind } from "./kinds.js";
 import { constraintsFor, conservedConstraintFor, ConstraintViolationError, CONSERVED_SUM_EPSILON } from "./registry.js";
 import { irreversibleFactFor } from "./irreversible.js";
+import { adjudicationOpen } from "./adjudication.js";
 
 /**
  * The choke point (design §5.4 option (C), Phase 3 step 2): the ONE place a
@@ -170,19 +171,20 @@ function clamp(value: number, minValue: number | null, maxValue: number | null):
 
 /**
  * A2: the single site where the declared constraint family (design §5.3) --
- * `monotonic`, `bounded`, `conserved` -- is evaluated against an intended
- * change. Every one of `checkResourceConstraints()` and
- * `checkBoundedAndMonotonicConstraints()`'s (formerly src/tools/constraint.ts)
+ * `monotonic`, `bounded`, `conserved`, and (issue #13) `resolve_only` -- is
+ * evaluated against an intended change. Every one of `checkResourceConstraints()`
+ * and `checkBoundedAndMonotonicConstraints()`'s (formerly src/tools/constraint.ts)
  * rules lives here now and ONLY here -- grep the tree for
  * `constraint.direction ===` or `constraint.kind === "bounded"` and this file
  * is the only hit outside a test.
  *
  * Reads via `constraintsFor(entityId, key)` (registry.ts), not
  * `allConstraintsForEntity` -- this is the behavioral point of Phase 3 step
- * 1's key-scoping: a `monotonic` constraint declared on one fact key must
- * never reach a write to a different key on the same entity, even though
- * every constraint declared through today's declare*() functions happens to
- * govern `'value'`.
+ * 1's key-scoping: a `monotonic` (or, now, `resolve_only`) constraint
+ * declared on one fact key must never reach a write to a different key on
+ * the same entity, even though every constraint declared through today's
+ * `declare*()` functions other than `declareResolveOnlyConstraint` happens
+ * to govern `'value'`.
  *
  * `bounds` is optional. When a caller has no bounds to check against (e.g.
  * `updateResource`'s own guard below, which is not itself moving a value
@@ -249,6 +251,44 @@ export function assertConstraintsAllow(params: {
           `Resource '${entityId}' is bounded-constrained (max ${bounds.maxValue}); rejected value ${intendedValue} instead of clamping.`
         );
       }
+    }
+
+    // 'resolve_only' (design §5.3, §5.2a; issue #13): every direct write to
+    // this (entityId, key) is refused, full stop -- unconditionally, not
+    // only when `conservedMemberWrite === "reject"`. That parameter exists
+    // to disambiguate 'conserved' membership (a direct single-resource
+    // write is ambiguous; transferConstrainedValue's two-leg write is not),
+    // and it has no bearing on 'resolve_only': neither writeConstrainedValue
+    // NOR transferConstrainedValue IS the adjudicating call, so both are
+    // "direct" from resolve_only's point of view and both are checked here,
+    // which is why this branch runs regardless of `conservedMemberWrite`.
+    // `adjudicationOpen()` (src/timeline/adjudication.ts) is the ONLY
+    // question this branch asks; see that module's doc comment for why it
+    // and the `timeline_facts_resolve_only` trigger (src/db/schema.ts) are
+    // two readers of one row of truth rather than two independent checks
+    // that merely agree today.
+    //
+    // THIS DOES NOT DUPLICATE THE TRIGGER. Design decision #7 / hard rule 7:
+    // a constrained numeric value changes through this module and nowhere
+    // else, and all four `ConstraintKind` members are evaluated here -- this
+    // is the ONE JS-level check for 'resolve_only', giving a caller a typed,
+    // reviewable `ConstraintViolationError` instead of an opaque SQLite
+    // `RAISE(ABORT)`. `timeline_facts_resolve_only` is the backstop that
+    // makes bypassing THIS module (a raw `UPDATE resources SET value = ...`
+    // that never calls writeConstrainedValue at all) unconstructable rather
+    // than merely inconvenient -- exactly the relationship
+    // `translateIrreversibleFailure` below describes for 'irreversible',
+    // except 'irreversible' has no JS-level check at all (its trigger is the
+    // only enforcement, translated after the fact) while 'resolve_only' is
+    // enforced at BOTH layers because, unlike a contradicted fact, "is a
+    // window open" is cheap to ask before ever touching the database.
+    if (constraint.kind === "resolve_only" && !adjudicationOpen()) {
+      throw new ConstraintViolationError(
+        "resolve_only",
+        entityId,
+        `Resource '${entityId}' is resolve_only-constrained for key '${key}'; direct writes are refused. ` +
+          `This value can only change through the adjudicating call that opens the resolution window.`
+      );
     }
   }
 

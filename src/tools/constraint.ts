@@ -44,10 +44,21 @@ export { ConstraintViolationError, CONSERVED_SUM_EPSILON };
  * explicit transfer, rather than a balanced multi-resource write, was
  * chosen.
  *
- * `irreversible` (design §5.3) is this family's fourth, temporal member --
- * `bounded`/`monotonic` constrain a value's range and direction, 'conserved'
- * constrains a set's total, and `irreversible` constrains what may be
- * asserted about a value after a point in time. It is declared per-FACT
+ * `resolve_only` (design §5.3, §5.2a; issue #13) is this family's fourth
+ * ROW-based member, alongside `bounded`/`monotonic`/`conserved`: every
+ * direct write to the fact key it governs is refused, so the value can move
+ * only through the adjudicating call issue #10's resolver will open (the
+ * window mechanism, `src/timeline/adjudication.ts`, lands here first --
+ * "a value that may move only through adjudication needs the adjudicator to
+ * exist first," design §5.3). Unlike the other three, it takes an explicit
+ * `factKey` parameter rather than always governing `'value'` -- see
+ * declareResolveOnlyConstraint() below.
+ *
+ * `irreversible` (design §5.3) is this family's FIFTH member and its only
+ * temporal, non-row one -- `bounded`/`monotonic` constrain a value's range
+ * and direction, 'conserved' constrains a set's total, 'resolve_only'
+ * constrains WHO may write a value, and `irreversible` constrains what may
+ * be asserted about a value after a point in time. It is declared per-FACT
  * (src/timeline/irreversible.ts's declareIrreversible()), not as a row in
  * `resource_constraints` here, and enforced by triggers on the timeline's
  * `facts` table (src/timeline/schema.ts) rather than by
@@ -56,17 +67,20 @@ export { ConstraintViolationError, CONSERVED_SUM_EPSILON };
  * the timeline's interval-versioned `facts`.
  *
  * Design §5.4's option (C) merge (Phase 3) is complete for `bounded`/
- * `monotonic`/`conserved`: this file declares constraints (insertConstraint
- * and the declare*() functions below) and reads them back for display
- * (listConstraints/getConstraintsForResource); EVALUATING a declared
- * constraint against an intended value change happens in exactly one place,
- * assertConstraintsAllow() (src/timeline/constrained.ts), which every
- * constrained write (writeConstrainedValue/transferConstrainedValue, and
- * through them updateResourceValue/transferResourceValue/updateResource in
- * resource.ts) goes through. Nothing in this file evaluates a constraint
+ * `monotonic`/`conserved`/`resolve_only`: this file declares constraints
+ * (insertConstraint and the declare*() functions below) and reads them back
+ * for display (listConstraints/getConstraintsForResource); EVALUATING a
+ * declared constraint against an intended value change happens in exactly
+ * one place, assertConstraintsAllow() (src/timeline/constrained.ts), which
+ * every constrained write (writeConstrainedValue/transferConstrainedValue,
+ * and through them updateResourceValue/transferResourceValue/updateResource
+ * in resource.ts) goes through. Nothing in this file evaluates a constraint
  * against a value any more -- grep for `constraint.kind === "bounded"` or
  * `constraint.direction ===` and constrained.ts is the only hit outside a
- * test.
+ * test. 'resolve_only' has no value-shape to evaluate (no bounds, no
+ * direction, no total) -- what constrained.ts checks for it is WHETHER an
+ * adjudication window is open (src/timeline/adjudication.ts), not anything
+ * about the intended value itself.
  */
 
 function insertConstraint(
@@ -157,6 +171,56 @@ export function declareMonotonicConstraint(params: {
   }
 
   return insertConstraint(params.gameId, "monotonic", [params.resourceId], params.direction, null, "value");
+}
+
+/**
+ * Declare a 'resolve_only' constraint (design §5.3, §5.2a; issue #13): every
+ * direct write to `factKey` on `resourceId` is refused --
+ * assertConstraintsAllow() (src/timeline/constrained.ts) rejects it whether
+ * it arrives through writeConstrainedValue OR transferConstrainedValue --
+ * unless made while an adjudication window is open
+ * (src/timeline/adjudication.ts's `withAdjudicationOpen`). The window is the
+ * mechanism this issue builds; the resolver that OPENS it (issue #10) is a
+ * separate, not-yet-built caller, and this function does not know or care
+ * what that caller will look like.
+ *
+ * `factKey` is optional and defaults to `'value'`, matching every other
+ * declare*Constraint() function's implicit scope -- but, unlike those,
+ * 'resolve_only' takes it as a REAL parameter rather than hardcoding it,
+ * because it is designed to guard a fact key a caller chooses, not only the
+ * one numeric column `resources` happens to expose today (design §5.4
+ * option (C)'s eventual generalization; see `factKey`'s doc comment on
+ * `ResourceConstraint`, src/types/index.ts).
+ *
+ * Validation mirrors declareBoundedConstraint()/declareMonotonicConstraint()
+ * exactly: the game and resource must exist, and re-declaring the same
+ * (resourceId, factKey) pair is rejected rather than silently accepted --
+ * scoped by factKey, not just resourceId, because that is the one thing
+ * that makes 'resolve_only' different from its two row-based siblings: two
+ * DIFFERENT fact keys on the same resource are two independent declarations,
+ * never a duplicate of each other.
+ *
+ * No shape prerequisite the way 'bounded' requires a min/max or 'monotonic'
+ * requires a direction -- 'resolve_only' constrains WHO may write, not what
+ * shape the value must take, so there is nothing else to validate.
+ */
+export function declareResolveOnlyConstraint(params: {
+  gameId: string;
+  resourceId: string;
+  factKey?: string;
+}): ResourceConstraint {
+  validateGameExists(params.gameId);
+
+  const resource = getResource(params.resourceId);
+  if (!resource) {
+    throw new Error(`Resource '${params.resourceId}' not found.`);
+  }
+  const factKey = params.factKey ?? "value";
+  if (constraintsFor(params.resourceId, factKey).some((c) => c.kind === "resolve_only")) {
+    throw new Error(`Resource '${params.resourceId}' already has a 'resolve_only' constraint on fact key '${factKey}'.`);
+  }
+
+  return insertConstraint(params.gameId, "resolve_only", [params.resourceId], null, null, factKey);
 }
 
 /**

@@ -228,6 +228,22 @@ describe("resource_constraints.fact_key migration against an existing database",
       // stored_images CHECK-constraint migration.
       let db = getDatabase();
       db.pragma("foreign_keys = OFF");
+      // `timeline_facts_resolve_only` (issue #13, src/db/schema.ts) names
+      // `resource_constraints` in its WHEN clause, and SQLite re-validates a
+      // trigger's body during schema surgery -- so for as long as that
+      // trigger exists, this table cannot be dropped or renamed out from
+      // under its own name, which is exactly what the recreate-and-rename
+      // below does. Dropping the trigger first is the same discipline the
+      // real CHECK-widening migration in src/db/schema.ts follows for the
+      // same reason, and it costs nothing here for the same reason it costs
+      // nothing there: every guard trigger in this codebase is DROP-then-
+      // CREATE on every startup (never CREATE TRIGGER IF NOT EXISTS), so
+      // `initializeSchema()` in pass 2 reinstalls it unconditionally. That
+      // reinstall is not incidental to this test -- it is the thing that
+      // makes the assertions after pass 2 meaningful, because a migration
+      // that silently left the guard uninstalled would otherwise look
+      // identical to one that worked.
+      db.exec(`DROP TRIGGER IF EXISTS timeline_facts_resolve_only`);
       db.exec(`
         CREATE TABLE resource_constraints_pre_fact_key (
           id TEXT PRIMARY KEY,
@@ -256,6 +272,18 @@ describe("resource_constraints.fact_key migration against an existing database",
       // migration path, exactly as a real restart would.
       initializeSchema();
       db = getDatabase();
+
+      // The guard this test dropped to do its surgery is back. Asserted
+      // rather than assumed, because "the migration ran and the data is
+      // right" and "the migration ran, the data is right, and enforcement
+      // quietly never came back" are indistinguishable from the row
+      // assertions below alone -- and the second is the strictly worse
+      // outcome of the two.
+      expect(
+        db
+          .prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND name = ?")
+          .get("timeline_facts_resolve_only")
+      ).toBeDefined();
 
       const row = db
         .prepare("SELECT fact_key FROM resource_constraints WHERE id = ?")
