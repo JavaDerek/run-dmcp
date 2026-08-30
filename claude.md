@@ -113,6 +113,15 @@ transport. `src/__tests__/entrypoints.test.ts` enforces both halves by running t
 processes — the library one must be able to *exit*, so no enumeration of forbidden side effects has
 to be kept up to date.
 
+**The timeline writes itself.** Dual-write is generated triggers, built at each startup from a live
+`pragma_table_info` read over `PROJECTED_TABLES` (`src/timeline/projection.ts`) — never hand-edit
+the write sites to append events, and never write `facts`/`events` directly from a tool. Consumer
+migrations run **before** trigger generation, deliberately and under test: a column a consumer adds
+to a projected table is projected and backfilled with no code change on either side. The core/RPG
+boundary is enforced the same structural way — `src/index.ts` exports core only, the RPG surface
+lives in `src/rpg/`, and `src/__tests__/layerBoundary.test.ts` goes red naming the import chain if
+core ever reaches up into it.
+
 ## Provenance
 
 Continues DMCP by Shawn Rushefsky, MIT. This repository carries its **full history** — the first
