@@ -47,6 +47,14 @@ export { replay } from "./timeline/replay.js";
 export type { Snapshot, ReplayedEntity, ReplayedFact } from "./timeline/replay.js";
 export { declareTimeAxis, setStoryTime, currentStoryTime } from "./timeline/clock.js";
 export type { StoryTime } from "./timeline/clock.js";
+// `changes_within(t0, t1)` (design §5.5) -- the range companion to `replay`,
+// for a consumer whose units have duration rather than instants. It returns
+// transitions and never a verdict: one caller reads a change inside a window
+// as a defect, another reads the same rows to build a summary of what has
+// happened since it last looked. Same primitive, opposite readings, which is
+// how you can tell it belongs in the core rather than to whoever asked first.
+export { changesWithin } from "./timeline/changes.js";
+export type { Change, ChangeSet, EventChange, FactChange } from "./timeline/changes.js";
 export { compareT, assertT } from "./timeline/t.js";
 export type { T, TimeAxis } from "./timeline/t.js";
 export { timelineDivergences } from "./timeline/checkpoint.js";

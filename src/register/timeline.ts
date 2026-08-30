@@ -6,6 +6,7 @@ import { replay } from "../timeline/replay.js";
 import { declareTimeAxis, setStoryTime, currentStoryTime } from "../timeline/clock.js";
 import { declareIrreversible, listIrreversibleFacts } from "../timeline/irreversible.js";
 import { exportTimelineToFile, importTimelineFromFile } from "../timeline/export.js";
+import { changesWithin } from "../timeline/changes.js";
 
 const log = createLogger("timeline");
 
@@ -63,6 +64,34 @@ export function registerTimelineTools(server: McpServer) {
         return { content: [{ type: "text", text: JSON.stringify(snapshot, null, 2) }] };
       } catch (error) {
         log.error("replay_world_at failed", { gameId, t, error: (error as Error).message });
+        return {
+          content: [{ type: "text", text: JSON.stringify({ error: (error as Error).message }) }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.registerTool(
+    "changes_within",
+    {
+      description:
+        "List every event and fact-interval transition a game recorded in the half-open window [t0, t1) -- t0 is in, t1 is not. The range companion to replay_world_at's point query, for callers whose units have duration. A fact that both opens and closes inside the window returns two rows, one per endpoint. Returns rows and nothing else: no verdict, no severity, no judgement about whether the window is 'clean'. What a change inside a window means is the caller's policy, not the engine's.",
+      inputSchema: {
+        gameId: z.string().max(100).describe("The game ID"),
+        t0: tSchema.describe("Start of the window, inclusive. Same axis as every other t for this game."),
+        t1: tSchema.describe(
+          "End of the window, exclusive. Must be >= t0. There is no open-ended form and no start-plus-length form -- a window is two points on the axis, never a point and a duration."
+        ),
+      },
+      annotations: ANNOTATIONS.READ_ONLY,
+    },
+    async ({ gameId, t0, t1 }) => {
+      try {
+        const changeSet = changesWithin({ gameId, t0, t1 });
+        return { content: [{ type: "text", text: JSON.stringify(changeSet, null, 2) }] };
+      } catch (error) {
+        log.error("changes_within failed", { gameId, t0, t1, error: (error as Error).message });
         return {
           content: [{ type: "text", text: JSON.stringify({ error: (error as Error).message }) }],
           isError: true,
