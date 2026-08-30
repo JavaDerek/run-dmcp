@@ -1,5 +1,6 @@
 import { getDatabase } from "../db/connection.js";
-import { type T, assertT } from "./t.js";
+import { assertT } from "./t.js";
+import { openingEventId, type FactProvenance } from "./provenance.js";
 
 /**
  * `irreversible` -- the temporal member of the constraint family alongside
@@ -22,15 +23,23 @@ import { type T, assertT } from "./t.js";
  * (hard rule 2 / design §5.5): no `isClean`, no severity, just the fact
  * that is or isn't there.
  */
-export interface IrreversibleFact {
-  factId: string;
-  entityId: string;
-  key: string;
-  value: string;
-  validFromT: T;
-  /** design §5.2c's one hop: the event that opened this fact, or null if none is recorded. */
-  openedByEventId: string | null;
-}
+/**
+ * §5.2c's one hop of causality, specialized to an irreversible fact. The
+ * shape itself now lives in `provenance.ts` as `FactProvenance` -- every
+ * carrier of "a fact plus the one event that opened it" extends the same
+ * interface rather than each re-declaring it and re-implementing the
+ * lookup, so this type and `narration.ts`'s `ConstraintFact` can never
+ * quietly disagree about what one hop means. `IrreversibleFact` adds
+ * nothing beyond the shared shape; the name is kept because every caller in
+ * this file, and `ConstraintViolationError.contradictedFact` (registry.ts),
+ * already reads it that way. A type alias rather than an empty `extends`
+ * interface -- ESLint's `no-empty-object-type` correctly rejects an
+ * interface that declares no members of its own, since it is indistinguishable
+ * from its supertype at every call site; a plain alias says the same thing
+ * without inventing a nominal type this codebase would then have to keep
+ * in sync with its supertype by hand.
+ */
+export type IrreversibleFact = FactProvenance;
 
 interface FactRow {
   id: string;
@@ -38,48 +47,6 @@ interface FactRow {
   key: string;
   value: string;
   valid_from_t: number;
-}
-
-/**
- * The one hop of causality (design §5.2c): the event of `gameId` whose
- * `at_t` equals the fact's `valid_from_t` and whose `causes` JSON names this
- * entity as the row it was written for. `causes` is produced entirely by
- * this codebase's own projection triggers (`json_object('table', ...,
- * 'row_id', NEW.id)` in projection.ts) -- matching `$.row_id` here is a
- * literal comparison against a token we defined in output we generated, not
- * an attempt to understand what any event "means" (hard rule 4). Ordered
- * deterministically (`at_t`, then `id`) and only the first row is taken --
- * one hop, never a chain, never a trace of how the engine got here.
- *
- * The `CASE WHEN json_valid(causes)` wrapper is load-bearing, not defensive
- * decoration. `events.causes` has no CHECK constraint, and SQLite's
- * `json_extract` RAISES "malformed JSON" rather than returning NULL when it
- * meets a value that is not JSON -- and that error belongs to the whole
- * query, not to the offending row, so a single bad row anywhere in this
- * game's events would make every function in this module throw, including
- * `declareIrreversible`, which has nothing to do with that event. That is
- * reachable in practice: timeline import (export.ts) carries `causes`
- * through verbatim by design, because an importer that rewrote a recorded
- * cause would be inventing history. A hop of provenance must never be able
- * to fail the write it annotates, so a row we cannot read simply does not
- * match. Written as CASE rather than `json_valid(causes) AND json_extract(...)`
- * because SQLite does not guarantee the evaluation order of AND operands --
- * the planner may reorder them, and then the guard is decoration that
- * happens to work today.
- */
-function findOpenedByEventId(gameId: string, entityId: string, validFromT: number): string | null {
-  const db = getDatabase();
-  const row = db
-    .prepare(
-      `SELECT id FROM events
-        WHERE game_id = ?
-          AND at_t = ?
-          AND json_extract(CASE WHEN json_valid(causes) THEN causes END, '$.row_id') = ?
-        ORDER BY at_t, id
-        LIMIT 1`
-    )
-    .get(gameId, validFromT, entityId) as { id: string } | undefined;
-  return row?.id ?? null;
 }
 
 function toIrreversibleFact(row: FactRow, gameId: string): IrreversibleFact {
@@ -90,7 +57,7 @@ function toIrreversibleFact(row: FactRow, gameId: string): IrreversibleFact {
     key: row.key,
     value: row.value,
     validFromT: row.valid_from_t,
-    openedByEventId: findOpenedByEventId(gameId, row.entity_id, row.valid_from_t),
+    openedByEventId: openingEventId(gameId, row.entity_id, row.valid_from_t),
   };
 }
 
