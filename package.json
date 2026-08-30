@@ -10,15 +10,23 @@
   },
   "type": "module",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "bin": {
-    "run-dmcp": "dist/index.js"
+    "run-dmcp": "dist/bin/run-dmcp.js"
   },
   "scripts": {
     "build": "tsc && npm run build:client",
     "build:server": "tsc",
     "build:client": "cd client && npm run build",
-    "start": "node dist/index.js",
-    "dev": "tsx src/index.ts",
+    "start": "node dist/bin/run-dmcp.js",
+    "dev": "tsx src/bin/run-dmcp.ts",
     "dev:client": "cd client && npm run dev",
     "test": "vitest",
     "test:run": "vitest run",

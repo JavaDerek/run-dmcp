@@ -34,4 +34,4 @@ RUN mkdir -p /app/data
 ENV NODE_ENV=production
 
 # MCP servers use stdio transport
-ENTRYPOINT ["node", "dist/index.js"]
+ENTRYPOINT ["node", "dist/bin/run-dmcp.js"]

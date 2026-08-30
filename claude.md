@@ -94,10 +94,17 @@ npm run lint          # eslint      (CI runs this)
 npm run typecheck     # tsc --noEmit (CI runs this)
 npm run test:run      # vitest, one shot (CI runs this)
 npm run build         # tsc + client build (CI runs this)
-npm run dev           # tsx src/index.ts
+npm run dev           # tsx src/bin/run-dmcp.ts
 ```
 
-Local MCP inspection: `npx @modelcontextprotocol/inspector node dist/index.js`
+Local MCP inspection: `npx @modelcontextprotocol/inspector node dist/bin/run-dmcp.js`
+
+**Two entry points, and the difference is load-bearing.** `src/index.ts` is the library: exports and
+nothing else, and importing it must never start, open or create anything. `src/bin/run-dmcp.ts` is
+the application, and is the only place that brings up the schema, binds a port or connects a
+transport. `src/__tests__/entrypoints.test.ts` enforces both halves by running them in child
+processes — the library one must be able to *exit*, so no enumeration of forbidden side effects has
+to be kept up to date.
 
 ## Provenance
 
