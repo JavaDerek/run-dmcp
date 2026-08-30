@@ -168,6 +168,35 @@ export type {
   ResolveRefusalReason,
 } from "./timeline/resolve.js";
 
+// The state-to-text projection (design §7, GitHub issue #16) -- "say what IS
+// true, never what is absent."
+//
+// What is exported here is the MECHANISM and the TYPE of a vocabulary. There
+// is deliberately no vocabulary value, no default and no example anywhere in
+// this package: a vocabulary rich enough to render a real world contains a
+// caller's own nouns, and either sitting in the engine would fail
+// `engineVocabulary.test.ts` on day one -- correctly (§7's closing paragraph,
+// §10). `RenderVocabulary` is a parameter type; a caller supplies the words.
+//
+// The rule is enforced at CONSTRUCTION and never by scanning output.
+// `createStateRenderer` refuses a vocabulary entry carrying any field but
+// `noun` and `adjectives`, by name -- which is what stops an `avoid:` or a
+// `negate:` being bolted on later -- and the renderer's only source of state
+// is `replay(t)`, so a fact that does not hold produces NOTHING rather than a
+// phrase about its absence. There is no differential form and never will be:
+// nothing here takes two `t`s, because "render the change between these two
+// states" is precisely the shape that produces "no longer" (hard rules 3 and
+// 4; the four recorded negative-prompt failures across two codebases).
+export { createStateRenderer } from "./timeline/render.js";
+export type {
+  RenderVocabulary,
+  VocabularyEntry,
+  StateRenderer,
+  RenderedState,
+  RenderedNoun,
+  UnnamedFact,
+} from "./timeline/render.js";
+
 // Timeline export (design §6) -- the boundary that keeps both halves honest:
 // conversational authoring upstream of a frozen artifact, deterministic
 // consumers downstream of it. These are exported as library functions first

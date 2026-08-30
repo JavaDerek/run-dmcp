@@ -34,7 +34,9 @@ import { registerMcpResources } from "./register/mcp-resources.js";
 import { registerMcpPrompts } from "./register/mcp-prompts.js";
 import { registerTimelineTools } from "./register/timeline.js";
 import { registerResolveTools } from "./register/resolve.js";
+import { registerRenderTools } from "./register/render.js";
 import { createResolver, type Mechanic } from "./timeline/resolve.js";
+import { createStateRenderer, type RenderVocabulary } from "./timeline/render.js";
 
 export const SERVER_NAME = "dmcp";
 export const SERVER_VERSION = "0.1.1";
@@ -58,8 +60,21 @@ export const SERVER_VERSION = "0.1.1";
  * `resolve` tool could ever dispatch, so it gets no `resolve`/`list_mechanics`
  * tools rather than a pair that could only ever answer "unknown-mechanic"
  * and "[]".
+ *
+ * `vocabulary` (design §7, issue #16) is injected the same way and for the
+ * same reason -- and here the injection is not merely a style choice, it is
+ * the design's own line: the state-to-text projection's MECHANISM is core,
+ * and the NOUNS it may emit belong to each caller. A vocabulary rich enough
+ * to render a real world would fail this engine's vocabulary hygiene test on
+ * day one, correctly, so this package ships none and there is no default to
+ * fall back to. An engine with no vocabulary injected has nothing it could
+ * name, so it registers no `render_state_at` tool at all -- the identical
+ * shape (and the identical silence) as `mechanics` above.
  */
-export function createMcpServer(options?: { mechanics?: readonly Mechanic[] }): McpServer {
+export function createMcpServer(options?: {
+  mechanics?: readonly Mechanic[];
+  vocabulary?: RenderVocabulary;
+}): McpServer {
   const server = new McpServer({
     name: SERVER_NAME,
     version: SERVER_VERSION,
@@ -94,6 +109,16 @@ export function createMcpServer(options?: { mechanics?: readonly Mechanic[] }): 
   if (mechanics && mechanics.length > 0) {
     const resolver = createResolver({ mechanics });
     registerResolveTools(server, resolver); // resolve(), list_mechanics -- only when mechanics are registered
+  }
+
+  const vocabulary = options?.vocabulary;
+  if (vocabulary) {
+    // Built here rather than accepted pre-built so the vocabulary is
+    // validated at construction of the SERVER too, not merely at
+    // construction of a renderer a caller might have made anywhere:
+    // `createStateRenderer` throws on a malformed vocabulary, so a server
+    // that would have served an unnameable projection never comes up.
+    registerRenderTools(server, createStateRenderer({ vocabulary })); // render_state_at -- only when a vocabulary is injected
   }
 
   // Register MCP Resources and Prompts
