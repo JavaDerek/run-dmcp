@@ -1,6 +1,36 @@
+import type Database from "better-sqlite3";
 import { getDatabase } from "./connection.js";
+import { createLogger } from "../utils/logger.js";
 
-export function initializeSchema(): void {
+const log = createLogger("schema");
+
+/**
+ * A schema change a consuming application wants applied to the same SQLite
+ * file the engine's own tables live in, during the engine's own startup
+ * pass. Passed as an array to `initializeSchema()`, not registered through
+ * a global function: a registry would make the engine's schema depend on
+ * module import order and on side effects at import time, which is exactly
+ * what this release is removing elsewhere. A parameter can't be "registered
+ * too late" -- it's either in the array passed to the one call that matters,
+ * or it isn't.
+ *
+ * There is no framework: no version table, no record of what already ran,
+ * no down-migrations. Every migration in the array runs on every startup,
+ * exactly like the engine's own DDL below, which is what forces `up` to be
+ * idempotent (`CREATE TABLE IF NOT EXISTS`, and
+ * `try { db.exec("ALTER TABLE ...") } catch {}` for added columns).
+ *
+ * Migrations run after every core table has been created, so `up` may
+ * declare a foreign key into one (e.g. `games`).
+ */
+export interface SchemaMigration {
+  /** Stable identifier. Used for duplicate detection and error messages. */
+  name: string;
+  /** Applies the migration. MUST be idempotent: it runs on every startup. */
+  up(db: Database.Database): void;
+}
+
+export function initializeSchema(options?: { migrations?: readonly SchemaMigration[] }): void {
   const db = getDatabase();
 
   // ============================================================================
@@ -767,4 +797,56 @@ export function initializeSchema(): void {
     CREATE INDEX IF NOT EXISTS idx_stored_audio_primary ON stored_audio(entity_id, entity_type, is_primary);
     CREATE INDEX IF NOT EXISTS idx_stored_audio_voice_ref ON stored_audio(game_id, is_voice_reference);
   `);
+
+  // Consumer-registered migrations (see `SchemaMigration` above) run last,
+  // after every core table above exists.
+  runConsumerMigrations(db, options?.migrations);
+}
+
+function runConsumerMigrations(
+  db: Database.Database,
+  migrations: readonly SchemaMigration[] | undefined
+): void {
+  if (!migrations || migrations.length === 0) {
+    return;
+  }
+
+  validateMigrations(migrations);
+
+  for (const migration of migrations) {
+    try {
+      db.transaction(() => {
+        migration.up(db);
+      })();
+    } catch (err) {
+      log.error("Consumer schema migration failed", {
+        migration: migration.name,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw new Error(`Schema migration '${migration.name}' failed`, { cause: err });
+    }
+  }
+}
+
+function validateMigrations(migrations: readonly SchemaMigration[]): void {
+  const seen = new Set<string>();
+
+  for (const migration of migrations) {
+    const name = migration?.name;
+
+    if (typeof name !== "string" || name.trim().length === 0) {
+      throw new Error(
+        `Invalid schema migration: 'name' must be a non-empty string, got ${JSON.stringify(name)}`
+      );
+    }
+
+    if (seen.has(name)) {
+      throw new Error(`Duplicate schema migration name: '${name}'`);
+    }
+    seen.add(name);
+
+    if (typeof migration.up !== "function") {
+      throw new Error(`Schema migration '${name}' has no 'up' function`);
+    }
+  }
 }
