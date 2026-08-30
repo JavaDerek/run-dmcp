@@ -47,8 +47,13 @@ export const PROJECTED_TABLES: ProjectedTable[] = [
  * blocks is picked up the next time this runs, with no second place to
  * remember to update. See `installProjectionTriggers`'s doc comment for why
  * this is re-read on every call rather than cached.
+ *
+ * Exported so the checkpoint (issue #4) reads fact keys from this exact
+ * function rather than carrying a second copy of the same query -- one
+ * owner for the column list, or a checkpoint could pass while comparing a
+ * different set of columns than the triggers actually project.
  */
-function liveColumns(db: Database.Database, table: string): string[] {
+export function liveColumns(db: Database.Database, table: string): string[] {
   return (db.prepare(`SELECT name FROM pragma_table_info(?)`).all(table) as { name: string }[])
     .map((r) => r.name)
     .filter((name) => name !== "id");
