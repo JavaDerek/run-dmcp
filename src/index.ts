@@ -65,6 +65,27 @@ export {
   listIrreversibleFacts,
 } from "./timeline/irreversible.js";
 export type { IrreversibleFact } from "./timeline/irreversible.js";
+
+// Timeline export (design §6) -- the boundary that keeps both halves honest:
+// conversational authoring upstream of a frozen artifact, deterministic
+// consumers downstream of it. These are exported as library functions first
+// and served as MCP tools second, because the consumer that most needs them
+// is a process that must never call a model at runtime.
+export {
+  exportTimeline,
+  importTimeline,
+  exportTimelineToFile,
+  importTimelineFromFile,
+  TIMELINE_FORMAT_VERSION,
+} from "./timeline/export.js";
+export type {
+  TimelineExport,
+  TimelineExportEntity,
+  TimelineExportFact,
+  TimelineExportEvent,
+  TimelineExportClock,
+  TimelineImportResult,
+} from "./timeline/export.js";
 export { ENTITY_KINDS } from "./timeline/kinds.js";
 export type { EntityKind } from "./timeline/kinds.js";
 

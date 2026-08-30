@@ -5,6 +5,7 @@ import { createLogger } from "../utils/logger.js";
 import { replay } from "../timeline/replay.js";
 import { declareTimeAxis, setStoryTime, currentStoryTime } from "../timeline/clock.js";
 import { declareIrreversible, listIrreversibleFacts } from "../timeline/irreversible.js";
+import { exportTimelineToFile, importTimelineFromFile } from "../timeline/export.js";
 
 const log = createLogger("timeline");
 
@@ -226,6 +227,81 @@ export function registerTimelineTools(server: McpServer) {
           entityId,
           error: (error as Error).message,
         });
+        return {
+          content: [{ type: "text", text: JSON.stringify({ error: (error as Error).message }) }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  /**
+   * Both export tools deal in a PATH and return only counts, never the
+   * artifact itself. That is design §6's point -- the deliverable is a file
+   * the client owns, not a payload passed back through a conversation -- and
+   * it is also what keeps a whole world's timeline from being pasted into
+   * the caller's context window, which is how a tool result kills the
+   * conversation that asked for it.
+   */
+  server.registerTool(
+    "export_timeline",
+    {
+      description:
+        "Freeze a game's entire timeline -- every entity, every fact interval, every event, and the declared time axis -- into a JSON file the caller owns. Deterministic: the same world exports byte-identically every time. Carries no media references and no live table rows by design, so the file can be re-imported anywhere and answer replay(t) identically. Returns the path and row counts, never the artifact itself.",
+      inputSchema: {
+        gameId: z.string().max(100).describe("The game ID"),
+        filePath: z.string().min(1).max(4096).describe("Absolute path to write the export file to"),
+      },
+      annotations: ANNOTATIONS.IDEMPOTENT_UPDATE,
+    },
+    async ({ gameId, filePath }) => {
+      try {
+        const artifact = exportTimelineToFile({ gameId, filePath });
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(
+                {
+                  filePath,
+                  gameId: artifact.gameId,
+                  formatVersion: artifact.formatVersion,
+                  entities: artifact.entities.length,
+                  facts: artifact.facts.length,
+                  events: artifact.events.length,
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      } catch (error) {
+        log.error("export_timeline failed", { gameId, filePath, error: (error as Error).message });
+        return {
+          content: [{ type: "text", text: JSON.stringify({ error: (error as Error).message }) }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.registerTool(
+    "import_timeline",
+    {
+      description:
+        "Restore a frozen timeline export into this database, verbatim -- ids and every t are carried through unchanged. Refuses rather than merges if the game already has any recorded history, and refuses an artifact whose rows do not all belong to the game it names. Imports the timeline only; the live tables are not repopulated.",
+      inputSchema: {
+        filePath: z.string().min(1).max(4096).describe("Absolute path of the export file to read"),
+      },
+      annotations: ANNOTATIONS.CREATE,
+    },
+    async ({ filePath }) => {
+      try {
+        const result = importTimelineFromFile(filePath);
+        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      } catch (error) {
+        log.error("import_timeline failed", { filePath, error: (error as Error).message });
         return {
           content: [{ type: "text", text: JSON.stringify({ error: (error as Error).message }) }],
           isError: true,
