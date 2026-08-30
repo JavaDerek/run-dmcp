@@ -32,6 +32,7 @@ import { registerDisplayTools } from "./register/display.js";
 import { registerBatchTools } from "./register/batch.js";
 import { registerMcpResources } from "./register/mcp-resources.js";
 import { registerMcpPrompts } from "./register/mcp-prompts.js";
+import { registerTimelineTools } from "./register/timeline.js";
 
 // Initialize database
 initializeSchema();
@@ -65,6 +66,7 @@ registerImageTools(server);          // Stored Images
 registerAudioTools(server);          // Stored Audio (TTS, Voice References)
 registerDisplayTools(server);        // Display/Theme Configuration
 registerBatchTools(server);          // Batch Operations (multi-entity, workflows)
+registerTimelineTools(server);       // replay(t), story-time axis declaration
 
 // Register MCP Resources and Prompts
 registerMcpResources(server);        // Read-only data access via URI
