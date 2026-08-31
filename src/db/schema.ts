@@ -250,12 +250,22 @@ export function initializeSchema(options?: { migrations?: readonly SchemaMigrati
   `);
 
   // Resources table (for tracking currency, reputation, counters, etc.)
-  db.exec(`
+  //
+  // `RESOURCES_DDL` is a shared constant, not a literal inlined here, for the
+  // same reason `RESOURCE_CONSTRAINTS_DDL` further down is one: the CHECK-
+  // rebuild migration immediately below needs this exact text executed in
+  // TWO places -- here, for a fresh database, and again inside the rebuild,
+  // for a database that still carries the OLD two-member CHECK. Sharing one
+  // JS string is what makes "a fresh database and a migrated database
+  // converge on byte-identical `sqlite_master.sql` for this table" true BY
+  // CONSTRUCTION rather than by two hand-written literals happening to agree
+  // today.
+  const RESOURCES_DDL = `
     CREATE TABLE IF NOT EXISTS resources (
       id TEXT PRIMARY KEY,
       game_id TEXT NOT NULL,
       owner_id TEXT,
-      owner_type TEXT NOT NULL CHECK (owner_type IN ('game', 'character')),
+      owner_type TEXT NOT NULL CHECK (owner_type IN ('game', 'character', 'faction', 'location')),
       name TEXT NOT NULL,
       description TEXT,
       category TEXT,
@@ -265,7 +275,145 @@ export function initializeSchema(options?: { migrations?: readonly SchemaMigrati
       created_at TEXT NOT NULL,
       FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
     )
-  `);
+  `;
+  db.exec(RESOURCES_DDL);
+
+  // Migration: widen `resources.owner_type` to admit 'faction' and
+  // 'location' alongside 'game' and 'character'. A resource owned by a
+  // faction or a location is generic mechanism -- the engine already has
+  // `factions` and `locations` tables; this just lets `resources` point at
+  // either the way it already points at a `game` or a `character` -- so it
+  // belongs here rather than behind a downstream application's own migration.
+  //
+  // SQLite cannot ALTER a CHECK constraint, so a database that already has
+  // `resources` rows under the OLD two-member CHECK needs the same full-
+  // table-rebuild recipe the `resource_constraints` CHECK-widening migration
+  // uses further down this function (see that block's comment for the
+  // detailed reasoning this one leans on): build a replacement table with
+  // the new CHECK, copy every row across, drop the old table, put the
+  // replacement in its place.
+  //
+  // DETECTION IS IDEMPOTENT AND LITERAL, not a guess: read this codebase's
+  // OWN generated DDL back out of `sqlite_master` and check whether it
+  // already contains the token 'faction' -- the same "a literal check for a
+  // token we defined in output we generated is fine" carve-out the
+  // `resource_constraints` migration's own comment cites (hard rule 4 in the
+  // downstream game's own engineering standards; this engine has no
+  // narrative-language rule of its own to point at, but the reasoning is the
+  // same: this is a substring check against SQL text THIS FUNCTION generated
+  // a few lines above, never against anything a player or a model wrote). A
+  // truly fresh database never takes the branch below: `RESOURCES_DDL`'s
+  // `CREATE TABLE IF NOT EXISTS` a few lines up already carries the widened
+  // CHECK, so by the time this runs, this database's own `resources` already
+  // contains 'faction'.
+  const resourcesDdl = db
+    .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'resources'`)
+    .get() as { sql: string } | undefined;
+
+  if (resourcesDdl && !resourcesDdl.sql.includes("faction")) {
+    // DROP THE PROJECTION TRIGGERS FIRST, UNCONDITIONALLY, IF THEY EXIST.
+    // `timeline_resources_ai`/`_au`/`_ad` are defined ON `resources` itself
+    // (`AFTER INSERT/UPDATE/DELETE ON resources`), so SQLite drops them
+    // automatically the moment `DROP TABLE resources` below runs -- but
+    // dropping them here too, explicitly, costs nothing and removes any
+    // dependence on that implicit behaviour being exactly right. They are
+    // unconditionally reinstalled, generated fresh off the rebuilt table's
+    // own `pragma_table_info`, by `installProjectionTriggers()`
+    // (`src/timeline/projection.ts`), which `initializeTimelineSchema()`
+    // calls LAST in this function -- see the comment on that call for why it
+    // runs after every migration above it, this one included.
+    db.exec(`DROP TRIGGER IF EXISTS timeline_resources_ai`);
+    db.exec(`DROP TRIGGER IF EXISTS timeline_resources_au`);
+    db.exec(`DROP TRIGGER IF EXISTS timeline_resources_ad`);
+
+    // PRAGMA foreign_keys is a documented no-op when toggled inside a
+    // pending transaction, so it brackets withTransaction() below rather
+    // than living inside it -- set OFF here (before BEGIN), restored ON
+    // after COMMIT. `getDatabase()` (`src/db/connection.ts`) turns it ON for
+    // every connection at open; this is one of the few places in the
+    // codebase that deliberately, temporarily, undoes that, and it is
+    // responsible for putting it back.
+    //
+    // This is not optional. If foreign key constraints are enabled when a
+    // DROP TABLE runs, SQLite performs an implicit DELETE of every row in
+    // the table being dropped BEFORE dropping it, specifically so that any
+    // ON DELETE action declared by a table that references it fires as if
+    // each row had genuinely been deleted. `resource_history.resource_id`
+    // and `resource_constraint_members.resource_id` both declare `FOREIGN
+    // KEY (resource_id) REFERENCES resources(id) ON DELETE CASCADE` --
+    // dropping `resources` with foreign keys still ON would therefore
+    // cascade-delete every row of both of those tables before `resources`
+    // itself was even gone. Turning enforcement off first is what makes the
+    // DROP below a pure schema operation instead of a silent mass deletion.
+    db.pragma("foreign_keys = OFF");
+
+    withTransaction(() => {
+      // 1. Copy the OLD table's rows into a staging table under a temporary
+      //    name, already carrying the widened CHECK.
+      db.exec(`
+        CREATE TABLE resources_staging (
+          id TEXT PRIMARY KEY,
+          game_id TEXT NOT NULL,
+          owner_id TEXT,
+          owner_type TEXT NOT NULL CHECK (owner_type IN ('game', 'character', 'faction', 'location')),
+          name TEXT NOT NULL,
+          description TEXT,
+          category TEXT,
+          value REAL NOT NULL DEFAULT 0,
+          min_value REAL,
+          max_value REAL,
+          created_at TEXT NOT NULL
+        )
+      `);
+      db.exec(`
+        INSERT INTO resources_staging (id, game_id, owner_id, owner_type, name, description, category, value, min_value, max_value, created_at)
+        SELECT id, game_id, owner_id, owner_type, name, description, category, value, min_value, max_value, created_at FROM resources
+      `);
+
+      // 2. Drop the OLD table outright -- not renamed. Renaming it out of
+      //    the way first would rewrite `resource_history` and
+      //    `resource_constraint_members`'s own stored FOREIGN KEY clauses to
+      //    point at the temporary name (RENAME TO rewrites every OTHER
+      //    table's FK text that references the renamed table, regardless of
+      //    the `foreign_keys` pragma), leaving them permanently dangling
+      //    once that temporary table is dropped a few steps later. `DROP
+      //    TABLE`, unlike `RENAME TO`, does not rewrite other tables'
+      //    references -- there is nothing to rewrite them TO -- so this
+      //    recipe never renames the table other tables' foreign keys point
+      //    at; the FINAL name is produced by a genuine `CREATE TABLE`
+      //    instead, and `resource_history`/`resource_constraint_members`'s
+      //    FK text is never touched by anything in this block.
+      db.exec(`DROP TABLE resources`);
+
+      // 3. Recreate under the FINAL name using the exact same DDL text the
+      //    fresh-database path executed above -- `RESOURCES_DDL` itself, not
+      //    a second hand-copied literal -- so its stored SQL matches the
+      //    fresh-database path byte for byte.
+      db.exec(RESOURCES_DDL);
+
+      // 4. Copy every row back across from the staging table with an
+      //    EXPLICIT column list -- never SELECT * -- and drop the staging
+      //    table. Every id was copied verbatim, so `resource_history` and
+      //    `resource_constraint_members`'s own `FOREIGN KEY (resource_id)
+      //    REFERENCES resources(id)` -- never touched by any of the steps
+      //    above -- is satisfied by the replacement table throughout,
+      //    verified for real by the `PRAGMA foreign_key_check` below, not
+      //    merely assumed here.
+      db.exec(`
+        INSERT INTO resources (id, game_id, owner_id, owner_type, name, description, category, value, min_value, max_value, created_at)
+        SELECT id, game_id, owner_id, owner_type, name, description, category, value, min_value, max_value, created_at FROM resources_staging
+      `);
+      db.exec(`DROP TABLE resources_staging`);
+    });
+
+    const fkViolations = db.pragma("foreign_key_check") as unknown[];
+    if (fkViolations.length > 0) {
+      throw new Error(
+        `resources.owner_type CHECK migration left dangling foreign keys: ` + JSON.stringify(fkViolations)
+      );
+    }
+    db.pragma("foreign_keys = ON");
+  }
 
   // Resource history table (tracks all changes) -- FROZEN, see the trigger
   // immediately below. Kept for existing rows only; nothing writes here any

@@ -600,7 +600,7 @@ export interface Resource {
   id: string;
   gameId: string;
   ownerId: string | null;  // null for game-level resources
-  ownerType: "game" | "character";
+  ownerType: "game" | "character" | "faction" | "location";
   name: string;
   description: string;
   category: string | null;
