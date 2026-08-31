@@ -490,12 +490,33 @@ without a real caller) and what keeps this from becoming a licence to build for 
 **Deferred:** per-seat visibility / fog of war. Not built (brink #16). It lands when **a real caller**
 makes the requirement concrete rather than being designed against an imagined one.
 
-*Erratum, and it matters more than a word.* This line previously read "when a second consumer" — a
-stricter bar than the rule stated four paragraphs above it, and stricter in a way that was not
-deferral but permanent refusal: the video-side consumer **structurally cannot** want fog of war (§9 —
-one traversal, no player, nobody to hide anything from), so a bar requiring two consumers is one no
-caller can ever clear no matter what it builds. The bar is the same as every other core entry: one
-real caller.
+*Erratum, corrected twice, and the second correction is the one worth reading.* This line previously
+read "when a second consumer" — a stricter bar than the rule stated four paragraphs above it, and
+stricter with no reason given for the difference. It now reads **a real caller**, matching every other
+core entry.
+
+The first version of this erratum justified that change by claiming the video-side consumer
+*structurally cannot* want fog of war — one traversal, no player, nobody to hide anything from — and
+therefore that a two-consumer bar was permanent refusal wearing a deferral's wording. **That was
+wrong, and it is left recorded rather than quietly deleted because of how it was wrong:** it conflates
+*player* with *principal*. There is no player. There are characters, and a character who must not
+appear to know something is a principal. Dramatic irony is not an exotic requirement; in narrative it
+is close to the default.
+
+Worse for the original claim, §7 makes that need **load-bearing for exactly this consumer**. If a
+per-character payload built from `replay(t)` carries a fact that character does not yet know, it
+cannot be corrected downstream — *"she does not yet know the island is doomed"* puts **island** and
+**doomed** into the prompt, which is §7's mouthing-words failure verbatim — and it cannot be corrected
+at construction either, because the constructor §7 mandates has no way to express absence by design.
+The consumer with no player is therefore the one that can *least* work around this feature's absence,
+which is the opposite of what the erratum first said. Its principal is also the cleaner of the two on
+offer: a character does not merely resolve to an entity, it is one.
+
+None of that makes the feature admissible, and the deferral is unaffected. Wanting a per-principal
+projection is not needing it in the core: character knowledge modelled as ordinary facts, plus a
+filter in the client's own layer, needs no engine change at all. The correction to the bar stands on
+the simpler ground it should have rested on from the start — §8 states one real caller for everything
+else, and this entry was never given a reason to differ.
 
 **Admission criterion, both halves required.** A real caller needs it, *and* its principal **resolves
 to an entity the engine already has**. "Resolves to", not "is": a caller's principal may carry
