@@ -32,6 +32,56 @@ export interface SchemaMigration {
   up(db: Database.Database): void;
 }
 
+/**
+ * Run one whole-table CHECK rebuild with foreign-key enforcement suspended,
+ * and verify afterwards that nothing was left dangling.
+ *
+ * SQLite cannot ALTER a CHECK, so widening one means rebuilding the table:
+ * copy the rows aside, DROP, CREATE with the new CHECK, copy back. Two
+ * migrations in this file do that, and both need the same two guarantees.
+ *
+ * ENFORCEMENT MUST BE OFF ACROSS THE DROP. With it on, `DROP TABLE` performs
+ * an implicit per-row DELETE first, precisely so that any ON DELETE action
+ * declared against that table fires as though each row had genuinely been
+ * deleted -- which for both of these tables means cascade-emptying the tables
+ * that reference them. Suspending it is what makes the drop a schema
+ * operation instead of a silent mass deletion. It is toggled out here rather
+ * than inside `withTransaction`, because `PRAGMA foreign_keys` is a
+ * documented no-op while a transaction is pending.
+ *
+ * AND IT MUST GO BACK ON WHEN THE REBUILD THROWS, which is why the restore is
+ * in a `finally` and why this is a shared function rather than two copies.
+ * Both call sites previously restored it on the success path only.
+ * `getDatabase()` caches one connection at module scope, so a rebuild that
+ * threw handed the rest of the process a handle with foreign keys still
+ * disabled -- and a disabled foreign key does not announce itself. It means
+ * every ON DELETE CASCADE in this schema quietly stops working: deleting a
+ * game orphans its characters, resources, locations and secrets instead of
+ * taking them with it, and nothing errors. The scenario is not exotic -- a
+ * staging table left behind by a rebuild that died partway is exactly what
+ * makes the next startup's `CREATE TABLE ..._staging` throw. Covered by
+ * `src/db/__tests__/foreignKeysRestored.test.ts`.
+ */
+function rebuildWithForeignKeysSuspended(
+  db: Database.Database,
+  label: string,
+  rebuild: () => void
+): void {
+  db.pragma("foreign_keys = OFF");
+  try {
+    withTransaction(rebuild);
+
+    const violations = db.pragma("foreign_key_check") as unknown[];
+    if (violations.length > 0) {
+      throw new Error(
+        `${label} CHECK migration left dangling foreign keys: ` + JSON.stringify(violations)
+      );
+    }
+  } finally {
+    db.pragma("foreign_keys = ON");
+  }
+}
+
 export function initializeSchema(options?: { migrations?: readonly SchemaMigration[] }): void {
   const db = getDatabase();
 
@@ -326,28 +376,12 @@ export function initializeSchema(options?: { migrations?: readonly SchemaMigrati
     db.exec(`DROP TRIGGER IF EXISTS timeline_resources_au`);
     db.exec(`DROP TRIGGER IF EXISTS timeline_resources_ad`);
 
-    // PRAGMA foreign_keys is a documented no-op when toggled inside a
-    // pending transaction, so it brackets withTransaction() below rather
-    // than living inside it -- set OFF here (before BEGIN), restored ON
-    // after COMMIT. `getDatabase()` (`src/db/connection.ts`) turns it ON for
-    // every connection at open; this is one of the few places in the
-    // codebase that deliberately, temporarily, undoes that, and it is
-    // responsible for putting it back.
-    //
-    // This is not optional. If foreign key constraints are enabled when a
-    // DROP TABLE runs, SQLite performs an implicit DELETE of every row in
-    // the table being dropped BEFORE dropping it, specifically so that any
-    // ON DELETE action declared by a table that references it fires as if
-    // each row had genuinely been deleted. `resource_history.resource_id`
-    // and `resource_constraint_members.resource_id` both declare `FOREIGN
-    // KEY (resource_id) REFERENCES resources(id) ON DELETE CASCADE` --
-    // dropping `resources` with foreign keys still ON would therefore
-    // cascade-delete every row of both of those tables before `resources`
-    // itself was even gone. Turning enforcement off first is what makes the
-    // DROP below a pure schema operation instead of a silent mass deletion.
-    db.pragma("foreign_keys = OFF");
-
-    withTransaction(() => {
+    // Enforcement has to be suspended across the drop, and put back
+    // afterwards on every path -- see `rebuildWithForeignKeysSuspended`. Here
+    // the tables that would be cascade-emptied are `resource_history` and
+    // `resource_constraint_members`, both of which declare
+    // `FOREIGN KEY (resource_id) REFERENCES resources(id) ON DELETE CASCADE`.
+    rebuildWithForeignKeysSuspended(db, "resources.owner_type", () => {
       // 1. Copy the OLD table's rows into a staging table under a temporary
       //    name, already carrying the widened CHECK.
       db.exec(`
@@ -405,14 +439,6 @@ export function initializeSchema(options?: { migrations?: readonly SchemaMigrati
       `);
       db.exec(`DROP TABLE resources_staging`);
     });
-
-    const fkViolations = db.pragma("foreign_key_check") as unknown[];
-    if (fkViolations.length > 0) {
-      throw new Error(
-        `resources.owner_type CHECK migration left dangling foreign keys: ` + JSON.stringify(fkViolations)
-      );
-    }
-    db.pragma("foreign_keys = ON");
   }
 
   // Resource history table (tracks all changes) -- FROZEN, see the trigger
@@ -594,16 +620,12 @@ export function initializeSchema(options?: { migrations?: readonly SchemaMigrati
     // regardless -- this is that discipline paying for itself a second time.
     db.exec(`DROP TRIGGER IF EXISTS timeline_facts_resolve_only`);
 
-    // PRAGMA foreign_keys is a documented no-op when toggled inside a
-    // pending transaction, so it brackets withTransaction() below rather
-    // than living inside it -- set OFF here (before BEGIN), restored ON
-    // after COMMIT. connection.ts turns it ON for every connection at
-    // open (`getDatabase()`); this block is the one place in the codebase
-    // that deliberately, temporarily, undoes that, and it is responsible
-    // for putting it back.
-    db.pragma("foreign_keys = OFF");
-
-    withTransaction(() => {
+    // Enforcement has to be suspended across the drop, and put back
+    // afterwards on every path -- see `rebuildWithForeignKeysSuspended`. Here
+    // the table that would be cascade-emptied is `resource_constraint_members`,
+    // which declares
+    // `FOREIGN KEY (constraint_id) REFERENCES resource_constraints(id) ON DELETE CASCADE`.
+    rebuildWithForeignKeysSuspended(db, "resource_constraints (resolve_only, issue #13)", () => {
       // EMPIRICALLY MEASURED, NOT ASSUMED (see resolveOnly.test.ts, whose
       // FK-check assertion caught a real bug in an earlier version of this
       // block): `ALTER TABLE ... RENAME TO` does not just rename the table
@@ -709,15 +731,6 @@ export function initializeSchema(options?: { migrations?: readonly SchemaMigrati
       //    below, not merely assumed here.
       db.exec(`DROP TABLE resource_constraints_staging`);
     });
-
-    const fkViolations = db.pragma("foreign_key_check") as unknown[];
-    if (fkViolations.length > 0) {
-      throw new Error(
-        `resource_constraints CHECK migration (resolve_only, issue #13) left dangling foreign keys: ` +
-          JSON.stringify(fkViolations)
-      );
-    }
-    db.pragma("foreign_keys = ON");
   }
 
   // Members of a resource constraint. 'bounded' and 'monotonic' constraints
