@@ -315,7 +315,7 @@ export const resourceOutputSchema = {
   id: z.string(),
   gameId: z.string(),
   ownerId: z.string().nullable(),
-  ownerType: z.enum(["game", "character"]),
+  ownerType: z.enum(["game", "character", "faction", "location"]),
   name: z.string(),
   description: z.string(),
   category: z.string().nullable(),

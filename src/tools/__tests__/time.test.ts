@@ -498,5 +498,112 @@ describe('time tools', () => {
       const [event] = listScheduledEvents(gameId, false)
       expect(event.triggerTime).toEqual(dt({ hour: 9 }))
     })
+
+    // The tests above stop one step short of the property they imply.
+    // "Leaves the event pending" is only worth anything if a pending event is
+    // eventually retried, and advanceTime's own comment promises exactly that
+    // ("the row is untouched, so the event stays pending"). It could not
+    // deliver it: the trigger window was `triggerTime >= previousTime &&
+    // triggerTime <= newTime`, and after the failing call the clock has
+    // already moved past triggerTime -- so on every subsequent call the lower
+    // bound excludes it and the event is stuck pending forever, with its
+    // consequence never applied. Found downstream (issue #27) and fixed there
+    // first; these are that fix's tests, brought up with it.
+    it('retries a failed consequence on a later advanceTime, once the trigger time is already behind the clock', () => {
+      const resource = createResource({ gameId, ownerType: 'game', name: 'grain', value: 100 })
+      scheduleEvent({
+        gameId,
+        name: 'spoilage',
+        triggerTime: dt({ hour: 9 }),
+        consequence: { resourceId: resource.id, delta: -10 },
+      })
+
+      // A TRANSIENT failure, which is the case that matters -- a permanent one
+      // is indistinguishable from a stuck event. Same injection point as the
+      // rollback test above: the annotation event a constrained write logs.
+      const db = getDatabase()
+      db.exec(`
+        CREATE TRIGGER fail_value_change_once
+        BEFORE INSERT ON events
+        WHEN NEW.kind = 'value.changed'
+        BEGIN
+          SELECT RAISE(ABORT, 'simulated transient failure');
+        END;
+      `)
+
+      const first = advanceTime(gameId, { hours: 2 }) // 08:00 -> 10:00, trigger at 09:00 fires and fails
+      expect(first?.consequenceFailures).toHaveLength(1)
+      expect(getResource(resource.id)?.value).toBe(100)
+      expect(listScheduledEvents(gameId, false)).toHaveLength(1)
+
+      db.exec(`DROP TRIGGER fail_value_change_once;`)
+
+      // The clock now reads 10:00, so this call's previousTime is PAST the
+      // event's 09:00 trigger time. The event is still pending and still due.
+      const second = advanceTime(gameId, { hours: 1 }) // 10:00 -> 11:00
+      expect(second?.consequenceFailures).toEqual([])
+      expect(second?.triggeredEvents.map((e) => e.name)).toEqual(['spoilage'])
+      expect(getResource(resource.id)?.value).toBe(90)
+      expect(listScheduledEvents(gameId, false)).toHaveLength(0)
+    })
+
+    it('applies a retried consequence exactly once -- the retry does not become a re-fire', () => {
+      const resource = createResource({ gameId, ownerType: 'game', name: 'grain', value: 100 })
+      scheduleEvent({
+        gameId,
+        name: 'spoilage',
+        triggerTime: dt({ hour: 9 }),
+        consequence: { resourceId: resource.id, delta: -10 },
+      })
+
+      const db = getDatabase()
+      db.exec(`
+        CREATE TRIGGER fail_value_change_once
+        BEFORE INSERT ON events
+        WHEN NEW.kind = 'value.changed'
+        BEGIN
+          SELECT RAISE(ABORT, 'simulated transient failure');
+        END;
+      `)
+      advanceTime(gameId, { hours: 2 })
+      db.exec(`DROP TRIGGER fail_value_change_once;`)
+
+      advanceTime(gameId, { hours: 1 }) // the retry lands
+      expect(getResource(resource.id)?.value).toBe(90)
+
+      advanceTime(gameId, { hours: 1 }) // and never again
+      advanceTime(gameId, { days: 1 })
+      expect(getResource(resource.id)?.value).toBe(90)
+    })
+
+    it('retries a recurring event at its unchanged occurrence, then resumes rescheduling from there', () => {
+      const resource = createResource({ gameId, ownerType: 'game', name: 'grain', value: 100 })
+      scheduleEvent({
+        gameId,
+        name: 'daily toll',
+        triggerTime: dt({ hour: 9 }),
+        recurring: 'daily',
+        consequence: { resourceId: resource.id, delta: -5 },
+      })
+
+      const db = getDatabase()
+      db.exec(`
+        CREATE TRIGGER fail_value_change_once
+        BEFORE INSERT ON events
+        WHEN NEW.kind = 'value.changed'
+        BEGIN
+          SELECT RAISE(ABORT, 'simulated transient failure');
+        END;
+      `)
+      advanceTime(gameId, { hours: 2 }) // 08:00 -> 10:00, occurrence fails, stays due at 09:00
+      expect(getResource(resource.id)?.value).toBe(100)
+      expect(listScheduledEvents(gameId, false)[0].triggerTime).toEqual(dt({ hour: 9 }))
+
+      db.exec(`DROP TRIGGER fail_value_change_once;`)
+
+      advanceTime(gameId, { hours: 1 }) // 10:00 -> 11:00, the missed occurrence lands
+      expect(getResource(resource.id)?.value).toBe(95)
+      expect(listScheduledEvents(gameId, false)[0].triggerTime).toEqual(dt({ day: 1, hour: 9 }))
+    })
   })
 })

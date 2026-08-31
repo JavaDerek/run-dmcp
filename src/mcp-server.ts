@@ -43,7 +43,7 @@ import { createResolver, type Mechanic } from "./timeline/resolve.js";
 import { createStateRenderer, type RenderVocabulary } from "./timeline/render.js";
 
 export const SERVER_NAME = "dmcp";
-export const SERVER_VERSION = "0.2.0";
+export const SERVER_VERSION = "0.3.0";
 
 /**
  * Build an MCP server with every CORE tool, resource and prompt this engine

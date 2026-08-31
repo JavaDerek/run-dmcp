@@ -12,23 +12,26 @@ holds full adjudication discretion over a world that only ever stores *now*.
 
 ## Status
 
-**0.1.1 — the foundation, not the thesis.** What ships today is the predecessor's engine plus four
-pieces of generic mechanism that were built for it and offered back to it:
+**0.3.0.** The base is the predecessor's engine plus four pieces of generic mechanism that were built
+for it and offered back to it:
 
 - **Atomicity** — `withTransaction()` wired into the multi-write operations that were running
   non-atomically.
 - **Declarative constraints** — resources can be declared `bounded` or `monotonic`, and the store
-  enforces it rather than trusting every caller. (`resolve_only` — every direct write rejected, so a
-  value can move only through an adjudicating call — exists in a downstream consumer and has not been
-  extracted here yet. It arrives with the resolve protocol; see [docs/DESIGN.md](docs/DESIGN.md) §5.2a.)
+  enforces it rather than trusting every caller. `resolve_only` — every direct write rejected, so a
+  value can move only through an adjudicating call — joined them alongside the resolve protocol, and
+  is enforced by a trigger rather than by a checker anyone has to remember to call; see
+  [docs/DESIGN.md](docs/DESIGN.md) §5.2a.
 - **Conserved resource sets** — a set of resources can be declared conserved, with an atomic transfer
   that never silently clamps.
 - **On-expiry consequences** — scheduled events and timers can carry a consequence that actually
   lands when they expire, rather than expiring into nothing.
 
-0.1.1 adds the packaging half of that: importing the library starts nothing, the database resolves to
-the consuming application rather than into `node_modules`, and a consumer can bring up its own tables
-through the migration hook below.
+0.1.1 added the packaging half of that: importing the library starts nothing, the database resolves
+to the consuming application rather than into `node_modules`, and a consumer can bring up its own
+tables through the migration hook below. 0.3.0 adds the consuming half — the entity/property spine is
+exported as library functions, so a consumer that deletes its own vendored copy has something to
+import rather than a server to make tool calls into.
 
 The timeline that gives this project its reason to exist — interval-versioned facts, `replay(t)`,
 irreversibility, timeline export, `changes_within` — is built, and every write of world state appends
@@ -92,6 +95,27 @@ one.
 The database lands in the consuming application: `DMCP_DB_PATH` if set, else an existing
 `~/.local/share/dmcp`, else `./data/games.db` relative to the working directory. Never inside the
 installed package.
+
+**The spine is importable, not only callable over a transport.** Games, locations, characters,
+factions, relationships, resources, secrets, items, notes, tags, time and timers are library
+functions first and MCP tools second, so a consumer reads and writes its own world directly and only
+serves the tools it actually wants an LLM to reach. That includes the constrained-write choke point:
+a number that moves through `updateResourceValue` is checked against its declared constraints and its
+history is `facts`, queryable with `valueHistory`.
+
+```ts
+import { createGame, createResource, updateResourceValue, valueHistory } from "run-dmcp";
+
+const game = createGame({ name: "The Granary", setting: "…", style: "…" });
+const grain = createResource({ gameId: game.id, ownerType: "game", name: "grain", value: 100 });
+
+updateResourceValue({ resourceId: grain.id, mode: "delta", value: -30, reason: "the winter ration" });
+valueHistory(grain.id, "value"); // → the transitions, with the reason each one carried
+```
+
+The annotations, input limits, error envelope and logger the engine's own tools are built from are
+exported too (`ANNOTATIONS`, `LIMITS`, `errors`, `createLogger`), so a consumer's own tools can
+refuse and bound the way these do instead of re-implementing it.
 
 ## Provenance
 

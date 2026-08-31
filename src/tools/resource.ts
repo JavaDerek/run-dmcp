@@ -48,7 +48,7 @@ function transitionToResourceChange(transition: ValueTransition): ResourceChange
 
 export function createResource(params: {
   gameId: string;
-  ownerType: "game" | "character";
+  ownerType: "game" | "character" | "faction" | "location";
   ownerId?: string;
   name: string;
   description?: string;
@@ -115,7 +115,7 @@ export function getResource(id: string): Resource | null {
     id: row.id as string,
     gameId: row.game_id as string,
     ownerId: row.owner_id as string | null,
-    ownerType: row.owner_type as "game" | "character",
+    ownerType: row.owner_type as "game" | "character" | "faction" | "location",
     name: row.name as string,
     description: row.description as string,
     category: row.category as string | null,
@@ -231,7 +231,7 @@ export function deleteResource(id: string): boolean {
 export function listResources(
   gameId: string,
   filter?: {
-    ownerType?: "game" | "character";
+    ownerType?: "game" | "character" | "faction" | "location";
     ownerId?: string;
     category?: string;
   }
@@ -264,7 +264,7 @@ export function listResources(
     id: row.id as string,
     gameId: row.game_id as string,
     ownerId: row.owner_id as string | null,
-    ownerType: row.owner_type as "game" | "character",
+    ownerType: row.owner_type as "game" | "character" | "faction" | "location",
     name: row.name as string,
     description: row.description as string,
     category: row.category as string | null,

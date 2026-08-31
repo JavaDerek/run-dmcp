@@ -13,7 +13,7 @@ export function registerResourceTools(server: McpServer) {
       description: "Create a new resource (currency, reputation, counter, etc.)",
       inputSchema: {
         gameId: z.string().max(100).describe("The game ID"),
-        ownerType: z.enum(["game", "character"]).describe("Owner type: 'game' for party/global resources, 'character' for personal resources"),
+        ownerType: z.enum(["game", "character", "faction", "location"]).describe("Owner type: 'game' for party/global resources, 'character' for personal resources, 'faction' or 'location' for resources owned by one of those entities"),
         ownerId: z.string().max(100).optional().describe("Character ID if ownerType is 'character' (omit for game-level resources)"),
         name: z.string().min(1).max(LIMITS.NAME_MAX).describe("Resource name (e.g., 'Gold', 'Sanity', 'Thieves Guild Reputation')"),
         description: z.string().max(LIMITS.DESCRIPTION_MAX).optional().describe("Resource description"),
@@ -127,7 +127,7 @@ export function registerResourceTools(server: McpServer) {
       description: "List resources in a game",
       inputSchema: {
         gameId: z.string().max(100).describe("The game ID"),
-        ownerType: z.enum(["game", "character"]).optional().describe("Filter by owner type"),
+        ownerType: z.enum(["game", "character", "faction", "location"]).optional().describe("Filter by owner type"),
         ownerId: z.string().max(100).optional().describe("Filter by owner ID (for character resources)"),
         category: z.string().max(100).optional().describe("Filter by category"),
       },
