@@ -58,6 +58,59 @@ jobs:
       - name: Run client tests
         run: cd client && npm run test:run
 
+  # The acceptance suite (e2e/). Deliberately its own job rather than another
+  # step on `test`: it needs a browser and a full build, which the unit job
+  # needs neither of, and a red acceptance run should say "acceptance" on the
+  # check list rather than hiding inside "Tests". Nothing above is modified --
+  # `npm run test:run` still means exactly what it meant before, because every
+  # file here is e2e/**/*.spec.ts and vitest only globs src/**/*.test.ts.
+  acceptance:
+    name: Acceptance
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install client dependencies
+        run: cd client && npm ci
+
+      # Chromium only. The suite launches one browser, for the admin client's
+      # smoke specs; the API and MCP harnesses never open one.
+      - name: Install Playwright chromium
+        run: npx playwright install --with-deps chromium
+
+      # The suite exercises the BUILT artifact -- dist/ for the server and MCP
+      # entry point, client/dist for the admin app -- so the build is a
+      # prerequisite, not a duplicate of the `build` job's work.
+      - name: Build
+        run: npm run build
+
+      # Playwright transpiles TypeScript without type-checking it, so without
+      # this a type error in a spec would only ever surface as a runtime
+      # failure.
+      - name: Type check the acceptance suite
+        run: npm run typecheck:e2e
+
+      - name: Run acceptance tests
+        run: npm run test:acceptance:only
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/.tmp/report/
+          retention-days: 7
+          if-no-files-found: ignore
+
   build:
     name: Build
     runs-on: self-hosted
