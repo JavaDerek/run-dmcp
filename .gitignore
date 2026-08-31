@@ -7,3 +7,12 @@ data/
 .DS_Store
 .mcp.json
 .claude/worktrees/
+
+# Acceptance-suite scratch: temp databases, handshake files, Playwright
+# reports and traces. Ignored rather than merely untidy -- engineVocabulary
+# .test.ts scans untracked-but-not-ignored files, and a generated HTML report
+# carrying a run's worth of quoted output has no business in that scan.
+e2e/.tmp/
+playwright-report/
+test-results/
+blob-report/

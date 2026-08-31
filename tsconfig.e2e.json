@@ -1,0 +1,29 @@
+{
+  // The acceptance suite's own type check.
+  //
+  // The root tsconfig.json includes `src/**/*` and compiles to dist/ -- e2e/
+  // must stay out of it, or `npm run build` would emit the test suite into
+  // the published package. But "out of the build" must not mean "unchecked":
+  // Playwright transpiles TypeScript without type-checking it, so without
+  // this file a type error in a spec would only ever surface as a runtime
+  // failure. `npm run typecheck:e2e` closes that, and the acceptance CI job
+  // runs it.
+  //
+  // It type-checks AGAINST dist/ -- the suite imports the built artifact,
+  // which is the thing it is supposed to be accepting -- so it needs
+  // `npm run build` to have run first, exactly as the suite itself does.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": ["e2e/**/*.ts", "playwright.config.ts"],
+  "exclude": ["node_modules", "dist"]
+}
