@@ -57,6 +57,8 @@ export function initializeTimelineSchema(): void {
   // all (absence is the absence of a fact, never a fact of absence -- hard
   // rule 3). No ON DELETE CASCADE and no FK to `games`: deleting a game
   // deletes its live rows, but the timeline of that game survives.
+  // DECISION(#21): a property to be declared irreversible needs its own fact key.
+  //
   // `irreversible` is a per-fact flag, not a per-entity or per-value one --
   // so any property a future consumer wants to declare irreversible has to
   // live under its own fact key; you cannot flag half a blob.

@@ -31,6 +31,16 @@ import type { EntityKind } from "./kinds.js";
  * artifact contains no `file_path` anywhere and that those rows
  * contributed nothing (not even an extra entity).
  *
+ * DECISION(#18): the frozen artifact carries no per-principal projection.
+ *
+ * No visibility filtering either, and the same "requirement, not omission"
+ * applies (issue #18): the artifact is the omniscient timeline. Whether a
+ * per-principal export should exist is not a small question deferred for
+ * tidiness -- it decides whether §6's "one file a deterministic consumer
+ * depends on" becomes N files plus a rule for choosing between them. That
+ * is a decision for the caller that first needs it to own, and it cannot be
+ * made well against no caller, so it is not made here.
+ *
  * No live tables either. The live projected tables (`games`, `characters`,
  * `resources`, ...) are a projection of the timeline, not a second source
  * of truth (design §5.4's decided destination) -- a file carrying both

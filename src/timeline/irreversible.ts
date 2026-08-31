@@ -3,6 +3,8 @@ import { assertT } from "./t.js";
 import { openingEventId, type FactProvenance } from "./provenance.js";
 
 /**
+ * DECISION(#21): contradiction is whole-value comparison under one key.
+ *
  * `irreversible` -- the temporal member of the constraint family alongside
  * `bounded`, `monotonic`, and conserved sets (design §5.3). Declared per
  * fact, not per entity or per value: `facts.irreversible` is a column on the
