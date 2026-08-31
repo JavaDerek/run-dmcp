@@ -692,7 +692,28 @@ export function createHttpServer(_port: number = 3456): express.Application {
         next();
         return;
       }
-      res.sendFile(join(CLIENT_DIST, "index.html"));
+      // `dotfiles: "allow"` is load-bearing, and its absence was a real bug.
+      //
+      // res.sendFile() with no `root` option hands the WHOLE absolute path to
+      // `send`, whose `dotfiles` default is "ignore" -- so if ANY segment of
+      // the path this package is installed under begins with a dot, `send`
+      // refuses the file with NotFoundError and the error handler below turns
+      // that into a 500. Every client-side route breaks at once, while `/`
+      // keeps working (it is served by express.static above, which only
+      // dotfile-checks the REQUEST path, not its own root). That is a
+      // spectacularly confusing failure: the app is fine, the file is there,
+      // and the deep link 500s because of where the checkout happens to live.
+      //
+      // Installing under a dot directory is ordinary -- a worktree beneath
+      // `.claude/`, a deploy under `~/.local/share`, a CI checkout in a dotted
+      // cache path -- so this is not a hypothetical.
+      //
+      // Safe, because the dotfiles guard is protecting nothing here: this path
+      // is a server-controlled constant (CLIENT_DIST plus a literal file name)
+      // and no part of it comes from the request. The guard exists to stop a
+      // user-supplied path from reaching `.env` or `.git`; there is no
+      // user-supplied path in it.
+      res.sendFile(join(CLIENT_DIST, "index.html"), { dotfiles: "allow" });
     });
   } else {
     // Development fallback - show message
