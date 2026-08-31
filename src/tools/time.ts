@@ -182,11 +182,24 @@ export function advanceTime(
   for (const row of events) {
     const triggerTime = safeJsonParse<GameDateTime>(row.trigger_time as string, { year: 1, month: 1, day: 1, hour: 0, minute: 0 });
 
-    // Check if event should trigger (trigger time is between previous and new time)
-    if (
-      compareDateTime(triggerTime, previousTime, calendarConfig) >= 0 &&
-      compareDateTime(triggerTime, newTime, calendarConfig) <= 0
-    ) {
+    // Due if the trigger time has been reached -- deliberately NOT also gated
+    // on `triggerTime >= previousTime`.
+    //
+    // That lower bound looks like the right window ("did we cross it on THIS
+    // call?") and quietly broke the retry the catch block below promises. When
+    // a consequence throws, the transaction rolls back and the row stays
+    // pending, exactly as intended -- but the clock has already moved past
+    // triggerTime by then, because it is updated unconditionally above. On
+    // every subsequent call the lower bound therefore excluded the row, and
+    // the event sat pending forever with its consequence never applied. The
+    // rollback was correct and unreachable.
+    //
+    // Without the lower bound, "pending and past due" is the whole condition,
+    // which is the same retry semantics timers already have. The `triggered =
+    // 0` filter in the query above is what keeps this exactly-once: a
+    // successful event is marked (or, if recurring, rescheduled forward) in
+    // the same transaction as its consequence, so it cannot come back.
+    if (compareDateTime(triggerTime, newTime, calendarConfig) <= 0) {
       const eventId = row.id as string;
       const eventName = row.name as string;
       const recurring = row.recurring as string | null;
