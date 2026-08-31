@@ -38,8 +38,8 @@ const openServers: Server[] = [];
 const tempDirs: string[] = [];
 
 afterEach(() => {
-  while (openServers.length > 0) openServers.pop()?.close();
-  while (tempDirs.length > 0) rmSync(tempDirs.pop()!, { recursive: true, force: true });
+  for (const server of openServers.splice(0)) server.close();
+  for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
 /** Binds on port 0 and returns the origin the OS actually gave us. */
