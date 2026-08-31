@@ -276,6 +276,103 @@ export {
   webUiEnabled,
   setHttpPort,
   getWebUiBaseUrl,
+  getGameUrl,
+  getCharacterUrl,
+  getLocationUrl,
 } from "./utils/webui.js";
+
+// ===========================================================================
+// The core's own tool modules, as library functions (design §8, §11 Phase 5).
+//
+// §8's layer table puts factions, relationships-with-history, secrets,
+// resources, locations and items in the CORE, and gives the reason: they are
+// "the client's spine. If these go up into the RPG layer, the client cannot
+// consume the package without dragging the RPG layer with it -- which defeats
+// the split." That reason is only satisfied if a consumer can actually IMPORT
+// them. Until this block, it could not: everything above is the timeline and
+// the database, and the only door to the spine was `createCoreMcpServer` --
+// the whole assembled server, which a consumer would then have to make tool
+// calls into, over a transport, to read its own tables.
+//
+// The layer ABOVE this one already got it right. src/rpg/index.ts ends with
+// six export-stars over its own tool modules, under a comment saying it is
+// using "the same shape core's index.ts uses for the timeline... a consumer
+// that wants to call combat/quest/table/status/ability/dice logic directly,
+// without going through an MCP tool call, can." The core never did
+//
+// (Those six are named here in prose rather than quoted as import lines on
+// purpose: layerBoundary.test.ts walks this file's import graph with a
+// deliberately syntactic scan for `from "<specifier>"`, and it cannot tell a
+// quoted example in a comment from a real edge. That is the guard being
+// conservative rather than clever, which is the right trade -- it fails loud
+// and names the chain. Do not teach it to strip comments; reword instead.)
+// the same for its own tools, which left the OPTIONAL layer more consumable
+// than the thing it is optional on top of. That is an oversight and not a
+// decision: §6's rule is "library functions first, MCP tools second", and the
+// narration-constraint and timeline-export blocks above both invoke it.
+//
+// This changes no behaviour and adds no dependency. Every module below is
+// ALREADY in this file's static import graph, reached through
+// ./mcp-server.js -> ./register/* -> ./tools/*, so src/__tests__/
+// layerBoundary.test.ts walks exactly the same file set before and after --
+// nothing under src/rpg/ becomes reachable, and none of the six tool modules
+// that moved up there is named here.
+export * from "./tools/game.js";
+export * from "./tools/world.js";
+export * from "./tools/character.js";
+export * from "./tools/faction.js";
+export * from "./tools/relationship.js";
+export * from "./tools/resource.js";
+export * from "./tools/constraint.js";
+export * from "./tools/inventory.js";
+export * from "./tools/secrets.js";
+export * from "./tools/narrative.js";
+export * from "./tools/notes.js";
+export * from "./tools/tags.js";
+export * from "./tools/time.js";
+export * from "./tools/timers.js";
+export * from "./tools/rules.js";
+export * from "./tools/pause.js";
+export * from "./tools/display.js";
+export * from "./tools/images.js";
+export * from "./tools/audio.js";
+export * from "./tools/image-prompt.js";
+
+// The event emitter the tool modules above write to. A consumer's own write
+// paths emit through the same singleton, so its tables and the engine's reach
+// one SSE subscriber rather than two competing ones.
+export { gameEvents } from "./events/emitter.js";
+export type { GameEvent } from "./events/emitter.js";
+
+// ===========================================================================
+// What a consumer needs to register tools OF ITS OWN onto the core server.
+//
+// A client keeps its own MCP surface -- that is the whole point of the split;
+// its mechanics are its own and the engine never learns their names. But a
+// tool it registers should refuse, bound and annotate the way the engine's do,
+// and today a client re-implements these or copies them and lets the copy
+// drift. Named one by one rather than star-exported: these modules contain
+// identifiers like `CREATE` and `UPDATE` that have no business in a package's
+// root namespace.
+export { ANNOTATIONS, withAnnotations } from "./utils/tool-annotations.js";
+export { LIMITS, validatedSchemas, boundedString, boundedArray } from "./utils/validation.js";
+export { createError, formatErrorResponse, errors } from "./utils/errors.js";
+export type { AgentError } from "./utils/errors.js";
+export { createLogger } from "./utils/logger.js";
+export type { Logger } from "./utils/logger.js";
+export { verbositySchema, applyVerbosity, filterFields } from "./utils/verbosity.js";
+export type { VerbosityLevel } from "./utils/verbosity.js";
+export { safeJsonParse, safeJsonParseOrNull } from "./utils/json.js";
+export {
+  successResponseSchema,
+  textResultSchema,
+  deletedResponseSchema,
+  listResponseSchema,
+  characterOutputSchema,
+  characterStatusSchema,
+  conditionModifyOutputSchema,
+  tagModifyOutputSchema,
+} from "./utils/output-schemas.js";
+export { imageGenSchema, voiceSchema } from "./schemas/index.js";
 
 export type * from "./types/index.js";
