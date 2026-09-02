@@ -1,3 +1,8 @@
+# Real env files never enter the repo; .env.example is the tracked template.
+.env
+.env.*
+!.env.example
+
 node_modules/
 dist/
 data/
