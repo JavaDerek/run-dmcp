@@ -6,11 +6,11 @@
 // ordinary MCP tool surface a consumer would actually use
 // (create_resource/update_resource, never a raw fact write).
 //
-// grain/treasury/population flavoured throughout (root claude.md,
+// grain/treasury/population flavoured throughout (root CLAUDE.md,
 // engineVocabulary.test.ts) -- a throwaway fixture, never a starter set.
 //
 // This file writes NO assertion that scans rendered text for negation, an
-// absence, or a forbidden word -- root claude.md hard rule 4 forbids
+// absence, or a forbidden word -- root CLAUDE.md hard rule 4 forbids
 // exactly that shape of check, whether inside the engine or a test of it.
 // Every assertion below is either (a) a direct equality against a token
 // FIXTURE_VOCABULARY below itself defines -- explicitly permitted, the same
@@ -30,7 +30,7 @@ import type { StoryTime } from "../../dist/timeline/clock.js";
  * shared object to import; this is the harness's own copy, used ONLY to
  * assert that render_state_at's output uses the exact nouns/adjectives THIS
  * vocabulary declares, never anything invented. Checking our own defined
- * tokens in our own output is explicitly permitted (root claude.md hard rule
+ * tokens in our own output is explicitly permitted (root CLAUDE.md hard rule
  * 4's "a literal check for a token we defined is fine"); this is that check,
  * not a disguised regex over prose.
  */

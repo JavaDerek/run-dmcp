@@ -8,7 +8,7 @@
 // speaking real JSON-RPC, reading state back through the ordinary MCP tool
 // surface a real consumer would use, never a database handle.
 //
-// grain/treasury/population flavoured throughout (root claude.md,
+// grain/treasury/population flavoured throughout (root CLAUDE.md,
 // engineVocabulary.test.ts) -- a throwaway fixture for exercising mechanism,
 // never a starter set.
 import { test, expect } from "@playwright/test";

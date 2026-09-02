@@ -1,4 +1,4 @@
-// End-to-end proof of the three server-enforced invariants (root claude.md
+// End-to-end proof of the three server-enforced invariants (root CLAUDE.md
 // hard rule 7; src/timeline/constrained.ts), driven entirely through real
 // MCP tool calls against the shipped `dist/bin/run-dmcp.js` binary -- no
 // direct import of `src/tools/*`, no reaching into the database.
@@ -84,7 +84,7 @@ test.describe("conserved constraint: a declared set's total is conserved, end to
 
       // Substrings the server itself produced
       // (assertConstraintsAllow in src/timeline/constrained.ts) -- never an
-      // invented regex over English (root claude.md hard rule 5).
+      // invented regex over English (root CLAUDE.md hard rule 5).
       const message = textOf(rejected);
       expect(message).toContain("conserved");
       expect(message).toContain("transfer_resource_value");

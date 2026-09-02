@@ -131,7 +131,7 @@ test.describe("mutating verbs perform no mutation", () => {
 // Structural: read the server's own source and check what verbs it actually
 // registers routes with. This is a check for tokens THIS PROJECT wrote in
 // its own generated-nowhere source file -- not language understanding, not
-// pattern-matching meaning out of prose (claude.md hard rule 4/5). It is the
+// pattern-matching meaning out of prose (CLAUDE.md hard rule 4/5). It is the
 // same shape as pillarZero.ts's literal search for a word this codebase
 // defined itself. What it catches: someone adding `app.post(...)` (or
 // `app.put`/`app.patch`/`app.delete`/a mounted `app.use` router) to a

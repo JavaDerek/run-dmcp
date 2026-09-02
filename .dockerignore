@@ -6,5 +6,5 @@ data
 .gitignore
 .mcp.json
 README.md
-claude.md
+CLAUDE.md
 *.log

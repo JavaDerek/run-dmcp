@@ -141,7 +141,7 @@ dotfile-checks only the request path, not its own root.
 Installing under a dot directory is ordinary: a worktree, a deploy under `~/.local/share`, a CI
 checkout in a dotted cache path. The fix is an explicit `dotfiles` option on that one call, pinned by
 `src/http/__tests__/spaFallback.test.ts` — which was checked by reverting the fix and watching it go
-red, the way `claude.md` asks.
+red, the way `CLAUDE.md` asks.
 
 ## Conventions
 
@@ -153,7 +153,7 @@ red, the way `claude.md` asks.
   small enough that determinism is worth more than the clock.
 - **Assert on our own tokens, never on English.** Where a spec checks generated output, it compares
   against a vocabulary object the harness itself defined, or a substring the server itself produced.
-  `claude.md` hard rule 4 applies to tests as much as to the engine.
+  `CLAUDE.md` hard rule 4 applies to tests as much as to the engine.
 
 ## Deliberately not covered
 

@@ -14,7 +14,7 @@
 //
 // This script is that consumer. It is deliberately thin -- two mechanics
 // and one small vocabulary, both grain/treasury/population flavoured
-// (root claude.md, engineVocabulary.test.ts) -- because its only job is to
+// (root CLAUDE.md, engineVocabulary.test.ts) -- because its only job is to
 // exercise the injection SEAM, not to look like a real game.
 //
 // Built the way a real consumer would build it: `createMcpServer` from
@@ -229,7 +229,7 @@ const MECHANICS: Mechanic[] = [TITHE, SPOIL, REDISTRIBUTE];
 // harness invented, because create_resource/update_resource are the only
 // tools available over MCP to open and close fact intervals on a value this
 // vocabulary can name. grain/treasury/population flavoured throughout
-// (root claude.md, engineVocabulary.test.ts) -- a throwaway fixture for
+// (root CLAUDE.md, engineVocabulary.test.ts) -- a throwaway fixture for
 // exercising mechanism, never a starter set. Positive nouns and adjectives
 // only, in the style of src/__tests__/renderTool.test.ts's own
 // FIXTURE_VOCABULARY.
@@ -247,7 +247,7 @@ const FIXTURE_VOCABULARY: RenderVocabulary = {
  * Deliberately malformed: an `avoid` field alongside `noun`, the exact
  * regression `src/__tests__/renderTool.test.ts` guards against inside the
  * same process. Reachable only via `E2E_BAD_VOCABULARY=1` -- a token this
- * HARNESS defines for itself (root claude.md hard rule 5's "a literal check
+ * HARNESS defines for itself (root CLAUDE.md hard rule 5's "a literal check
  * for a token we defined is fine" exception), never parsed out of anything
  * the engine produced. Exists so a spec can prove the refusal from OUTSIDE
  * the engine, in a fresh process, rather than only inside

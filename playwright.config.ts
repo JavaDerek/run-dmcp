@@ -6,7 +6,7 @@
 // and one runner means one command, one report and one place where a
 // hermeticity guarantee is made. The alternative was a second vitest project
 // alongside the first, which is how a repository ends up with two fixtures
-// for one database (the exact failure claude.md's testing section names).
+// for one database (the exact failure CLAUDE.md's testing section names).
 //
 // DELIBERATELY OUTSIDE THE VITEST GLOBS. vitest.config.ts includes
 // `src/**/*.test.ts`; every file here is `e2e/**/*.spec.ts`, so

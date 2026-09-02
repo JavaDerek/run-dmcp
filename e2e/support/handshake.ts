@@ -63,7 +63,7 @@ export function handshakePath(): string {
  * rather than by guessing at a name or taking `[0]` off a list. Names are
  * drawn from this engine's throwaway fixture vocabulary -- grain, treasury,
  * population -- which is the only vocabulary a test in this repository may
- * use (root claude.md, engineVocabulary.test.ts).
+ * use (root CLAUDE.md, engineVocabulary.test.ts).
  */
 export interface Seeded {
   gameId: string;

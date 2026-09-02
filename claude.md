@@ -129,6 +129,9 @@ commit is his, from 2025-12-30 — and is deliberately **not** a GitHub fork, so
 tracker. His copyright notice travels with the code and is in `LICENSE` above ours; that is MIT's one
 real obligation and it is also just correct.
 
-Four pieces of generic mechanism here were offered back upstream and remain open pull requests
-against `shawnrushefsky/dmcp` (#6 atomicity, #7 constraints, #8 conserved sets, #9 expiry
-consequences). They are merged here because that repository has not moved since 2026-01-06.
+Four pieces of generic mechanism here were offered back upstream as pull requests against
+`shawnrushefsky/dmcp` (#6 atomicity, #7 constraints, #8 conserved sets, #9 expiry consequences).
+They were never reviewed and we closed all four on 2026-08-18: that repository has not moved since
+2026-01-06, and nothing was refused — nobody was there. The offers are retired and the fork that
+carried their branches is gone, so generic mechanism now lands here rather than upstream. The code
+is MIT and he remains welcome to any of it.

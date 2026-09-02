@@ -111,7 +111,7 @@ describe("the real server's SPA fallback", () => {
 
   // createHttpServer() does not bring up a schema -- an application does that
   // (src/bin/run-dmcp.ts), which is exactly the library/application split
-  // claude.md calls load-bearing. So the API route below needs the ordinary
+  // CLAUDE.md calls load-bearing. So the API route below needs the ordinary
   // in-memory fixture underneath it, or listGames() throws against a database
   // with no tables and the route answers 500 for a reason that has nothing to
   // do with routing.
