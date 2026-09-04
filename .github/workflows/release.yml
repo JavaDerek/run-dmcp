@@ -1,0 +1,129 @@
+# Publishing, with no credential to leak, expire, or forget to rotate.
+#
+# npm's trusted-publisher (OIDC) flow: GitHub Actions proves this repository's
+# identity to the registry per run, and the registry issues a short-lived
+# credential scoped to that run. There is no NPM_TOKEN in this file, none in
+# repository secrets, and none on anybody's laptop.
+#
+# That is the point, and it is not only tidiness. The publish this workflow
+# replaces failed four times in a row on credential state: a token in
+# ~/.npmrc the registry had stopped honouring, a passkey the CLI cannot use
+# for a write, an account-level 2FA setting the PACKAGE-level requirement
+# overrode, and a bypass-token route npm has already dated (account changes
+# restricted Aug 2026, direct publishing Jan 2027). Trusted publishing is the
+# only option on that page with no expiry attached, because it has nothing to
+# expire.
+#
+# ONE-TIME HUMAN SETUP, on npmjs.com -> package -> Settings -> Publishing
+# access -> trusted publisher:
+#
+#     publisher:      GitHub Actions
+#     organization:   JavaDerek
+#     repository:     run-dmcp
+#     workflow file:  release.yml      <- this file's name; renaming it breaks publishing
+#     environment:    (leave empty)
+#
+# HOW TO RELEASE. Bump the version in package.json, commit it, then tag and
+# push the tag -- the tag is what triggers this:
+#
+#     npm version 0.4.1 --no-git-tag-version   # or edit package.json
+#     git commit -am "chore: 0.4.1"
+#     git tag v0.4.1 && git push origin main --tags
+#
+# The tag and package.json must agree, and a step below fails the run if they
+# do not, before anything reaches the registry. A wrong tag should cost a
+# re-tag, never a wrong version published forever.
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  # For re-running a release whose publish step failed after the gates passed.
+  # It publishes whatever version package.json names on the default branch.
+  workflow_dispatch:
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      # The OIDC token this whole approach rests on. Without it the publish
+      # falls back to looking for a credential that does not exist.
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          registry-url: "https://registry.npmjs.org"
+
+      # setup-node ships npm 10 with Node 20, and trusted publishing needs
+      # 11.5.1 or newer. Without this the publish fails asking for a token,
+      # which reads like an auth problem and is a version problem.
+      - name: Upgrade npm for trusted publishing
+        run: |
+          npm install -g npm@latest
+          npm --version
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install client dependencies
+        run: cd client && npm ci
+
+      # Before the gates, not after: a tag that disagrees with package.json is
+      # a mistake worth catching in seconds rather than at the registry.
+      - name: The tag must name the version being published
+        if: github.event_name == 'push'
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match package.json version ${pkg}"
+            exit 1
+          fi
+          echo "publishing ${pkg} as ${GITHUB_REF_NAME}"
+
+      # The same gates CI runs on main. A release is the one build where
+      # "it passed on main" is not a good enough answer, because this is the
+      # artifact that becomes permanent.
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Type check server
+        run: npm run typecheck
+
+      - name: Run server tests
+        run: npm run test:run
+
+      - name: Install Playwright chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Build
+        run: npm run build
+
+      - name: Type check the acceptance suite
+        run: npm run typecheck:e2e
+
+      - name: Run acceptance tests
+        run: npm run test:acceptance:only
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/.tmp/report/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      # No NODE_AUTH_TOKEN. The OIDC exchange happens inside npm, and
+      # provenance is attached automatically for a trusted publisher.
+      - name: Publish
+        run: npm publish
