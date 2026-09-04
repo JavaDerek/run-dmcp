@@ -38,7 +38,12 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname, join, relative, sep } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createCoreMcpServer } from "../mcp-server.js";
-import { createMcpServer as createFullMcpServer, registerRpgTools } from "../rpg/index.js";
+import { registerRpgTools } from "../rpg/index.js";
+// The full assembly moved to its own entry so that importing the layer's
+// tool functions stops loading a server (src/__tests__/assemblyBoundary.test.ts).
+// The golden-surface checks below are unaffected: same function, same options,
+// same registered set -- which is exactly what they exist to prove.
+import { createMcpServer as createFullMcpServer } from "../rpg/server.js";
 
 const REPO_ROOT = resolve(__dirname, "..", "..");
 const SRC_ROOT = join(REPO_ROOT, "src");

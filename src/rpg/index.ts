@@ -3,15 +3,18 @@
 // prompt library that assumes them -- genuinely game-shaped mechanism, an
 // OPTIONAL dependency for a consumer that wants it, and no part of the core.
 //
-// A consumer that only needs entities/facts/events/replay imports "run-dmcp"
-// and gets `createCoreMcpServer`, nothing here. A consumer that wants the
-// full tabletop surface imports "run-dmcp/rpg" and gets `createMcpServer`
-// below -- the same name and the same options the full assembly has always
-// had, so reaching it is a changed import path and nothing else.
+// A consumer that only needs entities/facts/events/replay imports "run-dmcp",
+// nothing here. A consumer that wants the full tabletop surface ASSEMBLED as
+// a server imports "run-dmcp/rpg/server" and gets `createMcpServer` -- the
+// same name and the same options the full assembly has always had.
+//
+// This entry is the layer's MECHANISM: the tool functions, and
+// `registerRpgTools` for putting them on a server somebody else built.
+// Neither needs the core assembly, and since 0.4.0 neither loads it --
+// `import * as combatTools from "run-dmcp/rpg"` used to pull in
+// src/mcp-server.ts and express with it, 123.6ms against 87.5ms without,
+// cold, per process. src/__tests__/assemblyBoundary.test.ts holds that line.
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { createCoreMcpServer } from "../mcp-server.js";
-import type { Mechanic } from "../timeline/resolve.js";
-import type { RenderVocabulary } from "../timeline/render.js";
 
 import { registerCombatTools } from "./register/combat.js";
 import { registerAbilityTools } from "./register/abilities.js";
@@ -38,31 +41,10 @@ export function registerRpgTools(server: McpServer): void {
   registerMcpPrompts(server);          // Reusable prompt templates (game-master session library)
 }
 
-/**
- * Build the FULL assembly: every core tool plus every RPG tool, resource and
- * prompt this engine has always served. Same name, same `{ mechanics?,
- * vocabulary? }` options as the pre-split `createMcpServer` in
- * src/mcp-server.ts -- this is that function, now composed from two layers
- * instead of one, so src/bin/run-dmcp.ts's zero-argument call site keeps
- * working unchanged and the registered tool/resource/prompt set is
- * unchanged too (src/__tests__/layerBoundary.test.ts asserts this exactly).
- */
-export function createMcpServer(options?: {
-  mechanics?: readonly Mechanic[];
-  vocabulary?: RenderVocabulary;
-}): McpServer {
-  const server = createCoreMcpServer(options);
-  registerRpgTools(server);
-  return server;
-}
-
-// The web UI. An application opts into serving it; importing this never
-// does. It lives on disk at src/http/server.ts, not under src/rpg/ -- it
-// imports RPG tools (quest/ability/combat), which is why it cannot be
-// reachable from the core entry point, but its CLIENT_DIST path resolution
-// is depth-sensitive in both src/ and compiled dist/, so it stays put and
-// only its EXPORT moves up to this layer.
-export { createHttpServer, startHttpServer } from "../http/server.js";
+// `createMcpServer` and the web UI are NOT here. Both are assembly, and both
+// moved to "run-dmcp/rpg/server" (src/rpg/server.ts) so that importing the
+// layer's tool functions stops loading a server and an HTTP framework with
+// them.
 
 // The RPG tool modules, exported as library functions -- the same shape
 // core's index.ts uses for the timeline (replay, changesWithin, and so on):

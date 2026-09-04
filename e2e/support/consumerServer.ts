@@ -18,7 +18,8 @@
 // exercise the injection SEAM, not to look like a real game.
 //
 // Built the way a real consumer would build it: `createMcpServer` from
-// `dist/rpg/index.js`, never from `src/`. A consumer never imports this
+// `dist/rpg/server.js` -- the assembly entry, since 0.4.0 -- never from
+// `src/`. A consumer never imports this
 // engine's TypeScript sources -- it imports the published package, which is
 // dist/. Importing src/ here would let a harness accidentally prove
 // something true only of the source tree and never of what actually ships.
@@ -32,7 +33,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { assertHermetic } from "./tempDb.js";
 import { initializeSchema } from "../../dist/db/schema.js";
 import { closeDatabase } from "../../dist/db/connection.js";
-import { createMcpServer } from "../../dist/rpg/index.js";
+import { createMcpServer } from "../../dist/rpg/server.js";
 import type { Mechanic, AdjudicationInput, Adjudication } from "../../dist/timeline/resolve.js";
 import type { RenderVocabulary } from "../../dist/timeline/render.js";
 import { createLogger } from "../../dist/utils/logger.js";

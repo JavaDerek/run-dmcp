@@ -1,6 +1,6 @@
 {
   "name": "run-dmcp",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "An MCP server for LLM-run interactive fiction where the server owns what is true - including when it was true. A continuation of DMCP.",
   "license": "MIT",
   "author": "Derek Ferguson",
@@ -16,9 +16,17 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    },
     "./rpg": {
       "types": "./dist/rpg/index.d.ts",
       "default": "./dist/rpg/index.js"
+    },
+    "./rpg/server": {
+      "types": "./dist/rpg/server.d.ts",
+      "default": "./dist/rpg/server.js"
     },
     "./package.json": "./package.json"
   },

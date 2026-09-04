@@ -106,12 +106,22 @@ npm run dev           # tsx src/bin/run-dmcp.ts
 
 Local MCP inspection: `npx @modelcontextprotocol/inspector node dist/bin/run-dmcp.js`
 
-**Two entry points, and the difference is load-bearing.** `src/index.ts` is the library: exports and
-nothing else, and importing it must never start, open or create anything. `src/bin/run-dmcp.ts` is
+**Library and application, and the difference is load-bearing.** The library entries are exports and
+nothing else, and importing one must never start, open or create anything. `src/bin/run-dmcp.ts` is
 the application, and is the only place that brings up the schema, binds a port or connects a
 transport. `src/__tests__/entrypoints.test.ts` enforces both halves by running them in child
 processes — the library one must be able to *exit*, so no enumeration of forbidden side effects has
 to be kept up to date.
+
+**Four library entries: mechanism and assembly, per layer, and importing one must not load the
+other.** `src/index.ts` (`run-dmcp`) and `src/rpg/index.ts` (`run-dmcp/rpg`) are mechanism —
+functions, constants, types. `src/server.ts` (`run-dmcp/server`) and `src/rpg/server.ts`
+(`run-dmcp/rpg/server`) are assembly, and they are the only ones that may reach `src/mcp-server.ts`
+or `src/http/`. Assembly costs the MCP SDK, twenty-one register modules and express; mechanism does
+not, and 0.3.0 charged for both on every import — 97.4ms per process against 47.0ms, on a consumer
+that spawns one per turn and never builds a server. `src/__tests__/assemblyBoundary.test.ts` walks
+the *runtime* import graph (type-only imports excluded, since they are erased) and fails naming the
+chain. Re-welding them is one convenient re-export, which is why it is a test and not a note.
 
 **The timeline writes itself.** Dual-write is generated triggers, built at each startup from a live
 `pragma_table_info` read over `PROJECTED_TABLES` (`src/timeline/projection.ts`) — never hand-edit

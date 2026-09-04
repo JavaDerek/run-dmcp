@@ -26,7 +26,13 @@
 // depending up into it. `src/__tests__/layerBoundary.test.ts` walks the
 // static import graph from this file and fails if anything under `src/rpg/`
 // is reachable from it.
-export { createCoreMcpServer, SERVER_NAME, SERVER_VERSION } from "./mcp-server.js";
+// The assembled core server is NOT here. It moved to "run-dmcp/server"
+// (src/server.ts) so that importing mechanism stops loading it: building a
+// server costs the MCP SDK and twenty-one register modules, and a consumer
+// reaching for `LIMITS` or `createGame` was paying for both -- 97.4ms per
+// process against 46.8ms without it, cold, at 0.3.0. Enforced by
+// src/__tests__/assemblyBoundary.test.ts, which walks this file's runtime
+// import graph and fails if the assembly is reachable from it again.
 
 // The database, and where it lives. The path resolves against the consuming
 // application (DMCP_DB_PATH, else an existing XDG data directory, else the

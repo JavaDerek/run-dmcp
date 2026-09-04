@@ -59,14 +59,25 @@ schema comes up, where the database lives, and whether anything listens.
 
 **The package root is the core, and the tabletop surface is a layer above it.** Dice, combat,
 abilities, status effects, random tables and quests are genuinely game-shaped — an optional
-dependency, not part of the engine (see [docs/DESIGN.md](docs/DESIGN.md) §8). A consumer that only
-needs entities, facts, events and the timeline imports `run-dmcp` and calls `createCoreMcpServer`. A
-consumer that wants the full tabletop surface imports `run-dmcp/rpg` and calls `createMcpServer` —
-same name, same options, the whole assembly this package has always served:
+dependency, not part of the engine (see [docs/DESIGN.md](docs/DESIGN.md) §8).
+
+**Mechanism and assembly are separate entries, and importing one never loads the other** (since
+0.4.0). Four specifiers, two layers by two kinds:
+
+| | mechanism — functions, constants, types | assembly — builds a server |
+|---|---|---|
+| **core** | `run-dmcp` | `run-dmcp/server` → `createCoreMcpServer` |
+| **+ tabletop** | `run-dmcp/rpg` | `run-dmcp/rpg/server` → `createMcpServer` |
+
+Assembling a server means loading the MCP SDK, twenty-one register modules and (for the full
+assembly) the web UI. Wanting `createGame` or `LIMITS` does not, and until 0.4.0 both entries
+charged for it anyway — 97.4ms per process against 47.0ms, cold, for a consumer that spawns a
+process per turn and may never build a server at all. The functions did not change; their
+specifiers did.
 
 ```ts
 import { initializeSchema, type SchemaMigration } from "run-dmcp";
-import { createMcpServer } from "run-dmcp/rpg";
+import { createMcpServer } from "run-dmcp/rpg/server";
 
 const migrations: SchemaMigration[] = [
   {
