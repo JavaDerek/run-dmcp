@@ -71,9 +71,12 @@ dependency, not part of the engine (see [docs/DESIGN.md](docs/DESIGN.md) §8).
 
 Assembling a server means loading the MCP SDK, twenty-one register modules and (for the full
 assembly) the web UI. Wanting `createGame` or `LIMITS` does not, and until 0.4.0 both entries
-charged for it anyway — 97.4ms per process against 47.0ms, cold, for a consumer that spawns a
-process per turn and may never build a server at all. The functions did not change; their
-specifiers did.
+charged for it anyway: the core entry cost 97.4ms per process cold and costs 47.0ms now, which is
+below the MCP SDK's own 55.0ms, because without the assembly it no longer loads the SDK at all.
+
+A consumer that *does* build a server loads the SDK regardless, so it saves less than that
+difference suggests — measured with the SDK warm, importing both entries, 67.4ms → 38.0ms, about
+29ms per process. The functions did not change; their specifiers did.
 
 ```ts
 import { initializeSchema, type SchemaMigration } from "run-dmcp";

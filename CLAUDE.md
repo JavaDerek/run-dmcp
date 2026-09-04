@@ -118,8 +118,9 @@ other.** `src/index.ts` (`run-dmcp`) and `src/rpg/index.ts` (`run-dmcp/rpg`) are
 functions, constants, types. `src/server.ts` (`run-dmcp/server`) and `src/rpg/server.ts`
 (`run-dmcp/rpg/server`) are assembly, and they are the only ones that may reach `src/mcp-server.ts`
 or `src/http/`. Assembly costs the MCP SDK, twenty-one register modules and express; mechanism does
-not, and 0.3.0 charged for both on every import — 97.4ms per process against 47.0ms, on a consumer
-that spawns one per turn and never builds a server. `src/__tests__/assemblyBoundary.test.ts` walks
+not, and 0.3.0 charged for both on every import — 97.4ms per process against 47.0ms cold, and
+67.4ms against 38.0ms for a consumer that already has the SDK warm and imports both entries. Quote
+the second pair when the question is what a consumer saves; the first is this package's entry cost. `src/__tests__/assemblyBoundary.test.ts` walks
 the *runtime* import graph (type-only imports excluded, since they are erased) and fails naming the
 chain. Re-welding them is one convenient re-export, which is why it is a test and not a note.
 

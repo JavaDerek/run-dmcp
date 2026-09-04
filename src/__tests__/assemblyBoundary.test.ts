@@ -16,14 +16,29 @@
 // McpServer and registers its own tools), and spawns a fresh process per
 // turn of play. Measured against 0.3.0, cold, median of nine spawns each:
 //
-//     run-dmcp                    97.4ms  ->  46.8ms  without the assembly
-//     run-dmcp/rpg               123.6ms  ->  87.5ms  without the assembly
+//     run-dmcp                    97.4ms  ->  47.0ms  without the assembly
+//     run-dmcp/rpg               123.6ms  ->  87.4ms  without the assembly
 //     @modelcontextprotocol/sdk   55.0ms
 //
 // The middle column is the point: the mechanism-only core lands BELOW the
 // cost of the MCP SDK, because with the assembly gone it does not import the
 // SDK at all. A consumer that wants `createGame` was paying for the whole
 // Model Context Protocol.
+//
+// WHAT A CONSUMER ACTUALLY SAVES IS LESS THAN THAT, and the difference is
+// worth stating rather than letting the bigger number stand. Most of the
+// core's 50ms is the SDK, and the consumer measured here loads the SDK
+// itself, on the second line of its own entry, because it builds its own
+// server. Measured again with the SDK already warm -- which is the only
+// state that consumer is ever in -- importing BOTH entries the way it does:
+//
+//     0.3.0   67.4ms        0.4.0   38.0ms        saves 29.3ms per process
+//
+// 29.3ms, not 50, and not 86. Against a ~200ms spawn-to-answerable that is
+// around 15%. It is real and it is per turn of play, but the cold column
+// above is this package's entry cost, not a consumer's saving, and reading
+// it as the latter would be the kind of arithmetic this repository files
+// issues about.
 //
 // The fix is that the assembly gets its own entries -- `run-dmcp/server` and
 // `run-dmcp/rpg/server` -- and this file is what keeps it there, because
