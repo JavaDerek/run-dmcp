@@ -66,9 +66,16 @@ jobs:
       # setup-node ships npm 10 with Node 20, and trusted publishing needs
       # 11.5.1 or newer. Without this the publish fails asking for a token,
       # which reads like an auth problem and is a version problem.
+      #
+      # PINNED TO THE 11 LINE, not @latest. `npm@latest` is npm 12, which
+      # requires node ^22.22.2 || ^24.15.0 || >=26, and this job deliberately
+      # runs Node 20 so the gates below are the same gates CI runs on main.
+      # The first attempt at this release died right here on EBADENGINE: an
+      # unpinned "latest" is a dependency on whatever the registry means by it
+      # on the morning you run, and it had moved past the Node underneath it.
       - name: Upgrade npm for trusted publishing
         run: |
-          npm install -g npm@latest
+          npm install -g "npm@^11.5.1"
           npm --version
 
       - name: Install dependencies
