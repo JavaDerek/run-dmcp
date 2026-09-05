@@ -43,7 +43,11 @@ import { createResolver, type Mechanic } from "./timeline/resolve.js";
 import { createStateRenderer, type RenderVocabulary } from "./timeline/render.js";
 
 export const SERVER_NAME = "dmcp";
-export const SERVER_VERSION = "0.3.0";
+/** What the server tells a client it is, in the MCP handshake. Kept equal to
+ *  the published package version by src/__tests__/serverVersion.test.ts --
+ *  this said "0.3.0" for the whole of 0.4.0, because a release bumps
+ *  package.json and nothing was watching this. */
+export const SERVER_VERSION = "0.5.0";
 
 /**
  * Build an MCP server with every CORE tool, resource and prompt this engine
