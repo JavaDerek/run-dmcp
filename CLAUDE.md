@@ -124,6 +124,18 @@ the second pair when the question is what a consumer saves; the first is this pa
 the *runtime* import graph (type-only imports excluded, since they are erased) and fails naming the
 chain. Re-welding them is one convenient re-export, which is why it is a test and not a note.
 
+**What we declare is what we mean.** Every string parameter in a tool's published
+`input_schema` carries a `maxLength`, and no published schema carries a `$ref`.
+`src/__tests__/schemaBounds.test.ts` holds both by connecting a real client over an in-memory
+transport and walking what `tools/list` hands back -- the bytes a consumer parses, not the source a
+grep reads. The bounds are the tiers on `validatedSchemas` (`src/utils/validation.ts`), whose
+properties are **getters that hand back a fresh instance per access**: the JSON Schema converter
+de-duplicates by object identity, so a shared instance used twice inside one tool is published the
+second time as a pointer into a sibling property. Bounding is a ceiling and nothing else -- never add
+a `.min()` while you are there -- and it applies to input only, because a `maxLength` on an
+`outputSchema` is a promise about content the engine generates that a validating client would
+enforce against us.
+
 **The timeline writes itself.** Dual-write is generated triggers, built at each startup from a live
 `pragma_table_info` read over `PROJECTED_TABLES` (`src/timeline/projection.ts`) — never hand-edit
 the write sites to append events, and never write `facts`/`events` directly from a tool. Consumer

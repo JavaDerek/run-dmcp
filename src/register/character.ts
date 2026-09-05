@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import * as characterTools from "../tools/character.js";
 import { imageGenSchema, voiceSchema } from "../schemas/index.js";
-import { LIMITS } from "../utils/validation.js";
+import { LIMITS, validatedSchemas } from "../utils/validation.js";
 import { ANNOTATIONS } from "../utils/tool-annotations.js";
 import {
   characterOutputSchema,
@@ -57,7 +57,7 @@ export function registerCharacterTools(server: McpServer) {
     {
       description: "Get character details",
       inputSchema: {
-        characterId: z.string().describe("The character ID"),
+        characterId: validatedSchemas.id.describe("The character ID"),
       },
       outputSchema: characterOutputSchema,
       annotations: ANNOTATIONS.READ_ONLY,
@@ -85,13 +85,13 @@ export function registerCharacterTools(server: McpServer) {
     {
       description: "Update character attributes, skills, status, or voice",
       inputSchema: {
-        characterId: z.string().describe("The character ID"),
-        name: z.string().optional().describe("New name"),
+        characterId: validatedSchemas.id.describe("The character ID"),
+        name: validatedSchemas.token.optional().describe("New name"),
         attributes: z.record(z.string(), z.number()).optional().describe("Attribute updates"),
         skills: z.record(z.string(), z.number()).optional().describe("Skill updates"),
         status: z.record(z.string(), z.unknown()).optional().describe("Status updates"),
-        locationId: z.string().optional().describe("New location"),
-        notes: z.string().optional().describe("Notes update"),
+        locationId: validatedSchemas.id.optional().describe("New location"),
+        notes: validatedSchemas.content.optional().describe("Notes update"),
         voice: voiceSchema.nullable().optional().describe("Voice characteristics (null to remove)"),
         imageGen: imageGenSchema.nullable().optional().describe("Image generation metadata (null to remove)"),
       },
@@ -121,9 +121,9 @@ export function registerCharacterTools(server: McpServer) {
     {
       description: "List characters in a game. Use verbosity to control response size: 'minimal' for quick lookups (id/name only), 'standard' for common fields, 'full' for all details.",
       inputSchema: {
-        gameId: z.string().describe("The game ID"),
+        gameId: validatedSchemas.id.describe("The game ID"),
         isPlayer: z.boolean().optional().describe("Filter by player/NPC"),
-        locationId: z.string().optional().describe("Filter by location"),
+        locationId: validatedSchemas.id.optional().describe("Filter by location"),
         verbosity: verbositySchema,
       },
       outputSchema: {
@@ -156,8 +156,8 @@ export function registerCharacterTools(server: McpServer) {
     {
       description: "Move a character to a different location",
       inputSchema: {
-        characterId: z.string().describe("The character ID"),
-        locationId: z.string().describe("The destination location ID"),
+        characterId: validatedSchemas.id.describe("The character ID"),
+        locationId: validatedSchemas.id.describe("The destination location ID"),
       },
       outputSchema: {
         success: z.boolean(),
@@ -196,7 +196,7 @@ export function registerCharacterTools(server: McpServer) {
     {
       description: "Modify a character's health. Use mode 'damage' to reduce health, or 'heal' to restore health.",
       inputSchema: {
-        characterId: z.string().describe("The character ID"),
+        characterId: validatedSchemas.id.describe("The character ID"),
         mode: z.enum(["damage", "heal"]).describe("'damage' to reduce health, 'heal' to restore health"),
         amount: z.number().describe("Amount of damage or healing"),
       },
@@ -239,7 +239,7 @@ export function registerCharacterTools(server: McpServer) {
     {
       description: "Add and/or remove conditions from a character in a single call. More efficient than separate add/remove calls.",
       inputSchema: {
-        characterId: z.string().describe("The character ID"),
+        characterId: validatedSchemas.id.describe("The character ID"),
         add: z.array(z.string().max(100)).max(LIMITS.ARRAY_MAX).optional().describe("Conditions to add"),
         remove: z.array(z.string().max(100)).max(LIMITS.ARRAY_MAX).optional().describe("Conditions to remove"),
       },
@@ -290,8 +290,8 @@ export function registerCharacterTools(server: McpServer) {
     {
       description: "Look up a character by name within a game. Supports exact, partial, and fuzzy matching. Returns the best match or an error if no reasonable match found.",
       inputSchema: {
-        gameId: z.string().describe("The game ID to search within"),
-        name: z.string().describe("Character name to search for (case-insensitive)"),
+        gameId: validatedSchemas.id.describe("The game ID to search within"),
+        name: validatedSchemas.token.describe("Character name to search for (case-insensitive)"),
       },
       outputSchema: characterOutputSchema,
       annotations: ANNOTATIONS.READ_ONLY,
@@ -319,7 +319,7 @@ export function registerCharacterTools(server: McpServer) {
     {
       description: "List characters with quick-identification summaries. Use this to help identify characters by appearance before looking up their full details. More efficient than loading full character data when you just need to identify who's who.",
       inputSchema: {
-        gameId: z.string().describe("The game ID"),
+        gameId: validatedSchemas.id.describe("The game ID"),
       },
       outputSchema: {
         summaries: z.array(z.object({
@@ -353,7 +353,7 @@ export function registerCharacterTools(server: McpServer) {
     {
       description: "Delete a character permanently. This is IRREVERSIBLE and will remove the character and all associated data.",
       inputSchema: {
-        characterId: z.string().describe("The character ID to delete"),
+        characterId: validatedSchemas.id.describe("The character ID to delete"),
       },
       outputSchema: {
         success: z.boolean(),

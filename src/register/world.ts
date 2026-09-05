@@ -2,7 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import * as worldTools from "../tools/world.js";
 import { imageGenSchema } from "../schemas/index.js";
-import { LIMITS } from "../utils/validation.js";
+import { LIMITS, validatedSchemas } from "../utils/validation.js";
 import { ANNOTATIONS } from "../utils/tool-annotations.js";
 
 export function registerWorldTools(server: McpServer) {
@@ -35,7 +35,7 @@ export function registerWorldTools(server: McpServer) {
     {
       description: "Get location details",
       inputSchema: {
-        locationId: z.string().describe("The location ID"),
+        locationId: validatedSchemas.id.describe("The location ID"),
       },
       annotations: ANNOTATIONS.READ_ONLY,
     },
@@ -58,9 +58,9 @@ export function registerWorldTools(server: McpServer) {
     {
       description: "Update a location",
       inputSchema: {
-        locationId: z.string().describe("The location ID"),
-        name: z.string().optional().describe("New name"),
-        description: z.string().optional().describe("New description"),
+        locationId: validatedSchemas.id.describe("The location ID"),
+        name: validatedSchemas.token.optional().describe("New name"),
+        description: validatedSchemas.description.optional().describe("New description"),
         properties: z.record(z.string(), z.unknown()).optional().describe("Property updates"),
         imageGen: imageGenSchema.nullable().optional().describe("Image generation metadata (null to remove)"),
       },
@@ -85,7 +85,7 @@ export function registerWorldTools(server: McpServer) {
     {
       description: "List all locations in a game",
       inputSchema: {
-        gameId: z.string().describe("The game ID"),
+        gameId: validatedSchemas.id.describe("The game ID"),
       },
       annotations: ANNOTATIONS.READ_ONLY,
     },
@@ -102,11 +102,11 @@ export function registerWorldTools(server: McpServer) {
     {
       description: "Create exits/paths between two locations. Call this whenever you describe how locations connect to each other - the player should be able to navigate based on database connections.",
       inputSchema: {
-        fromLocationId: z.string().describe("First location ID"),
-        toLocationId: z.string().describe("Second location ID"),
-        fromDirection: z.string().describe("Direction from first location (e.g., 'north', 'up', 'through the door')"),
-        toDirection: z.string().describe("Direction from second location back (e.g., 'south', 'down')"),
-        description: z.string().optional().describe("Description of the path"),
+        fromLocationId: validatedSchemas.id.describe("First location ID"),
+        toLocationId: validatedSchemas.id.describe("Second location ID"),
+        fromDirection: validatedSchemas.token.describe("Direction from first location (e.g., 'north', 'up', 'through the door')"),
+        toDirection: validatedSchemas.token.describe("Direction from second location back (e.g., 'south', 'down')"),
+        description: validatedSchemas.description.optional().describe("Description of the path"),
         bidirectional: z.boolean().optional().describe("Create exit in both directions (default: true)"),
       },
       annotations: ANNOTATIONS.CREATE,
@@ -137,8 +137,8 @@ export function registerWorldTools(server: McpServer) {
     {
       description: "Look up a location by name within a game. Supports exact, partial, and fuzzy matching. Returns the best match or an error if no reasonable match found.",
       inputSchema: {
-        gameId: z.string().describe("The game ID to search within"),
-        name: z.string().describe("Location name to search for (case-insensitive)"),
+        gameId: validatedSchemas.id.describe("The game ID to search within"),
+        name: validatedSchemas.token.describe("Location name to search for (case-insensitive)"),
       },
       annotations: ANNOTATIONS.READ_ONLY,
     },

@@ -4,7 +4,7 @@ import * as characterTools from "../tools/character.js";
 import * as worldTools from "../tools/world.js";
 import * as inventoryTools from "../tools/inventory.js";
 import * as narrativeTools from "../tools/narrative.js";
-import { LIMITS } from "../utils/validation.js";
+import { LIMITS, validatedSchemas } from "../utils/validation.js";
 import { ANNOTATIONS } from "../utils/tool-annotations.js";
 import { imageGenSchema, voiceSchema } from "../schemas/index.js";
 import type { Character } from "../types/index.js";
@@ -24,7 +24,7 @@ export function registerBatchTools(server: McpServer) {
       description:
         "Create multiple NPCs at once. Use this when populating a location with several characters. Returns all created characters.",
       inputSchema: {
-        gameId: z.string().describe("The game ID"),
+        gameId: validatedSchemas.id.describe("The game ID"),
         npcs: z
           .array(
             z.object({
@@ -35,10 +35,10 @@ export function registerBatchTools(server: McpServer) {
                 .object({
                   health: z.number().optional(),
                   maxHealth: z.number().optional(),
-                  conditions: z.array(z.string()).optional(),
+                  conditions: validatedSchemas.stringArray.optional(),
                 })
                 .optional(),
-              locationId: z.string().optional().describe("Starting location"),
+              locationId: validatedSchemas.id.optional().describe("Starting location"),
               notes: z.string().max(LIMITS.CONTENT_MAX).optional(),
               voice: voiceSchema.optional(),
               imageGen: imageGenSchema.optional(),
@@ -127,12 +127,13 @@ export function registerBatchTools(server: McpServer) {
       description:
         "Complete scene transition in one call: moves specified characters to a new location and logs a narrative event. Perfect for moving between scenes.",
       inputSchema: {
-        gameId: z.string().describe("The game ID"),
+        gameId: validatedSchemas.id.describe("The game ID"),
         characterIds: z
-          .array(z.string())
+          .array(validatedSchemas.id)
           .min(1)
+          .max(LIMITS.ARRAY_MAX)
           .describe("Characters to move to the new scene"),
-        destinationId: z.string().describe("Destination location ID"),
+        destinationId: validatedSchemas.id.describe("Destination location ID"),
         narrativeDescription: z
           .string()
           .max(LIMITS.DESCRIPTION_MAX)
@@ -196,7 +197,7 @@ export function registerBatchTools(server: McpServer) {
       description:
         "Get comprehensive character context in one call: character details, inventory, and current location info. Reduces multiple tool calls to one.",
       inputSchema: {
-        characterId: z.string().describe("The character ID"),
+        characterId: validatedSchemas.id.describe("The character ID"),
       },
       annotations: ANNOTATIONS.READ_ONLY,
     },
@@ -264,8 +265,8 @@ export function registerBatchTools(server: McpServer) {
       description:
         "Get comprehensive location context in one call: location details, present characters, and items here. Reduces multiple tool calls to one.",
       inputSchema: {
-        locationId: z.string().describe("The location ID"),
-        gameId: z.string().describe("The game ID (needed for character lookup)"),
+        locationId: validatedSchemas.id.describe("The location ID"),
+        gameId: validatedSchemas.id.describe("The game ID (needed for character lookup)"),
       },
       annotations: ANNOTATIONS.READ_ONLY,
     },

@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { ANNOTATIONS } from "../utils/tool-annotations.js";
+import { validatedSchemas } from "../utils/validation.js";
 import { createLogger } from "../utils/logger.js";
 import { errors, formatErrorResponse } from "../utils/errors.js";
 import { ConstraintViolationError } from "../timeline/registry.js";
@@ -44,7 +45,9 @@ export function registerResolveTools(server: McpServer, resolver: Resolver) {
             z.object({
               entityId: z.string().max(100).describe("The entity this expectation is about"),
               key: z.string().max(200).describe("The fact key this expectation is about"),
-              value: z.union([z.string(), z.number()]).describe("The value this proposal declares it depends on"),
+              value: z
+                .union([validatedSchemas.token, z.number()])
+                .describe("The value this proposal declares it depends on"),
             })
           )
           .optional()

@@ -2,9 +2,26 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import * as gameTools from "../tools/game.js";
 import * as rulesTools from "../tools/rules.js";
-import { LIMITS } from "../utils/validation.js";
+import { LIMITS, validatedSchemas } from "../utils/validation.js";
 import { getGameUrl, getWebUiBaseUrl } from "../utils/webui.js";
 import { ANNOTATIONS } from "../utils/tool-annotations.js";
+
+/**
+ * One answer from the preferences interview: what the player said, or a
+ * delegation to the DM. `save_game_preferences` takes eighteen of these and
+ * they were eighteen copies of the same three fields, which is how half of
+ * them ended up unbounded.
+ *
+ * A FUNCTION, not a shared constant. Reusing one instance eighteen times
+ * inside a single tool publishes seventeen `$ref` pointers where a consumer
+ * expects a declaration -- see the comment on `validatedSchemas`.
+ */
+const preferenceAnswer = () =>
+  z.object({
+    value: validatedSchemas.token.nullable(),
+    delegatedToDM: z.boolean(),
+    notes: validatedSchemas.description.optional(),
+  });
 
 export function registerCoreTools(server: McpServer) {
   // ============================================================================
@@ -134,7 +151,7 @@ export function registerCoreTools(server: McpServer) {
     {
       description: "Get full current state overview for a game",
       inputSchema: {
-        gameId: z.string().describe("The game ID"),
+        gameId: validatedSchemas.id.describe("The game ID"),
       },
       annotations: ANNOTATIONS.READ_ONLY,
     },
@@ -170,7 +187,7 @@ export function registerCoreTools(server: McpServer) {
     {
       description: "Delete a game and all its data. This is IRREVERSIBLE and removes all characters, locations, quests, and history.",
       inputSchema: {
-        gameId: z.string().describe("The game ID to delete"),
+        gameId: validatedSchemas.id.describe("The game ID to delete"),
       },
       annotations: ANNOTATIONS.DESTRUCTIVE,
     },
@@ -188,7 +205,7 @@ export function registerCoreTools(server: McpServer) {
     {
       description: "Update a game's name, setting, or style",
       inputSchema: {
-        gameId: z.string().describe("The game ID to update"),
+        gameId: validatedSchemas.id.describe("The game ID to update"),
         name: z.string().min(1).max(LIMITS.NAME_MAX).optional().describe("New name for the game"),
         setting: z.string().min(1).max(LIMITS.DESCRIPTION_MAX).optional().describe("New setting description"),
         style: z.string().min(1).max(LIMITS.NAME_MAX).optional().describe("New narrative style"),
@@ -230,8 +247,8 @@ export function registerCoreTools(server: McpServer) {
     {
       description: "Set or remove the title image for a game",
       inputSchema: {
-        gameId: z.string().describe("The game ID"),
-        imageId: z.string().nullable().describe("The image ID to set as title image, or null to remove"),
+        gameId: validatedSchemas.id.describe("The game ID"),
+        imageId: validatedSchemas.id.nullable().describe("The image ID to set as title image, or null to remove"),
       },
       annotations: ANNOTATIONS.SET,
     },
@@ -264,8 +281,8 @@ export function registerCoreTools(server: McpServer) {
     {
       description: "Set or remove the favicon image for a game. This image will be displayed as the browser favicon when viewing this game in the web UI. Should be a square image (ideally 32x32 or larger).",
       inputSchema: {
-        gameId: z.string().describe("The game ID"),
-        imageId: z.string().nullable().describe("The image ID to set as favicon, or null to remove"),
+        gameId: validatedSchemas.id.describe("The game ID"),
+        imageId: validatedSchemas.id.nullable().describe("The image ID to set as favicon, or null to remove"),
       },
       annotations: ANNOTATIONS.SET,
     },
@@ -653,30 +670,30 @@ export function registerCoreTools(server: McpServer) {
     {
       description: "Save the player's game preferences after the interview",
       inputSchema: {
-        gameId: z.string().describe("The game ID"),
+        gameId: validatedSchemas.id.describe("The game ID"),
         preferences: z.object({
-          genre: z.object({ value: z.string().nullable(), delegatedToDM: z.boolean(), notes: z.string().optional() }),
-          tone: z.object({ value: z.string().nullable(), delegatedToDM: z.boolean(), notes: z.string().optional() }),
-          setting: z.object({ value: z.string().nullable(), delegatedToDM: z.boolean(), notes: z.string().optional() }),
-          complexity: z.object({ value: z.string().nullable(), delegatedToDM: z.boolean(), notes: z.string().optional() }),
-          combatFrequency: z.object({ value: z.string().nullable(), delegatedToDM: z.boolean(), notes: z.string().optional() }),
-          combatStyle: z.object({ value: z.string().nullable(), delegatedToDM: z.boolean(), notes: z.string().optional() }),
-          lethality: z.object({ value: z.string().nullable(), delegatedToDM: z.boolean(), notes: z.string().optional() }),
-          narrativeStyle: z.object({ value: z.string().nullable(), delegatedToDM: z.boolean(), notes: z.string().optional() }),
-          playerAgency: z.object({ value: z.string().nullable(), delegatedToDM: z.boolean(), notes: z.string().optional() }),
-          npcDepth: z.object({ value: z.string().nullable(), delegatedToDM: z.boolean(), notes: z.string().optional() }),
-          romanceContent: z.object({ value: z.string().nullable(), delegatedToDM: z.boolean(), notes: z.string().optional() }),
-          worldFamiliarity: z.object({ value: z.string().nullable(), delegatedToDM: z.boolean(), notes: z.string().optional() }),
-          magicOrTechLevel: z.object({ value: z.string().nullable(), delegatedToDM: z.boolean(), notes: z.string().optional() }),
-          politicalComplexity: z.object({ value: z.string().nullable(), delegatedToDM: z.boolean(), notes: z.string().optional() }),
-          sessionLength: z.object({ value: z.string().nullable(), delegatedToDM: z.boolean(), notes: z.string().optional() }),
-          pacingPreference: z.object({ value: z.string().nullable(), delegatedToDM: z.boolean(), notes: z.string().optional() }),
-          characterCreation: z.object({ value: z.string().nullable(), delegatedToDM: z.boolean(), notes: z.string().optional() }),
-          startingPowerLevel: z.object({ value: z.string().nullable(), delegatedToDM: z.boolean(), notes: z.string().optional() }),
-          contentToAvoid: z.array(z.string()),
-          contentToInclude: z.array(z.string()),
-          inspirations: z.array(z.string()),
-          additionalNotes: z.string(),
+          genre: preferenceAnswer(),
+          tone: preferenceAnswer(),
+          setting: preferenceAnswer(),
+          complexity: preferenceAnswer(),
+          combatFrequency: preferenceAnswer(),
+          combatStyle: preferenceAnswer(),
+          lethality: preferenceAnswer(),
+          narrativeStyle: preferenceAnswer(),
+          playerAgency: preferenceAnswer(),
+          npcDepth: preferenceAnswer(),
+          romanceContent: preferenceAnswer(),
+          worldFamiliarity: preferenceAnswer(),
+          magicOrTechLevel: preferenceAnswer(),
+          politicalComplexity: preferenceAnswer(),
+          sessionLength: preferenceAnswer(),
+          pacingPreference: preferenceAnswer(),
+          characterCreation: preferenceAnswer(),
+          startingPowerLevel: preferenceAnswer(),
+          contentToAvoid: validatedSchemas.stringArray,
+          contentToInclude: validatedSchemas.stringArray,
+          inspirations: validatedSchemas.stringArray,
+          additionalNotes: validatedSchemas.description,
         }).describe("The collected preferences"),
       },
       annotations: ANNOTATIONS.CREATE,
@@ -720,7 +737,7 @@ export function registerCoreTools(server: McpServer) {
     {
       description: "Get the saved game preferences for a game",
       inputSchema: {
-        gameId: z.string().describe("The game ID"),
+        gameId: validatedSchemas.id.describe("The game ID"),
       },
       annotations: ANNOTATIONS.READ_ONLY,
     },
@@ -746,91 +763,93 @@ export function registerCoreTools(server: McpServer) {
     defaultTool: z.enum(["dalle", "sdxl", "midjourney", "comfyui", "flux", "other"]).optional()
       .describe("Default image generation tool/service"),
     defaultStyle: z.object({
-      artisticStyle: z.string().optional().describe("E.g., 'digital painting', 'oil painting', 'anime'"),
-      mood: z.string().optional().describe("E.g., 'dark', 'epic', 'whimsical'"),
-      colorScheme: z.string().optional().describe("E.g., 'warm', 'cold', 'muted', 'vibrant'"),
-      qualityTags: z.array(z.string()).optional().describe("E.g., ['highly detailed', '8k', 'masterpiece']"),
-      negativePrompts: z.array(z.string()).optional().describe("Things to avoid globally"),
-      influences: z.array(z.string()).optional().describe("Artist/game/movie style references"),
+      artisticStyle: validatedSchemas.token.optional().describe("E.g., 'digital painting', 'oil painting', 'anime'"),
+      mood: validatedSchemas.token.optional().describe("E.g., 'dark', 'epic', 'whimsical'"),
+      colorScheme: validatedSchemas.token.optional().describe("E.g., 'warm', 'cold', 'muted', 'vibrant'"),
+      qualityTags: validatedSchemas.stringArray.optional().describe("E.g., ['highly detailed', '8k', 'masterpiece']"),
+      negativePrompts: validatedSchemas.stringArray.optional().describe("Things to avoid globally"),
+      influences: validatedSchemas.stringArray.optional().describe("Artist/game/movie style references"),
     }).optional().describe("Default style settings applied to all images"),
     comfyui: z.object({
-      endpoint: z.string().optional().describe("ComfyUI server URL"),
-      checkpoint: z.string().optional().describe("Default checkpoint model"),
+      endpoint: validatedSchemas.token.optional().describe("ComfyUI server URL"),
+      checkpoint: validatedSchemas.token.optional().describe("Default checkpoint model"),
       loras: z.array(z.object({
-        name: z.string(),
+        name: validatedSchemas.token,
         weight: z.number(),
       })).optional().describe("LoRA models to apply"),
       samplerSettings: z.object({
-        sampler: z.string().optional(),
-        scheduler: z.string().optional(),
+        sampler: validatedSchemas.token.optional(),
+        scheduler: validatedSchemas.token.optional(),
         steps: z.number().optional(),
         cfg: z.number().optional(),
       }).optional(),
       workflows: z.record(z.string(), z.object({
-        name: z.string().describe("Human-readable workflow name"),
-        description: z.string().optional().describe("What this workflow does"),
+        name: validatedSchemas.token.describe("Human-readable workflow name"),
+        description: validatedSchemas.description.optional().describe("What this workflow does"),
         workflow: z.record(z.string(), z.unknown()).describe("Full ComfyUI workflow JSON (API format)"),
         inputNodes: z.object({
-          positivePrompt: z.string().optional().describe("Node ID for positive prompt"),
-          negativePrompt: z.string().optional().describe("Node ID for negative prompt"),
-          checkpoint: z.string().optional().describe("Node ID for checkpoint loader"),
-          seed: z.string().optional().describe("Node ID for seed/noise"),
-          width: z.string().optional().describe("Node ID for width"),
-          height: z.string().optional().describe("Node ID for height"),
-          steps: z.string().optional().describe("Node ID for steps"),
-          cfg: z.string().optional().describe("Node ID for CFG scale"),
-          sampler: z.string().optional().describe("Node ID for sampler"),
-          scheduler: z.string().optional().describe("Node ID for scheduler"),
+          positivePrompt: validatedSchemas.token.optional().describe("Node ID for positive prompt"),
+          negativePrompt: validatedSchemas.token.optional().describe("Node ID for negative prompt"),
+          checkpoint: validatedSchemas.token.optional().describe("Node ID for checkpoint loader"),
+          seed: validatedSchemas.token.optional().describe("Node ID for seed/noise"),
+          width: validatedSchemas.token.optional().describe("Node ID for width"),
+          height: validatedSchemas.token.optional().describe("Node ID for height"),
+          steps: validatedSchemas.token.optional().describe("Node ID for steps"),
+          cfg: validatedSchemas.token.optional().describe("Node ID for CFG scale"),
+          sampler: validatedSchemas.token.optional().describe("Node ID for sampler"),
+          scheduler: validatedSchemas.token.optional().describe("Node ID for scheduler"),
         }).optional().describe("Node IDs for dynamic value injection"),
       })).optional().describe("Named workflow templates - full ComfyUI workflows"),
-      defaultWorkflowId: z.string().optional().describe("ID of the default workflow to use"),
-      defaultWorkflow: z.string().optional().describe("Legacy: Workflow name or ID"),
+      defaultWorkflowId: validatedSchemas.id.optional().describe("ID of the default workflow to use"),
+      defaultWorkflow: validatedSchemas.token.optional().describe("Legacy: Workflow name or ID"),
       workflowOverrides: z.record(z.string(), z.unknown()).optional(),
     }).optional().describe("ComfyUI-specific settings"),
     dalle: z.object({
-      model: z.string().optional().describe("'dall-e-3' or 'dall-e-2'"),
+      model: validatedSchemas.token.optional().describe("'dall-e-3' or 'dall-e-2'"),
       quality: z.enum(["standard", "hd"]).optional(),
       style: z.enum(["vivid", "natural"]).optional(),
       size: z.enum(["1024x1024", "1792x1024", "1024x1792"]).optional(),
     }).optional().describe("DALL-E specific settings"),
     midjourney: z.object({
-      version: z.string().optional().describe("'v5', 'v6', 'niji'"),
+      version: validatedSchemas.token.optional().describe("'v5', 'v6', 'niji'"),
       stylize: z.number().optional().describe("0-1000"),
       chaos: z.number().optional().describe("0-100"),
       quality: z.number().optional().describe("0.25, 0.5, 1, 2"),
-      aspectRatio: z.string().optional().describe("E.g., '1:1', '16:9', '2:3'"),
+      aspectRatio: validatedSchemas.token.optional().describe("E.g., '1:1', '16:9', '2:3'"),
     }).optional().describe("Midjourney specific settings"),
     sdxl: z.object({
-      model: z.string().optional().describe("Model ID or path"),
-      samplerName: z.string().optional(),
+      model: validatedSchemas.token.optional().describe("Model ID or path"),
+      samplerName: validatedSchemas.token.optional(),
       steps: z.number().optional(),
       cfg: z.number().optional(),
       width: z.number().optional(),
       height: z.number().optional(),
-      negativePrompt: z.string().optional(),
+      // Free text, not a node ID -- a negative prompt is a comma-separated
+      // list that routinely runs past a token's 200.
+      negativePrompt: validatedSchemas.description.optional(),
     }).optional().describe("Stable Diffusion / SDXL settings"),
     flux: z.object({
-      model: z.string().optional().describe("'schnell', 'dev', 'pro'"),
+      model: validatedSchemas.token.optional().describe("'schnell', 'dev', 'pro'"),
       steps: z.number().optional(),
       guidance: z.number().optional(),
     }).optional().describe("Flux settings"),
     defaults: z.object({
-      aspectRatio: z.string().optional().describe("Default aspect ratio for images"),
+      aspectRatio: validatedSchemas.token.optional().describe("Default aspect ratio for images"),
       generateOnCreate: z.boolean().optional().describe("Auto-generate images when entities are created"),
       savePrompts: z.boolean().optional().describe("Store prompts with entities"),
       framing: z.object({
-        character: z.string().optional().describe("Default framing for character portraits"),
-        location: z.string().optional().describe("Default framing for location scenes"),
-        item: z.string().optional().describe("Default framing for item images"),
+        character: validatedSchemas.token.optional().describe("Default framing for character portraits"),
+        location: validatedSchemas.token.optional().describe("Default framing for location scenes"),
+        item: validatedSchemas.token.optional().describe("Default framing for item images"),
       }).optional(),
     }).optional().describe("Generation defaults"),
     consistency: z.object({
       maintainColorPalette: z.boolean().optional(),
-      characterSeedImages: z.record(z.string(), z.string()).optional().describe("characterId -> seed image"),
-      styleReferenceImage: z.string().optional().describe("Game-wide style reference"),
+      characterSeedImages: z.record(z.string(), validatedSchemas.description).optional().describe("characterId -> seed image"),
+      styleReferenceImage: validatedSchemas.description.optional().describe("Game-wide style reference"),
       useCharacterRefs: z.boolean().optional().describe("Use existing character images as reference"),
     }).optional().describe("Consistency settings"),
-    notes: z.string().optional().describe("Custom notes for the DM about image generation"),
+    notes: validatedSchemas.description.optional().describe("Custom notes for the DM about image generation"),
   });
 
   server.registerTool(
@@ -838,7 +857,7 @@ export function registerCoreTools(server: McpServer) {
     {
       description: "List all image generation presets for a game. Presets allow different configurations for different use cases (character portraits, location art, items with text, etc.)",
       inputSchema: {
-        gameId: z.string().describe("The game ID"),
+        gameId: validatedSchemas.id.describe("The game ID"),
       },
       annotations: ANNOTATIONS.READ_ONLY,
     },
@@ -870,8 +889,8 @@ export function registerCoreTools(server: McpServer) {
     {
       description: "Get a specific image generation preset by ID, including full configuration details",
       inputSchema: {
-        gameId: z.string().describe("The game ID"),
-        presetId: z.string().describe("The preset ID"),
+        gameId: validatedSchemas.id.describe("The game ID"),
+        presetId: validatedSchemas.id.describe("The preset ID"),
       },
       annotations: ANNOTATIONS.READ_ONLY,
     },
@@ -894,7 +913,7 @@ export function registerCoreTools(server: McpServer) {
     {
       description: "Get the default image generation preset for a game",
       inputSchema: {
-        gameId: z.string().describe("The game ID"),
+        gameId: validatedSchemas.id.describe("The game ID"),
       },
       annotations: ANNOTATIONS.READ_ONLY,
     },
@@ -922,9 +941,9 @@ export function registerCoreTools(server: McpServer) {
     {
       description: "Create a new image generation preset. Use different presets for different purposes: character portraits, location art, items with text, etc. Each preset can have its own tool, model, style, and workflow configuration.",
       inputSchema: {
-        gameId: z.string().describe("The game ID"),
-        name: z.string().describe("Human-readable preset name (e.g., 'Character Portraits', 'Location Art', 'Items with Text')"),
-        description: z.string().optional().describe("What this preset is for"),
+        gameId: validatedSchemas.id.describe("The game ID"),
+        name: validatedSchemas.token.describe("Human-readable preset name (e.g., 'Character Portraits', 'Location Art', 'Items with Text')"),
+        description: validatedSchemas.description.optional().describe("What this preset is for"),
         entityTypes: z.array(z.string().max(50)).optional()
           .describe("Which entity types this preset is best suited for (e.g., character, location, item, scene, faction)"),
         isDefault: z.boolean().optional().describe("Make this the default preset"),
@@ -964,10 +983,10 @@ export function registerCoreTools(server: McpServer) {
     {
       description: "Update an existing image generation preset. Only specified fields are updated; others are preserved.",
       inputSchema: {
-        gameId: z.string().describe("The game ID"),
-        presetId: z.string().describe("The preset ID to update"),
-        name: z.string().optional().describe("New preset name"),
-        description: z.string().optional().describe("New description"),
+        gameId: validatedSchemas.id.describe("The game ID"),
+        presetId: validatedSchemas.id.describe("The preset ID to update"),
+        name: validatedSchemas.token.optional().describe("New preset name"),
+        description: validatedSchemas.description.optional().describe("New description"),
         entityTypes: z.array(z.string().max(50)).optional()
           .describe("Update which entity types this preset is for (e.g., character, location, item, scene, faction)"),
         isDefault: z.boolean().optional().describe("Make this the default preset"),
@@ -1000,8 +1019,8 @@ export function registerCoreTools(server: McpServer) {
     {
       description: "Delete an image generation preset. This is IRREVERSIBLE.",
       inputSchema: {
-        gameId: z.string().describe("The game ID"),
-        presetId: z.string().describe("The preset ID to delete"),
+        gameId: validatedSchemas.id.describe("The game ID"),
+        presetId: validatedSchemas.id.describe("The preset ID to delete"),
       },
       annotations: ANNOTATIONS.DELETE,
     },
@@ -1024,8 +1043,8 @@ export function registerCoreTools(server: McpServer) {
     {
       description: "Set which image generation preset should be used by default",
       inputSchema: {
-        gameId: z.string().describe("The game ID"),
-        presetId: z.string().describe("The preset ID to make default"),
+        gameId: validatedSchemas.id.describe("The game ID"),
+        presetId: validatedSchemas.id.describe("The preset ID to make default"),
       },
       annotations: ANNOTATIONS.SET,
     },
@@ -1052,50 +1071,50 @@ export function registerCoreTools(server: McpServer) {
     {
       description: "Store a rule system for the game",
       inputSchema: {
-        gameId: z.string().describe("The game ID"),
+        gameId: validatedSchemas.id.describe("The game ID"),
         rules: z.object({
-          name: z.string(),
-          description: z.string(),
+          name: validatedSchemas.token,
+          description: validatedSchemas.description,
           attributes: z.array(z.object({
-            name: z.string(),
-            abbreviation: z.string(),
-            description: z.string(),
+            name: validatedSchemas.token,
+            abbreviation: validatedSchemas.token,
+            description: validatedSchemas.description,
             defaultValue: z.number(),
             minValue: z.number(),
             maxValue: z.number(),
           })),
           skills: z.array(z.object({
-            name: z.string(),
-            governingAttribute: z.string(),
-            description: z.string(),
+            name: validatedSchemas.token,
+            governingAttribute: validatedSchemas.token,
+            description: validatedSchemas.description,
           })),
           derivedStats: z.array(z.object({
-            name: z.string(),
-            abbreviation: z.string(),
-            description: z.string(),
-            formula: z.string(),
+            name: validatedSchemas.token,
+            abbreviation: validatedSchemas.token,
+            description: validatedSchemas.description,
+            formula: validatedSchemas.token,
           })),
           combatRules: z.object({
-            initiativeFormula: z.string(),
+            initiativeFormula: validatedSchemas.token,
             actionsPerTurn: z.number(),
-            attackFormula: z.string(),
-            defenseFormula: z.string(),
-            damageFormula: z.string(),
+            attackFormula: validatedSchemas.token,
+            defenseFormula: validatedSchemas.token,
+            damageFormula: validatedSchemas.token,
             conditions: z.array(z.object({
-              name: z.string(),
-              description: z.string(),
-              effects: z.string(),
+              name: validatedSchemas.token,
+              description: validatedSchemas.description,
+              effects: validatedSchemas.description,
             })),
           }),
           checkMechanics: z.object({
-            baseDice: z.string(),
-            modifierCalculation: z.string(),
+            baseDice: validatedSchemas.token,
+            modifierCalculation: validatedSchemas.token,
             difficultyScale: z.record(z.string(), z.number()),
             criticalSuccess: z.number().optional(),
             criticalFailure: z.number().optional(),
           }),
           progression: z.object({
-            experienceFormula: z.string(),
+            experienceFormula: validatedSchemas.token,
             levelUpThresholds: z.array(z.number()),
             attributePointsPerLevel: z.number(),
             skillPointsPerLevel: z.number(),
@@ -1118,7 +1137,7 @@ export function registerCoreTools(server: McpServer) {
     {
       description: "Get the current rule system for a game",
       inputSchema: {
-        gameId: z.string().describe("The game ID"),
+        gameId: validatedSchemas.id.describe("The game ID"),
       },
       annotations: ANNOTATIONS.READ_ONLY,
     },
@@ -1140,7 +1159,7 @@ export function registerCoreTools(server: McpServer) {
     {
       description: "Partially update the rule system",
       inputSchema: {
-        gameId: z.string().describe("The game ID"),
+        gameId: validatedSchemas.id.describe("The game ID"),
         updates: z.record(z.string(), z.unknown()).describe("Partial rule updates"),
       },
       annotations: ANNOTATIONS.UPDATE,

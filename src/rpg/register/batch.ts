@@ -3,7 +3,7 @@ import { z } from "zod";
 import * as characterTools from "../../tools/character.js";
 import * as narrativeTools from "../../tools/narrative.js";
 import * as combatTools from "../tools/combat.js";
-import { LIMITS } from "../../utils/validation.js";
+import { LIMITS, validatedSchemas } from "../../utils/validation.js";
 import { ANNOTATIONS } from "../../utils/tool-annotations.js";
 import type { Character } from "../../types/index.js";
 
@@ -23,8 +23,8 @@ export function registerRpgBatchTools(server: McpServer) {
       description:
         "Complete combat setup in one call: creates enemy NPCs and starts combat with all participants (enemies + players at location). Returns the ready-to-play combat state.",
       inputSchema: {
-        gameId: z.string().describe("The game ID"),
-        locationId: z.string().describe("Location where combat takes place"),
+        gameId: validatedSchemas.id.describe("The game ID"),
+        locationId: validatedSchemas.id.describe("Location where combat takes place"),
         enemies: z
           .array(
             z.object({

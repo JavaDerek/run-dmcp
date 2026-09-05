@@ -8,12 +8,54 @@ describe('LIMITS', () => {
     expect(LIMITS.DESCRIPTION_MAX).toBe(5000)
     expect(LIMITS.CONTENT_MAX).toBe(50000)
     expect(LIMITS.NARRATIVE_MAX).toBe(200000)
+    expect(LIMITS.EMBEDDED_DATA_MAX).toBe(2000000)
     expect(LIMITS.ARRAY_MAX).toBe(100)
     expect(LIMITS.MAX_DEPTH).toBe(10)
   })
 })
 
 describe('validatedSchemas', () => {
+  // Load-bearing, not an implementation detail: the JSON Schema converter the
+  // MCP SDK runs de-duplicates by object identity, so a SHARED instance used
+  // twice inside one tool is published the second time as a `$ref` pointing at
+  // the first. Handing back a fresh instance per access is what keeps a
+  // declaration at every site (issue #29, and see schemaBounds.test.ts).
+  describe('each access is a fresh instance', () => {
+    it('never hands back the same object twice', () => {
+      expect(validatedSchemas.name).not.toBe(validatedSchemas.name)
+      expect(validatedSchemas.token).not.toBe(validatedSchemas.token)
+      expect(validatedSchemas.stringArray).not.toBe(validatedSchemas.stringArray)
+    })
+
+    it('hands back an equivalent schema every time', () => {
+      expect(validatedSchemas.token.parse('north')).toBe('north')
+      expect(validatedSchemas.token.parse('north')).toBe('north')
+    })
+  })
+
+  describe('token', () => {
+    it('accepts an empty string -- a ceiling with no floor, unlike name', () => {
+      expect(validatedSchemas.token.parse('')).toBe('')
+    })
+
+    it('rejects a string over NAME_MAX', () => {
+      expect(() => validatedSchemas.token.parse('a'.repeat(LIMITS.NAME_MAX + 1))).toThrow()
+    })
+  })
+
+  describe('embeddedData', () => {
+    it('accepts an inline image far larger than any prose tier', () => {
+      const inlineImage = 'data:image/png;base64,' + 'A'.repeat(LIMITS.NARRATIVE_MAX)
+      expect(validatedSchemas.embeddedData.parse(inlineImage)).toBe(inlineImage)
+    })
+
+    it('rejects one over EMBEDDED_DATA_MAX', () => {
+      expect(() =>
+        validatedSchemas.embeddedData.parse('A'.repeat(LIMITS.EMBEDDED_DATA_MAX + 1))
+      ).toThrow()
+    })
+  })
+
   describe('name', () => {
     it('should accept valid names', () => {
       expect(validatedSchemas.name.parse('Test Name')).toBe('Test Name')

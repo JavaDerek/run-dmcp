@@ -13,6 +13,7 @@ import {
   inferAndApplyTheme,
 } from "../tools/display.js";
 import { ANNOTATIONS } from "../utils/tool-annotations.js";
+import { validatedSchemas } from "../utils/validation.js";
 
 // All available theme presets
 const themePresetNames = [
@@ -58,19 +59,19 @@ export function registerDisplayTools(server: McpServer): void {
     {
       description: "Set display configuration for the web viewer. Can set any subset of options.",
       inputSchema: {
-        bgColor: z.string().optional().describe("Background color (e.g., '#1a1a2e')"),
-        bgSecondary: z.string().optional().describe("Secondary background color"),
-        bgElevated: z.string().optional().describe("Elevated surface background"),
-        textColor: z.string().optional().describe("Main text color"),
-        textMuted: z.string().optional().describe("Muted text color"),
-        accentColor: z.string().optional().describe("Accent color for links and highlights"),
-        accentHover: z.string().optional().describe("Accent color on hover"),
-        borderColor: z.string().optional().describe("Border color"),
-        successColor: z.string().optional().describe("Success/positive color"),
-        warningColor: z.string().optional().describe("Warning/caution color"),
-        dangerColor: z.string().optional().describe("Danger/error color"),
-        codeBackground: z.string().optional().describe("Code/monospace block background"),
-        codeText: z.string().optional().describe("Code/monospace text color"),
+        bgColor: validatedSchemas.token.optional().describe("Background color (e.g., '#1a1a2e')"),
+        bgSecondary: validatedSchemas.token.optional().describe("Secondary background color"),
+        bgElevated: validatedSchemas.token.optional().describe("Elevated surface background"),
+        textColor: validatedSchemas.token.optional().describe("Main text color"),
+        textMuted: validatedSchemas.token.optional().describe("Muted text color"),
+        accentColor: validatedSchemas.token.optional().describe("Accent color for links and highlights"),
+        accentHover: validatedSchemas.token.optional().describe("Accent color on hover"),
+        borderColor: validatedSchemas.token.optional().describe("Border color"),
+        successColor: validatedSchemas.token.optional().describe("Success/positive color"),
+        warningColor: validatedSchemas.token.optional().describe("Warning/caution color"),
+        dangerColor: validatedSchemas.token.optional().describe("Danger/error color"),
+        codeBackground: validatedSchemas.token.optional().describe("Code/monospace block background"),
+        codeText: validatedSchemas.token.optional().describe("Code/monospace text color"),
         borderRadius: z
           .enum(["sharp", "rounded", "soft"])
           .optional()
@@ -79,13 +80,13 @@ export function registerDisplayTools(server: McpServer): void {
           .enum(["clean", "grungy", "tech", "parchment", "metallic", "wooden"])
           .optional()
           .describe("Card visual style"),
-        fontDisplay: z.string().optional().describe("Display/heading font (Google Font name)"),
-        fontBody: z.string().optional().describe("Body text font (Google Font name)"),
-        fontMono: z.string().optional().describe("Monospace font (Google Font name)"),
+        fontDisplay: validatedSchemas.token.optional().describe("Display/heading font (Google Font name)"),
+        fontBody: validatedSchemas.token.optional().describe("Body text font (Google Font name)"),
+        fontMono: validatedSchemas.token.optional().describe("Monospace font (Google Font name)"),
         showHealthBars: z.boolean().optional().describe("Show health bars on character cards"),
         showConditionTags: z.boolean().optional().describe("Show condition tags"),
         showImages: z.boolean().optional().describe("Show images in the viewer"),
-        appTitle: z.string().optional().describe("Custom title for the web viewer"),
+        appTitle: validatedSchemas.token.optional().describe("Custom title for the web viewer"),
       },
       annotations: ANNOTATIONS.SET,
     },
@@ -185,7 +186,7 @@ export function registerDisplayTools(server: McpServer): void {
     {
       description: "Get the display configuration for a specific game",
       inputSchema: {
-        gameId: z.string().describe("The game ID"),
+        gameId: validatedSchemas.id.describe("The game ID"),
       },
       annotations: ANNOTATIONS.READ_ONLY,
     },
@@ -208,29 +209,29 @@ export function registerDisplayTools(server: McpServer): void {
     {
       description: "Set display configuration for a specific game. Each game can have its own visual theme.",
       inputSchema: {
-        gameId: z.string().describe("The game ID"),
-        bgColor: z.string().optional().describe("Background color"),
-        bgSecondary: z.string().optional().describe("Secondary background"),
-        bgElevated: z.string().optional().describe("Elevated surface background"),
-        textColor: z.string().optional().describe("Text color"),
-        textMuted: z.string().optional().describe("Muted text"),
-        accentColor: z.string().optional().describe("Accent color"),
-        accentHover: z.string().optional().describe("Accent hover color"),
-        borderColor: z.string().optional().describe("Border color"),
-        successColor: z.string().optional().describe("Success color"),
-        warningColor: z.string().optional().describe("Warning color"),
-        dangerColor: z.string().optional().describe("Danger color"),
-        codeBackground: z.string().optional().describe("Code block background"),
-        codeText: z.string().optional().describe("Code text color"),
+        gameId: validatedSchemas.id.describe("The game ID"),
+        bgColor: validatedSchemas.token.optional().describe("Background color"),
+        bgSecondary: validatedSchemas.token.optional().describe("Secondary background"),
+        bgElevated: validatedSchemas.token.optional().describe("Elevated surface background"),
+        textColor: validatedSchemas.token.optional().describe("Text color"),
+        textMuted: validatedSchemas.token.optional().describe("Muted text"),
+        accentColor: validatedSchemas.token.optional().describe("Accent color"),
+        accentHover: validatedSchemas.token.optional().describe("Accent hover color"),
+        borderColor: validatedSchemas.token.optional().describe("Border color"),
+        successColor: validatedSchemas.token.optional().describe("Success color"),
+        warningColor: validatedSchemas.token.optional().describe("Warning color"),
+        dangerColor: validatedSchemas.token.optional().describe("Danger color"),
+        codeBackground: validatedSchemas.token.optional().describe("Code block background"),
+        codeText: validatedSchemas.token.optional().describe("Code text color"),
         borderRadius: z.enum(["sharp", "rounded", "soft"]).optional().describe("Border radius style"),
         cardStyle: z.enum(["clean", "grungy", "tech", "parchment", "metallic", "wooden"]).optional().describe("Card style"),
-        fontDisplay: z.string().optional().describe("Display font"),
-        fontBody: z.string().optional().describe("Body font"),
-        fontMono: z.string().optional().describe("Mono font"),
+        fontDisplay: validatedSchemas.token.optional().describe("Display font"),
+        fontBody: validatedSchemas.token.optional().describe("Body font"),
+        fontMono: validatedSchemas.token.optional().describe("Mono font"),
         showHealthBars: z.boolean().optional().describe("Show health bars"),
         showConditionTags: z.boolean().optional().describe("Show condition tags"),
         showImages: z.boolean().optional().describe("Show images"),
-        appTitle: z.string().optional().describe("App title"),
+        appTitle: validatedSchemas.token.optional().describe("App title"),
       },
       annotations: ANNOTATIONS.SET,
     },
@@ -253,7 +254,7 @@ export function registerDisplayTools(server: McpServer): void {
     {
       description: "Apply a predefined theme preset to a specific game. This allows different games to have completely different visual themes.",
       inputSchema: {
-        gameId: z.string().describe("The game ID"),
+        gameId: validatedSchemas.id.describe("The game ID"),
         preset: z.enum(themePresetNames).describe("Theme preset name"),
       },
       annotations: ANNOTATIONS.SET,
@@ -283,7 +284,7 @@ export function registerDisplayTools(server: McpServer): void {
     {
       description: "Remove a game's custom theme, reverting to the global theme",
       inputSchema: {
-        gameId: z.string().describe("The game ID"),
+        gameId: validatedSchemas.id.describe("The game ID"),
       },
       annotations: ANNOTATIONS.SET,
     },
@@ -306,9 +307,9 @@ export function registerDisplayTools(server: McpServer): void {
     {
       description: "Automatically apply an appropriate theme to a game based on its genre and setting. Call this when creating a new game to set up the visual style.",
       inputSchema: {
-        gameId: z.string().describe("The game ID"),
-        genre: z.string().describe("Game genre (e.g., 'fantasy', 'sci-fi', 'western', 'noir')"),
-        setting: z.string().optional().describe("Optional setting description for more accurate theme matching"),
+        gameId: validatedSchemas.id.describe("The game ID"),
+        genre: validatedSchemas.token.describe("Game genre (e.g., 'fantasy', 'sci-fi', 'western', 'noir')"),
+        setting: validatedSchemas.description.optional().describe("Optional setting description for more accurate theme matching"),
       },
       annotations: ANNOTATIONS.SET,
     },
