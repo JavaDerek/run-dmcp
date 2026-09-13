@@ -73,10 +73,16 @@ function tExpr(gidExpr: string): string {
 /**
  * `AFTER INSERT`: ensure the game's clock row exists, advance it, insert the
  * entity, insert one fact per non-NULL column, insert a `<kind>.created`
- * event. Column names are interpolated directly (never bound as parameters)
- * because they come from this codebase's own `pragma_table_info`, never
- * from anything a caller supplied -- there is no user input anywhere in
- * this SQL (trigger-sql-skeleton trap #6).
+ * event, then (issue #30) stamp every fact this firing just opened with that
+ * event's id via `last_insert_rowid()` -- the one hop of causality (design
+ * §5.2c), recorded rather than derived later. The `opened_by_event_id IS
+ * NULL` guard is what keeps a repeated `t` on a non-`sequence` axis correct:
+ * it restricts the stamp to facts THIS firing opened, never one a previous
+ * firing at the same `t` already stamped. Column names are interpolated
+ * directly (never bound as parameters) because they come from this
+ * codebase's own `pragma_table_info`, never from anything a caller supplied
+ * -- there is no user input anywhere in this SQL (trigger-sql-skeleton
+ * trap #6).
  */
 function buildInsertTrigger(row: ProjectedTable, cols: string[]): string {
   const gid = `NEW.${row.gameIdColumn}`;
@@ -108,6 +114,9 @@ ${factInserts}
       INSERT INTO events (id, game_id, at_t, kind, description, causes)
         VALUES (lower(hex(randomblob(16))), ${gid}, ${t}, '${row.kind}.created', '${row.kind} created',
                 json_object('table', '${row.table}', 'row_id', NEW.id));
+
+      UPDATE facts SET opened_by_event_id = (SELECT id FROM events WHERE rowid = last_insert_rowid())
+        WHERE entity_id = NEW.id AND valid_from_t = ${t} AND opened_by_event_id IS NULL;
     END;
   `;
 }
@@ -121,6 +130,11 @@ ${factInserts}
  * column: reversed, the open's subquery would still see the value the
  * close was about to retire and write nothing (trap #3). The five-case
  * table this produces is walked by the test suite, not re-derived here.
+ * After the `<kind>.updated` event lands, every fact this firing just opened
+ * (across every column touched) is stamped with that event's id -- see
+ * `buildInsertTrigger`'s doc comment for why the `opened_by_event_id IS
+ * NULL` guard is what keeps this correct when a non-`sequence` axis repeats
+ * a `t` across firings (issue #30).
  */
 function buildUpdateTrigger(row: ProjectedTable, cols: string[]): string {
   const gid = `NEW.${row.gameIdColumn}`;
@@ -152,6 +166,9 @@ ${perColumn}
       INSERT INTO events (id, game_id, at_t, kind, description, causes)
         VALUES (lower(hex(randomblob(16))), ${gid}, ${t}, '${row.kind}.updated', '${row.kind} updated',
                 json_object('table', '${row.table}', 'row_id', NEW.id));
+
+      UPDATE facts SET opened_by_event_id = (SELECT id FROM events WHERE rowid = last_insert_rowid())
+        WHERE entity_id = NEW.id AND valid_from_t = ${t} AND opened_by_event_id IS NULL;
     END;
   `;
 }

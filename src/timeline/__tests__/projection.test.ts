@@ -20,6 +20,7 @@ import { createResource, updateResource, updateResourceValue } from "../../tools
 import { createRelationship } from "../../tools/relationship.js";
 import { createFaction } from "../../tools/faction.js";
 import { createSecret } from "../../tools/secrets.js";
+import { declareTimeAxis, currentStoryTime } from "../clock.js";
 
 interface EntityRow {
   id: string;
@@ -38,6 +39,7 @@ interface FactRow {
   valid_from_t: number;
   valid_to_t: number | null;
   irreversible: number;
+  opened_by_event_id: string | null;
 }
 
 interface EventRow {
@@ -705,6 +707,134 @@ describe("projection: reconciliation", () => {
     expect(() => initializeSchema()).not.toThrow();
 
     expect(snapshot()).toEqual(before);
+  });
+});
+
+describe("projection: opened_by_event_id -- the one hop of causality is stamped, not derived (issue #30)", () => {
+  let db: Database.Database;
+
+  beforeEach(() => {
+    db = createTestDb();
+  });
+
+  afterEach(() => {
+    destroyTestDb();
+  });
+
+  function openedByEventId(entityId: string, key: string): string | null {
+    const row = db
+      .prepare(`SELECT opened_by_event_id FROM facts WHERE entity_id = ? AND key = ? AND valid_to_t IS NULL`)
+      .get(entityId, key) as { opened_by_event_id: string | null } | undefined;
+    return row?.opened_by_event_id ?? null;
+  }
+
+  function creationEventId(gameId: string, kind: string, rowId: string): string {
+    const rows = eventsOfKind(db, gameId, kind).filter(
+      (e) => (JSON.parse(e.causes ?? "{}") as { row_id?: string }).row_id === rowId
+    );
+    expect(rows.length).toBe(1);
+    return rows[0].id;
+  }
+
+  it("every fact a create firing opens carries that firing's own event id", () => {
+    const game = createGame({ name: "grain depot", setting: "test", style: "test" });
+    const character = createCharacter({ gameId: game.id, name: "grain warden", isPlayer: false });
+
+    const createdEventId = creationEventId(game.id, "character.created", character.id);
+
+    for (const col of liveColumns(db, "characters")) {
+      const factRow = openFactForKey(db, character.id, col);
+      if (factRow === undefined) continue; // a NULL column opens no fact
+      expect(factRow.opened_by_event_id).toBe(createdEventId);
+    }
+  });
+
+  it("an update firing stamps only the facts it opened, leaving earlier stamps untouched", () => {
+    const game = createGame({ name: "grain depot", setting: "test", style: "test" });
+    const resource = createResource({ gameId: game.id, ownerType: "game", name: "treasury", category: "raw" });
+    const createdEventId = creationEventId(game.id, "resource.created", resource.id);
+    expect(openedByEventId(resource.id, "category")).toBe(createdEventId);
+
+    updateResource(resource.id, { category: "processed" });
+
+    const updatedEventId = creationEventId(game.id, "resource.updated", resource.id);
+    expect(updatedEventId).not.toBe(createdEventId);
+
+    // The new, currently-open fact was stamped by the update firing...
+    expect(openedByEventId(resource.id, "category")).toBe(updatedEventId);
+    // ...and the fact the update CLOSED still carries the creation event --
+    // closing is not opening, so nothing re-stamps it.
+    const closedCategoryFact = factsForKey(db, resource.id, "category").find((f) => f.value === "raw");
+    expect(closedCategoryFact?.opened_by_event_id).toBe(createdEventId);
+  });
+
+  it("a delete firing (_ad) stamps nothing -- it only closes facts, it opens none", () => {
+    const game = createGame({ name: "grain depot", setting: "test", style: "test" });
+    const character = createCharacter({ gameId: game.id, name: "grain warden", isPlayer: false });
+    const createdEventId = creationEventId(game.id, "character.created", character.id);
+
+    expect(deleteCharacter(character.id)).toBe(true);
+
+    const destroyedEventId = creationEventId(game.id, "character.destroyed", character.id);
+    expect(destroyedEventId).not.toBe(createdEventId);
+
+    // Every fact for this entity still carries whatever event OPENED it
+    // (the creation event, for every column this fixture set) -- the
+    // destroy event opened nothing, so it stamps nothing.
+    for (const f of allFactsFor(db, character.id)) {
+      expect(f.opened_by_event_id).not.toBe(destroyedEventId);
+    }
+  });
+
+  it("repeated t on a non-sequence axis (issue #30's non-sequence case): each firing stamps only the facts IT opened", () => {
+    const game = createGame({ name: "grain depot", setting: "test", style: "test" });
+    const resource = createResource({
+      gameId: game.id,
+      ownerType: "game",
+      name: "treasury",
+      value: 10,
+      category: "raw",
+    });
+    const createdEventId = creationEventId(game.id, "resource.created", resource.id);
+
+    // Freeze the clock on a counter axis: the projection triggers only
+    // advance current_t `WHERE axis_kind = 'sequence'` (projection.ts), so
+    // every write against this game from here on lands at the SAME t --
+    // exactly the condition #30's NULL guard exists for.
+    const frozenTBefore = currentStoryTime(game.id);
+    expect(frozenTBefore).not.toBeNull();
+    const frozenT = frozenTBefore?.t as number;
+    declareTimeAxis({ gameId: game.id, axis: { kind: "counter", unit: "turn" }, startAt: frozenT });
+    expect(currentStoryTime(game.id)?.t).toBe(frozenT);
+
+    // Firing 1 at the frozen t: opens a new 'category' fact.
+    updateResource(resource.id, { category: "processed" });
+    expect(currentStoryTime(game.id)?.t).toBe(frozenT);
+    const firing1EventId = creationEventId(game.id, "resource.updated", resource.id);
+
+    // Firing 2, at the IDENTICAL t: opens a new 'value' fact on the SAME
+    // entity. Without the `opened_by_event_id IS NULL` guard, this firing's
+    // stamp UPDATE would also match the 'category' fact firing 1 already
+    // stamped (same entity_id, same valid_from_t) and attempt to re-stamp
+    // it -- which the immutable latch aborts. This call must not throw.
+    expect(() =>
+      updateResourceValue({ resourceId: resource.id, mode: "set", value: 20 })
+    ).not.toThrow();
+    expect(currentStoryTime(game.id)?.t).toBe(frozenT);
+
+    const events = eventsOfKind(db, game.id, "resource.updated").filter(
+      (e) => (JSON.parse(e.causes ?? "{}") as { row_id?: string }).row_id === resource.id
+    );
+    expect(events.length).toBe(2);
+    const firing2Event = events.find((e) => e.id !== firing1EventId);
+    expect(firing2Event).toBeDefined();
+    const firing2EventId = firing2Event?.id as string;
+
+    // Each firing's own fact carries its OWN event id -- never the other
+    // firing's, and never the creation event's.
+    expect(openedByEventId(resource.id, "category")).toBe(firing1EventId);
+    expect(openedByEventId(resource.id, "value")).toBe(firing2EventId);
+    expect(new Set([createdEventId, firing1EventId, firing2EventId]).size).toBe(3);
   });
 });
 

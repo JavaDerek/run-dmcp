@@ -85,6 +85,13 @@ export interface TimelineExportFact {
   validFromT: T;
   validToT: T | null;
   irreversible: boolean;
+  /** The one hop of causality (design §5.2c, issue #30) -- the event that
+   *  opened this fact, or null when none is recorded. Optional, not just
+   *  nullable: a v1 artifact written before issue #30 landed carries no such
+   *  field at all, and `importTimeline` treats an absent field and an
+   *  explicit `null` identically -- there was never a recorded hop for
+   *  either, so there is nothing to guess and no reason to refuse. */
+  openedByEventId?: string | null;
 }
 
 export interface TimelineExportEvent {
@@ -137,6 +144,7 @@ interface FactRow {
   valid_from_t: number;
   valid_to_t: number | null;
   irreversible: number;
+  opened_by_event_id: string | null;
 }
 
 interface EventRow {
@@ -200,7 +208,7 @@ function readTimeline(gameId: string): TimelineExport {
   // "what was true of them" to "who was alive."
   const factRows = db
     .prepare(
-      `SELECT f.id, f.entity_id, f.key, f.value, f.valid_from_t, f.valid_to_t, f.irreversible
+      `SELECT f.id, f.entity_id, f.key, f.value, f.valid_from_t, f.valid_to_t, f.irreversible, f.opened_by_event_id
        FROM facts f
        JOIN entities e ON e.id = f.entity_id
        WHERE e.game_id = ?
@@ -239,6 +247,7 @@ function readTimeline(gameId: string): TimelineExport {
       validFromT: row.valid_from_t,
       validToT: row.valid_to_t,
       irreversible: Boolean(row.irreversible),
+      openedByEventId: row.opened_by_event_id,
     })),
     events: eventRows.map((row) => ({
       id: row.id,
@@ -387,10 +396,12 @@ function assertTargetIsEmpty(gameId: string): void {
  * artifact shape above) is stamped fresh at import time; it was never
  * exported and never round-trips.
  *
- * `entities` are inserted before `facts` because `facts.entity_id` is a
- * real foreign key and this database runs with `PRAGMA foreign_keys = ON`
- * (`../db/connection.ts`) -- inserting out of order would fail loudly
- * rather than silently, but there is no reason to invite the failure.
+ * `entities` are inserted before `events` and `facts` because `facts.entity_id`
+ * is a real foreign key; `events` are inserted before `facts` (issue #30) for
+ * the identical reason now that `facts.opened_by_event_id` is one too --
+ * this database runs with `PRAGMA foreign_keys = ON` (`../db/connection.ts`),
+ * so inserting out of order would fail loudly rather than silently, but
+ * there is no reason to invite the failure.
  */
 export function importTimeline(artifact: TimelineExport): TimelineImportResult {
   assertValidArtifactShape(artifact);
@@ -429,8 +440,18 @@ export function importTimeline(artifact: TimelineExport): TimelineImportResult {
       insertEntity.run(entity.id, entity.gameId, entity.kind, entity.name, entity.createdAtT, entity.destroyedAtT);
     }
 
+    // Events before facts (issue #30): `facts.opened_by_event_id` is a real
+    // foreign key into `events` now, on top of `facts.entity_id`'s existing
+    // one into `entities` -- see this function's doc comment.
+    const insertEvent = db.prepare(
+      `INSERT INTO events (id, game_id, at_t, kind, description, causes) VALUES (?, ?, ?, ?, ?, ?)`
+    );
+    for (const event of artifact.events) {
+      insertEvent.run(event.id, event.gameId, event.atT, event.kind, event.description, event.causes);
+    }
+
     const insertFact = db.prepare(
-      `INSERT INTO facts (id, entity_id, key, value, valid_from_t, valid_to_t, irreversible) VALUES (?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO facts (id, entity_id, key, value, valid_from_t, valid_to_t, irreversible, opened_by_event_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     );
     for (const fact of artifact.facts) {
       insertFact.run(
@@ -440,15 +461,9 @@ export function importTimeline(artifact: TimelineExport): TimelineImportResult {
         fact.value,
         fact.validFromT,
         fact.validToT,
-        fact.irreversible ? 1 : 0
+        fact.irreversible ? 1 : 0,
+        fact.openedByEventId ?? null
       );
-    }
-
-    const insertEvent = db.prepare(
-      `INSERT INTO events (id, game_id, at_t, kind, description, causes) VALUES (?, ?, ?, ?, ?, ?)`
-    );
-    for (const event of artifact.events) {
-      insertEvent.run(event.id, event.gameId, event.atT, event.kind, event.description, event.causes);
     }
 
     return {

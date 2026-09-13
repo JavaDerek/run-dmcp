@@ -185,7 +185,7 @@ the merge is not a compromise:
 
 ```
 entities  (id, kind, name, created_at_t, destroyed_at_t NULL)
-facts     (id, entity_id, key, value, valid_from_t, valid_to_t NULL, irreversible BOOL)
+facts     (id, entity_id, key, value, valid_from_t, valid_to_t NULL, irreversible BOOL, opened_by_event_id NULL)
 events    (id, at_t, kind, description, causes JSON)
 ```
 
@@ -272,9 +272,10 @@ mistake §7 exists to kill, one layer up.
 #### 5.2c One hop of causality
 
 A serialized constraint carries, for each fact it asserts: **the fact, its `valid_from_t`, and the
-`events.id` that opened it.** `events.causes` already exists in §5.1, so serializing that edge costs
-nothing. One hop — never a trace of how the engine reached a verdict, which rules were consulted, or
-in what order.
+`events.id` that opened it.** `facts.opened_by_event_id` (§5.1) is stamped by the same trigger that
+opens the fact, in the same transaction, so the edge is recorded at the moment it is true rather than
+searched for afterward. One hop — never a trace of how the engine reached a verdict, which rules were
+consulted, or in what order.
 
 **Why this is not a UX nicety.** A reviewer at a fired check has exactly one decision to make:
 *is the fact wrong, or is the claim wrong?* That is undecidable without knowing what made the fact

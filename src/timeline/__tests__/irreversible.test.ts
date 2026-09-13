@@ -420,12 +420,16 @@ describe("irreversible facts", () => {
      * `causes` through verbatim by design, which is correct: an importer
      * that rewrote a recorded cause would be inventing history.
      *
-     * SQLite's `json_extract` raises "malformed JSON" rather than returning
-     * NULL when it meets one, and that error is not scoped to the offending
-     * row -- one bad row anywhere in the game's events would take down
-     * every function in this module, including `declareIrreversible`, which
-     * has nothing to do with that event. A lookup that is one hop of
-     * provenance must never be able to fail the write it is annotating.
+     * Before issue #30, the hop was DERIVED by searching `events` for a row
+     * matching `(at_t, causes.row_id)`, and `json_extract` raises "malformed
+     * JSON" (not scoped to the offending row) when it meets a `causes` value
+     * that isn't JSON -- so a single bad event anywhere in the game could
+     * take down every lookup in this module. Now the hop is a stored column
+     * (`facts.opened_by_event_id`), stamped at write time and never derived
+     * by scanning `events` at all, so an unrelated malformed-JSON event
+     * sharing this fact's `t` has nothing to interfere with -- this test is
+     * kept as a regression guard for that property, not because the lookup
+     * still scans anything.
      */
     it("survives an event whose causes is not valid JSON, and still finds the right hop", () => {
       const gameId = createGame({ name: "grain depot", setting: "test", style: "test" }).id;

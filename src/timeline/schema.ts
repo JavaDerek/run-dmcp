@@ -90,6 +90,23 @@ export function initializeTimelineSchema(): void {
     )
   `);
 
+  // facts.opened_by_event_id -- issue #30: the one hop of causality (design
+  // §5.2c) recorded at the moment it is true, instead of derived at read
+  // time by searching `events` for a row whose `at_t`/`causes.row_id` happen
+  // to match (the query this replaces lived in provenance.ts, and could
+  // return null for a bad `causes` JSON blob, or pick the wrong event of
+  // several sharing one `t` by an arbitrary hex-id tiebreak). Idempotent
+  // ALTER, ordered after `events` exists -- legal under SQLite's ADD COLUMN
+  // restrictions because the implicit default is NULL, and a database that
+  // already has this column (every run after the first) just throws here,
+  // caught and ignored, same idiom as every other migration in this
+  // codebase (root CLAUDE.md).
+  try {
+    db.exec("ALTER TABLE facts ADD COLUMN opened_by_event_id TEXT REFERENCES events(id)");
+  } catch {
+    // Column already exists.
+  }
+
   // timeline_clock -- one row per game, tracking the declared axis and its
   // current position. A game that never declares an axis still needs one
   // of these once its first entity/fact/event is written, with axis_kind
@@ -161,6 +178,16 @@ export function initializeTimelineSchema(): void {
   // change. declareIrreversible() (irreversible.ts) relies on that last
   // case to make re-declaring idempotent with a single UPDATE and no
   // separate "already set" check.
+  // Third one-way latch (issue #30): NULL -> value, once, exactly like
+  // `valid_to_t` above -- once the projection trigger has stamped
+  // `opened_by_event_id`, nothing may rewrite it, but the stamp itself (the
+  // trigger's own UPDATE, immediately after the fact's INSERT -- see
+  // projection.ts) must be allowed through. This clause is load-bearing, not
+  // hygiene: probed against better-sqlite3 at this project's own pragma
+  // settings, the append-only guard fires on trigger-initiated UPDATEs too.
+  // Without it, the projection trigger's own stamp would abort the write it
+  // annotates; with it, a stamped edge can never be rewritten -- a re-stamp
+  // raises ABORT.
   db.exec(`
     DROP TRIGGER IF EXISTS timeline_facts_immutable;
     CREATE TRIGGER timeline_facts_immutable
@@ -173,8 +200,9 @@ export function initializeTimelineSchema(): void {
       OR (NEW.irreversible IS NOT OLD.irreversible
           AND (OLD.irreversible IS NOT 0 OR NEW.irreversible IS NOT 1))
       OR (OLD.valid_to_t IS NOT NULL AND NEW.valid_to_t IS NOT OLD.valid_to_t)
+      OR (OLD.opened_by_event_id IS NOT NULL AND NEW.opened_by_event_id IS NOT OLD.opened_by_event_id)
     BEGIN
-      SELECT RAISE(ABORT, 'timeline: facts are append-only; valid_from_t cannot be rewritten, valid_to_t may only be closed once, and irreversible may only move 0 -> 1');
+      SELECT RAISE(ABORT, 'timeline: facts are append-only; valid_from_t cannot be rewritten, valid_to_t may only be closed once, irreversible may only move 0 -> 1, and opened_by_event_id may only be stamped once');
     END;
   `);
 

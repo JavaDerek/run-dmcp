@@ -327,6 +327,51 @@ describe("round trip: specific properties survive byte-for-byte", () => {
     expect(reimportedFact?.irreversible).toBe(true);
   });
 
+  it("preserves opened_by_event_id (issue #30) on round trip, and it names a real event in the re-imported game", () => {
+    const game = createGame({ name: "grain depot", setting: "a farming valley", style: "grounded" });
+    const grain = createResource({ gameId: game.id, ownerType: "game", name: "grain", value: 100 });
+
+    const before = exportTimeline(game.id);
+    const valueFact = before.facts.find((f) => f.entityId === grain.id && f.key === "value");
+    expect(valueFact?.openedByEventId).not.toBeNull();
+    expect(before.events.some((e) => e.id === valueFact?.openedByEventId)).toBe(true);
+
+    destroyTestDb();
+    createTestDb();
+    importTimeline(before);
+
+    const after = exportTimeline(game.id);
+    expect(after).toEqual(before);
+    const reimportedFact = after.facts.find((f) => f.entityId === grain.id && f.key === "value");
+    expect(reimportedFact?.openedByEventId).toBe(valueFact?.openedByEventId);
+  });
+
+  it("imports a v1 artifact carrying no openedByEventId at all, and reads it back as null", () => {
+    const game = createGame({ name: "grain depot", setting: "a farming valley", style: "grounded" });
+    const grain = createResource({ gameId: game.id, ownerType: "game", name: "grain", value: 100 });
+    const exported = exportTimeline(game.id);
+
+    // Simulate an artifact written before issue #30: the field is absent
+    // entirely from every fact, not merely null -- exactly what
+    // `JSON.parse` of a pre-#30 export file would produce.
+    const legacyArtifact: TimelineExport = {
+      ...exported,
+      facts: exported.facts.map((f) => {
+        const { openedByEventId: _drop, ...rest } = f;
+        return rest as TimelineExport["facts"][number];
+      }),
+    };
+    expect(legacyArtifact.facts.every((f) => !("openedByEventId" in f))).toBe(true);
+
+    destroyTestDb();
+    createTestDb();
+    expect(() => importTimeline(legacyArtifact)).not.toThrow();
+
+    const after = exportTimeline(game.id);
+    const valueFact = after.facts.find((f) => f.entityId === grain.id && f.key === "value");
+    expect(valueFact?.openedByEventId).toBeNull();
+  });
+
   it("preserves a declared non-sequence axis and its current_t", () => {
     const game = createGame({ name: "grain depot", setting: "a farming valley", style: "grounded" });
     createResource({ gameId: game.id, ownerType: "game", name: "grain", value: 100 });

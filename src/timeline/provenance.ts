@@ -35,52 +35,48 @@ export interface FactProvenance {
 }
 
 interface OpeningEventRow {
-  id: string;
+  id: string | null;
 }
 
 /**
- * The one hop of causality (design §5.2c): the event of `gameId` whose
- * `at_t` equals the fact's `valid_from_t` and whose `causes` JSON names this
- * entity as the row it was written for. `causes` is produced entirely by
- * this codebase's own projection triggers (`json_object('table', ...,
- * 'row_id', NEW.id)` in projection.ts) -- matching `$.row_id` here is a
- * literal comparison against a token we defined in output we generated, not
- * an attempt to understand what any event "means" (hard rule 4). Ordered
- * deterministically (`at_t`, then `id`) and only the first row is taken --
- * one hop, never a chain, never a trace of how the engine got here.
+ * The one hop of causality (design §5.2c), READ rather than derived (issue
+ * #30). `facts.opened_by_event_id` is stamped by the projection triggers'
+ * `_ai`/`_au` bodies (projection.ts) at the moment a fact opens, in the same
+ * firing, via `last_insert_rowid()` against the event they just inserted --
+ * so this is a direct column lookup now, not a search over `events` keyed by
+ * `(at_t, causes.row_id)` with a random-hex tiebreak among rows sharing a
+ * `t`. That derivation is gone, along with the failure modes it carried: it
+ * could return null for an event whose `causes` was not valid JSON, and it
+ * broke ties among same-`t` events arbitrarily.
  *
- * The `CASE WHEN json_valid(causes)` wrapper is load-bearing, not defensive
- * decoration. `events.causes` has no CHECK constraint, and SQLite's
- * `json_extract` RAISES "malformed JSON" rather than returning NULL when it
- * meets a value that is not JSON -- and that error belongs to the whole
- * query, not to the offending row, so a single bad row anywhere in this
- * game's events would make every function that calls this throw, including
- * ones that have nothing to do with that event. That is reachable in
- * practice: timeline import (export.ts) carries `causes` through verbatim
- * by design, because an importer that rewrote a recorded cause would be
- * inventing history. A hop of provenance must never be able to fail the
- * write it annotates, so a row we cannot read simply does not match.
- * Written as CASE rather than `json_valid(causes) AND json_extract(...)`
- * because SQLite does not guarantee the evaluation order of AND operands --
- * the planner may reorder them, and then the guard is decoration that
- * happens to work today.
+ * Both internal callers of this shape (`irreversible.ts`, `narration.ts`)
+ * no longer call this function at all -- each already queries its own fact
+ * row and now selects `opened_by_event_id` directly as part of that same
+ * query, which is strictly cheaper than a second round trip through here.
  *
- * Moved here verbatim (SQL, doc comment and all) from `irreversible.ts`'s
- * former module-private `findOpenedByEventId` -- this is the ONE owner of
- * §5.2c's hop now; `irreversible.ts` and `narration.ts` both call this
- * rather than each keeping a copy of the query.
+ * This function is kept, and re-pointed at the stored column rather than
+ * removed, because it is part of this package's published library surface
+ * (`src/index.ts` re-exports it) -- issue #30 did not ask for a public API
+ * removal, and removing an exported function silently would be exactly the
+ * kind of undocumented break root CLAUDE.md's "what we declare is what we
+ * mean" section warns against. A caller that already holds
+ * `(gameId, entityId, validFromT)` rather than a fact id can still use it;
+ * it now does less work to answer the same question.
  */
 export function openingEventId(gameId: string, entityId: string, validFromT: number): string | null {
   const db = getDatabase();
   const row = db
     .prepare(
-      `SELECT id FROM events
-        WHERE game_id = ?
-          AND at_t = ?
-          AND json_extract(CASE WHEN json_valid(causes) THEN causes END, '$.row_id') = ?
-        ORDER BY at_t, id
+      `SELECT f.opened_by_event_id AS id
+         FROM facts f
+         JOIN entities e ON e.id = f.entity_id
+        WHERE e.game_id = ?
+          AND f.entity_id = ?
+          AND f.valid_from_t = ?
+          AND f.opened_by_event_id IS NOT NULL
+        ORDER BY f.id
         LIMIT 1`
     )
-    .get(gameId, validFromT, entityId) as OpeningEventRow | undefined;
+    .get(gameId, entityId, validFromT) as OpeningEventRow | undefined;
   return row?.id ?? null;
 }

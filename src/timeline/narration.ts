@@ -1,7 +1,7 @@
 import { getDatabase } from "../db/connection.js";
 import { assertT, compareT, type T } from "./t.js";
 import type { EntityKind } from "./kinds.js";
-import { openingEventId, type FactProvenance } from "./provenance.js";
+import { type FactProvenance } from "./provenance.js";
 
 /**
  * The outbound half of authority (design §5.2b/§5.2c, GitHub issues #11 and
@@ -89,9 +89,13 @@ interface ConstraintFactRow {
   irreversible: number;
   entity_kind: EntityKind;
   entity_name: string | null;
+  opened_by_event_id: string | null;
 }
 
-function toConstraintFact(row: ConstraintFactRow, gameId: string): ConstraintFact {
+/** `gameId` is unused now that the hop is a stored column (issue #30) rather
+ *  than derived per-row, but the parameter stays -- see irreversible.ts's
+ *  identical note on `toIrreversibleFact`. */
+function toConstraintFact(row: ConstraintFactRow, _gameId: string): ConstraintFact {
   assertT(row.valid_from_t);
   if (row.valid_to_t !== null) assertT(row.valid_to_t);
   return {
@@ -104,7 +108,7 @@ function toConstraintFact(row: ConstraintFactRow, gameId: string): ConstraintFac
     irreversible: Boolean(row.irreversible),
     entityKind: row.entity_kind,
     entityName: row.entity_name,
-    openedByEventId: openingEventId(gameId, row.entity_id, row.valid_from_t),
+    openedByEventId: row.opened_by_event_id,
   };
 }
 
@@ -177,7 +181,7 @@ export function narrationConstraintAt(params: {
     .prepare(
       `SELECT f.id AS id, f.entity_id AS entity_id, f.key AS key, f.value AS value,
               f.valid_from_t AS valid_from_t, f.valid_to_t AS valid_to_t, f.irreversible AS irreversible,
-              e.kind AS entity_kind, e.name AS entity_name
+              e.kind AS entity_kind, e.name AS entity_name, f.opened_by_event_id AS opened_by_event_id
          FROM facts f
          JOIN entities e ON e.id = f.entity_id
         WHERE e.game_id = ?

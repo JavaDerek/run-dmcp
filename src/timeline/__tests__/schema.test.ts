@@ -164,7 +164,16 @@ describe("timeline schema", () => {
 
     it("facts has exactly the declared columns", () => {
       expect(columnNames(db, "facts")).toEqual(
-        ["id", "entity_id", "key", "value", "valid_from_t", "valid_to_t", "irreversible"].sort()
+        [
+          "id",
+          "entity_id",
+          "key",
+          "value",
+          "valid_from_t",
+          "valid_to_t",
+          "irreversible",
+          "opened_by_event_id",
+        ].sort()
       );
     });
 
@@ -256,6 +265,82 @@ describe("timeline schema", () => {
       ) as { name: string; game_id: string } | undefined;
       expect(characterRow?.name).toBe("treasury keeper");
       expect(characterRow?.game_id).toBe(legacyGame.id);
+    });
+  });
+
+  describe("against an existing database that predates opened_by_event_id (issue #30)", () => {
+    it("adds the column without disturbing existing facts, which read null", () => {
+      // Simulate a database built by a pre-#30 run of this exact codebase:
+      // every timeline table already exists, in the SIX-column shape facts
+      // had before this column was added. Rebuilding `facts` in place (drop,
+      // recreate without the column, no ALTER) is the only way to fabricate
+      // that shape, since a fresh createTestDb() already runs the current,
+      // eight-column schema.
+      db.exec(`
+        DROP TRIGGER IF EXISTS timeline_facts_immutable;
+        DROP TRIGGER IF EXISTS timeline_facts_irreversible;
+        DROP TRIGGER IF EXISTS timeline_facts_no_delete;
+      `);
+      const legacyGame = createGame({ name: "grain depot", setting: "test", style: "test" });
+      const beforeFacts = db
+        .prepare(`SELECT id, entity_id, key, value, valid_from_t, valid_to_t, irreversible FROM facts`)
+        .all() as Array<Record<string, unknown>>;
+      expect(beforeFacts.length).toBeGreaterThan(0);
+
+      db.exec(`
+        DROP TABLE facts;
+        CREATE TABLE facts (
+          id TEXT PRIMARY KEY,
+          entity_id TEXT NOT NULL REFERENCES entities(id),
+          key TEXT NOT NULL,
+          value TEXT NOT NULL,
+          valid_from_t REAL NOT NULL,
+          valid_to_t REAL,
+          irreversible INTEGER NOT NULL DEFAULT 0,
+          CHECK (valid_to_t IS NULL OR valid_to_t >= valid_from_t)
+        );
+      `);
+      const insert = db.prepare(
+        `INSERT INTO facts (id, entity_id, key, value, valid_from_t, valid_to_t, irreversible) VALUES (?, ?, ?, ?, ?, ?, ?)`
+      );
+      for (const f of beforeFacts) {
+        insert.run(f.id, f.entity_id, f.key, f.value, f.valid_from_t, f.valid_to_t, f.irreversible);
+      }
+      expect(columnNames(db, "facts")).toEqual(
+        ["id", "entity_id", "key", "value", "valid_from_t", "valid_to_t", "irreversible"].sort()
+      );
+
+      expect(() => initializeSchema()).not.toThrow();
+
+      expect(columnNames(db, "facts")).toEqual(
+        [
+          "id",
+          "entity_id",
+          "key",
+          "value",
+          "valid_from_t",
+          "valid_to_t",
+          "irreversible",
+          "opened_by_event_id",
+        ].sort()
+      );
+      const afterFacts = db
+        .prepare(`SELECT id, opened_by_event_id FROM facts WHERE entity_id IN (SELECT id FROM entities WHERE game_id = ?)`)
+        .all(legacyGame.id) as Array<{ id: string; opened_by_event_id: string | null }>;
+      expect(afterFacts.length).toBe(beforeFacts.length);
+      for (const row of afterFacts) {
+        // Pre-existing rows were never stamped by the projection trigger (it
+        // never ran for them) -- B1 (the issue's decision): stored only,
+        // never backfilled by a guess.
+        expect(row.opened_by_event_id).toBeNull();
+      }
+
+      // And the column is live for anything written from here on.
+      const character = createCharacter({ gameId: legacyGame.id, name: "grain warden", isPlayer: false });
+      const newFact = db
+        .prepare(`SELECT opened_by_event_id FROM facts WHERE entity_id = ? AND key = 'name'`)
+        .get(character.id) as { opened_by_event_id: string | null };
+      expect(newFact.opened_by_event_id).not.toBeNull();
     });
   });
 
@@ -372,6 +457,51 @@ describe("timeline schema", () => {
       expect(() =>
         db.prepare("UPDATE facts SET irreversible = 1 WHERE id = ?").run(factId)
       ).not.toThrow();
+    });
+
+    /**
+     * The third one-way latch (issue #30): NULL -> value, once, on
+     * `opened_by_event_id`. This is the guard the projection trigger's own
+     * stamp (`UPDATE facts SET opened_by_event_id = ...`, projection.ts)
+     * must survive -- probed and confirmed against better-sqlite3 that a
+     * trigger-initiated UPDATE is not exempt from this guard, which is
+     * exactly why the WHEN clause admits NULL -> value rather than
+     * forbidding every change to the column outright.
+     */
+    it("timeline_facts_immutable makes opened_by_event_id a one-way latch: NULL -> value only", () => {
+      const entityId = insertEntity(db, { gameId });
+      const factId = insertFact(db, entityId, { key: "value", value: "50" });
+      const eventId = insertEvent(db, { gameId });
+      const otherEventId = insertEvent(db, { gameId });
+
+      // NULL -> value: permitted, once.
+      expect(() =>
+        db.prepare("UPDATE facts SET opened_by_event_id = ? WHERE id = ?").run(eventId, factId)
+      ).not.toThrow();
+      expect(
+        (db.prepare("SELECT opened_by_event_id FROM facts WHERE id = ?").get(factId) as {
+          opened_by_event_id: string | null;
+        }).opened_by_event_id
+      ).toBe(eventId);
+
+      // A re-stamp -- even to a DIFFERENT, otherwise-legal event id -- is
+      // refused: PLANT a re-stamp of an already-stamped edge and watch it
+      // ABORT, per the issue's own test list.
+      expect(() =>
+        db.prepare("UPDATE facts SET opened_by_event_id = ? WHERE id = ?").run(otherEventId, factId)
+      ).toThrow();
+
+      // Re-asserting the SAME value it already holds is not a change, so it
+      // never reaches the guard -- the same idiom every other latch in this
+      // trigger uses.
+      expect(() =>
+        db.prepare("UPDATE facts SET opened_by_event_id = ? WHERE id = ?").run(eventId, factId)
+      ).not.toThrow();
+
+      // And it cannot be withdrawn back to NULL either.
+      expect(() =>
+        db.prepare("UPDATE facts SET opened_by_event_id = NULL WHERE id = ?").run(factId)
+      ).toThrow();
     });
 
     it("permits valid_to_t NULL -> value exactly once, and rejects a second change", () => {

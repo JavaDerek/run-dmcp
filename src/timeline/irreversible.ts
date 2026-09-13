@@ -1,6 +1,6 @@
 import { getDatabase } from "../db/connection.js";
 import { assertT } from "./t.js";
-import { openingEventId, type FactProvenance } from "./provenance.js";
+import { type FactProvenance } from "./provenance.js";
 
 /**
  * DECISION(#21): contradiction is whole-value comparison under one key.
@@ -49,9 +49,15 @@ interface FactRow {
   key: string;
   value: string;
   valid_from_t: number;
+  opened_by_event_id: string | null;
 }
 
-function toIrreversibleFact(row: FactRow, gameId: string): IrreversibleFact {
+/** `gameId` is no longer used to look up the hop (issue #30: it is a stored
+ *  column on the fact row itself, never derived), but stays a parameter so
+ *  every call site here keeps naming the game it is working in -- and so a
+ *  future caller that genuinely needs to re-scope by game has somewhere to
+ *  put it without changing every signature in this file again. */
+function toIrreversibleFact(row: FactRow, _gameId: string): IrreversibleFact {
   assertT(row.valid_from_t);
   return {
     factId: row.id,
@@ -59,7 +65,7 @@ function toIrreversibleFact(row: FactRow, gameId: string): IrreversibleFact {
     key: row.key,
     value: row.value,
     validFromT: row.valid_from_t,
-    openedByEventId: openingEventId(gameId, row.entity_id, row.valid_from_t),
+    openedByEventId: row.opened_by_event_id,
   };
 }
 
@@ -102,7 +108,7 @@ export function declareIrreversible(params: { entityId: string; key: string }): 
   // can never disagree about which row they mean.
   const open = db
     .prepare(
-      `SELECT id, entity_id, key, value, valid_from_t FROM facts
+      `SELECT id, entity_id, key, value, valid_from_t, opened_by_event_id FROM facts
         WHERE entity_id = ? AND key = ? AND valid_to_t IS NULL
         ORDER BY valid_from_t DESC, id DESC
         LIMIT 1`
@@ -141,7 +147,7 @@ export function irreversibleFactFor(entityId: string, key: string): Irreversible
 
   const row = db
     .prepare(
-      `SELECT id, entity_id, key, value, valid_from_t FROM facts
+      `SELECT id, entity_id, key, value, valid_from_t, opened_by_event_id FROM facts
         WHERE entity_id = ? AND key = ? AND irreversible = 1
         ORDER BY valid_from_t DESC, id DESC
         LIMIT 1`
@@ -163,7 +169,8 @@ export function listIrreversibleFacts(params: { gameId: string; entityId?: strin
   const db = getDatabase();
 
   let query = `
-    SELECT f.id AS id, f.entity_id AS entity_id, f.key AS key, f.value AS value, f.valid_from_t AS valid_from_t
+    SELECT f.id AS id, f.entity_id AS entity_id, f.key AS key, f.value AS value, f.valid_from_t AS valid_from_t,
+           f.opened_by_event_id AS opened_by_event_id
     FROM facts f
     JOIN entities e ON e.id = f.entity_id
     WHERE e.game_id = ? AND f.irreversible = 1
