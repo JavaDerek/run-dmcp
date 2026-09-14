@@ -93,6 +93,7 @@ export {
   listIrreversibleFacts,
 } from "./timeline/irreversible.js";
 export type { IrreversibleFact } from "./timeline/irreversible.js";
+export type { SetTransition } from "./timeline/constrained.js";
 export { openingEventId } from "./timeline/provenance.js";
 export type { FactProvenance } from "./timeline/provenance.js";
 
@@ -184,6 +185,7 @@ export type {
   IntendedChange,
   IntendedWrite,
   IntendedTransfer,
+  IntendedSet,
   Outcome,
   ResolveRefusalReason,
 } from "./timeline/resolve.js";

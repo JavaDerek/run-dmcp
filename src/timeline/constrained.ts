@@ -478,7 +478,7 @@ interface IrreversibleWriteAttempt {
   entityId: string;
   key: string;
   table: string;
-  attemptedValue: number;
+  attemptedValue: number | string;
 }
 
 /**
@@ -509,7 +509,7 @@ interface IrreversibleWriteAttempt {
  * required one to get this far), so NUMERIC -- not BLOB -- is the honest
  * default here.
  */
-function castedTextForm(db: Database.Database, table: string, key: string, attemptedValue: number): string {
+function castedTextForm(db: Database.Database, table: string, key: string, attemptedValue: number | string): string {
   const info = db.prepare(`SELECT type FROM pragma_table_info(?) WHERE name = ?`).get(table, key) as
     | { type: string }
     | undefined;
@@ -950,3 +950,120 @@ export function valueHistory(entityId: string, key: string, limit?: number): Val
   const limited = limit !== undefined ? ranked.slice(0, limit) : ranked;
   return limited.map((r) => r.transition);
 }
+
+/**
+ * One non-numeric column set, as `resolve()`'s `set` intent applies it (issue
+ * #32). A row, never a verdict: what the column held, what it holds now, and
+ * the fact the write opened -- `null` when the value did not move, because an
+ * unchanged value opens no new interval (projection.ts's update trigger).
+ */
+export interface SetTransition {
+  entityId: string;
+  key: string;
+  previousValue: string | number | null;
+  newValue: string | number | null;
+  t: T;
+  factId: string | null;
+}
+
+/** The numeric members of the constraint family. A key carrying one of them
+ *  changes by a write (`writeConstrainedValue`), where the constraint is
+ *  evaluated; a `set` would step round it. */
+const NUMERIC_CONSTRAINT_KINDS = new Set(["monotonic", "bounded", "conserved"]);
+
+function openFactId(db: Database.Database, entityId: string, key: string): string | null {
+  const row = db
+    .prepare(`SELECT id FROM facts WHERE entity_id = ? AND key = ? AND valid_to_t IS NULL ORDER BY valid_from_t DESC, id DESC LIMIT 1`)
+    .get(entityId, key) as { id: string } | undefined;
+  return row?.id ?? null;
+}
+
+/**
+ * Sets one live column of an entity's projected table to `value` (issue #32).
+ * The engine stores what it is handed and never learns what the column means;
+ * the projection triggers version it exactly as they version every other
+ * column write, so nothing here touches `facts` directly.
+ *
+ * The same choke point as numeric writes, and the same checks in the same
+ * voice: the entity and column are resolved against `PROJECTED_TABLES` /
+ * `liveColumns` (never a caller-supplied table name); the column that places
+ * the entity in its game is refused; a key carrying a numeric constraint is
+ * refused, because that value changes by a write where the constraint is
+ * evaluated; `resolve_only` asks the one question it always asks, whether an
+ * adjudication window is open; and a contradicted irreversible fact is
+ * translated into a typed `ConstraintViolationError` with the one hop
+ * attached, by `translateIrreversibleFailure`, never by reading the trigger's
+ * message.
+ *
+ * Not exported from the library: `resolve()` is its only caller, so a
+ * non-numeric consequence reaches storage through a resolution or not at all.
+ */
+export function setProjectedValue(params: { entityId: string; key: string; value: string | number | null }): SetTransition {
+  const resolved = resolveProjection(params.entityId, params.key);
+  const db = getDatabase();
+
+  const projected = PROJECTED_TABLES.find((p) => p.table === resolved.table);
+  if (projected && projected.gameIdColumn === params.key) {
+    throw new Error(
+      `timeline: '${params.key}' places entity '${params.entityId}' in its game and cannot be set -- ` +
+        `an entity does not move between games`
+    );
+  }
+
+  for (const constraint of constraintsFor(params.entityId, params.key)) {
+    if (NUMERIC_CONSTRAINT_KINDS.has(constraint.kind)) {
+      throw new ConstraintViolationError(
+        constraint.kind,
+        params.entityId,
+        `Entity '${params.entityId}' is ${constraint.kind}-constrained for key '${params.key}', which a set does not ` +
+          `evaluate; this value changes by a write, where the constraint is checked.`
+      );
+    }
+    if (constraint.kind === "resolve_only" && !adjudicationOpen()) {
+      throw new ConstraintViolationError(
+        "resolve_only",
+        params.entityId,
+        `Entity '${params.entityId}' is resolve_only-constrained for key '${params.key}'; direct writes are refused. ` +
+          `This value can only change through the adjudicating call that opens the resolution window.`
+      );
+    }
+  }
+
+  const row = db.prepare(`SELECT ${resolved.key} AS value FROM ${resolved.table} WHERE id = ?`).get(resolved.entityId) as
+    | { value: string | number | null }
+    | undefined;
+  if (!row) {
+    throw new Error(
+      `timeline: no live row in '${resolved.table}' for entity '${resolved.entityId}' -- ` +
+        `it may have been destroyed since it was last confirmed to exist`
+    );
+  }
+
+  try {
+    return withTransaction(() => {
+      const before = openFactId(db, resolved.entityId, resolved.key);
+      db.prepare(`UPDATE ${resolved.table} SET ${resolved.key} = ? WHERE id = ?`).run(params.value, resolved.entityId);
+      const after = openFactId(db, resolved.entityId, resolved.key);
+      const story = currentStoryTime(resolved.gameId);
+      if (!story) {
+        throw new Error(`timeline: game '${resolved.gameId}' has no timeline clock -- a set has no t to attach to`);
+      }
+      return {
+        entityId: resolved.entityId,
+        key: resolved.key,
+        previousValue: row.value,
+        newValue: params.value,
+        t: story.t,
+        factId: after !== before ? after : null,
+      };
+    });
+  } catch (err) {
+    if (params.value === null) throw err;
+    translateIrreversibleFailure(
+      db,
+      [{ entityId: params.entityId, key: params.key, table: resolved.table, attemptedValue: params.value }],
+      err
+    );
+  }
+}
+

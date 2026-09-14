@@ -4,7 +4,7 @@ import { type T } from "./t.js";
 import { currentStoryTime } from "./clock.js";
 import { narrationConstraintAt, contradictions, type NarrationConstraint, type Claim, type Contradiction } from "./narration.js";
 import { withAdjudicationOpen } from "./adjudication.js";
-import { writeConstrainedValue, transferConstrainedValue, type ValueTransition } from "./constrained.js";
+import { writeConstrainedValue, transferConstrainedValue, setProjectedValue, type ValueTransition, type SetTransition } from "./constrained.js";
 
 /**
  * The inbound half of authority (design §5.2a, GitHub issue #10): propose ->
@@ -76,8 +76,9 @@ import { writeConstrainedValue, transferConstrainedValue, type ValueTransition }
  *      INSIDE it (adjudication.ts's own doc comment asks for exactly this
  *      nesting, so the window row rolls back with the writes it
  *      authorized). Every change goes through `writeConstrainedValue` /
- *      `transferConstrainedValue` -- the one choke point (root CLAUDE.md
- *      hard rule 7) -- never a direct write. A constraint violation
+ *      `transferConstrainedValue` / `setProjectedValue` (issue #32, a
+ *      non-numeric column) -- the one choke point (root CLAUDE.md hard
+ *      rule 7) -- never a direct write. A constraint violation
  *      anywhere in the list propagates out of the transaction untouched
  *      (never caught and re-labelled here) and rolls back EVERY change the
  *      transaction made, including ones that individually would have
@@ -171,7 +172,18 @@ export interface IntendedTransfer {
   toBounds?: { minValue: number | null; maxValue: number | null };
 }
 
-export type IntendedChange = IntendedWrite | IntendedTransfer;
+/** One intended set of a non-numeric column on an entity's projected row
+ *  (issue #32) -- a thing changing owner, a character changing place. The
+ *  engine stores `value` and never learns what `key` means; see
+ *  `setProjectedValue` (constrained.ts) for what it refuses. */
+export interface IntendedSet {
+  kind: "set";
+  entityId: string;
+  key: string;
+  value: string | number | null;
+}
+
+export type IntendedChange = IntendedWrite | IntendedTransfer | IntendedSet;
 
 /**
  * What a mechanic returns. `changes` are intents, not writes -- `resolve()`
@@ -205,6 +217,9 @@ export interface Outcome {
   t: T;
   result: Record<string, unknown>;
   transitions: ValueTransition[];
+  /** Every `set` this resolution applied, in order (issue #32). Kept apart
+   *  from `transitions`, whose values are numbers. */
+  sets: SetTransition[];
   constraint: NarrationConstraint;
   eventId: string;
 }
@@ -330,7 +345,11 @@ interface ResolutionCauses {
   change_count: number;
 }
 
-function applyChange(change: IntendedChange): ValueTransition[] {
+function applyChange(change: IntendedChange): ValueTransition[] | SetTransition {
+  if (change.kind === "set") {
+    return setProjectedValue({ entityId: change.entityId, key: change.key, value: change.value });
+  }
+
   if (change.kind === "write") {
     return [
       writeConstrainedValue({
@@ -451,8 +470,11 @@ function resolveProposal(mechanicsByName: Map<string, Mechanic>, proposal: Propo
   const applied = withTransaction(() =>
     withAdjudicationOpen(gameId, () => {
       const transitions: ValueTransition[] = [];
+      const sets: SetTransition[] = [];
       for (const change of changes) {
-        transitions.push(...applyChange(change));
+        const applied = applyChange(change);
+        if (Array.isArray(applied)) transitions.push(...applied);
+        else sets.push(applied);
       }
 
       // Re-read the clock AFTER every write has landed, inside this same
@@ -484,7 +506,7 @@ function resolveProposal(mechanicsByName: Map<string, Mechanic>, proposal: Propo
         )
         .run(eventId, gameId, postStory.t, adjudication.description ?? null, JSON.stringify(causes));
 
-      return { transitions, eventId, postT: postStory.t };
+      return { transitions, sets, eventId, postT: postStory.t };
     })
   );
 
@@ -501,6 +523,7 @@ function resolveProposal(mechanicsByName: Map<string, Mechanic>, proposal: Propo
     t,
     result: adjudication.result ?? {},
     transitions: applied.transitions,
+    sets: applied.sets,
     constraint: postConstraint,
     eventId: applied.eventId,
   };
