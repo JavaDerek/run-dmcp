@@ -4,7 +4,18 @@ import { type T } from "./t.js";
 import { currentStoryTime } from "./clock.js";
 import { narrationConstraintAt, contradictions, type NarrationConstraint, type Claim, type Contradiction } from "./narration.js";
 import { withAdjudicationOpen } from "./adjudication.js";
-import { writeConstrainedValue, transferConstrainedValue, setProjectedValue, type ValueTransition, type SetTransition } from "./constrained.js";
+import type { EntityKind } from "./kinds.js";
+import {
+  writeConstrainedValue,
+  transferConstrainedValue,
+  setProjectedValue,
+  createProjectedEntity,
+  destroyProjectedEntity,
+  type ValueTransition,
+  type SetTransition,
+  type CreatedEntity,
+  type DestroyedEntity,
+} from "./constrained.js";
 
 /**
  * The inbound half of authority (design §5.2a, GitHub issue #10): propose ->
@@ -77,8 +88,16 @@ import { writeConstrainedValue, transferConstrainedValue, setProjectedValue, typ
  *      nesting, so the window row rolls back with the writes it
  *      authorized). Every change goes through `writeConstrainedValue` /
  *      `transferConstrainedValue` / `setProjectedValue` (issue #32, a
- *      non-numeric column) -- the one choke point (root CLAUDE.md hard
- *      rule 7) -- never a direct write. A constraint violation
+ *      non-numeric column) / `createProjectedEntity` /
+ *      `destroyProjectedEntity` (issue #34, an entity beginning or ending)
+ *      -- the one choke point (root CLAUDE.md hard rule 7) -- never a
+ *      direct write. A `create` is labelled with a caller-chosen `ref`,
+ *      and a later leg of the same resolution may say `{ ref }` wherever
+ *      it would say an entity id, because a mechanic has no database
+ *      handle and cannot know the id the engine will allocate; every ref
+ *      is checked against the legs before it, BEFORE the transaction
+ *      opens, so a ref naming nothing refuses with no write attempted.
+ *      A constraint violation
  *      anywhere in the list propagates out of the transaction untouched
  *      (never caught and re-labelled here) and rolls back EVERY change the
  *      transaction made, including ones that individually would have
@@ -145,13 +164,23 @@ export interface AdjudicationInput {
   constraint: NarrationConstraint;
 }
 
+/**
+ * An entity id, or the label of an entity created by an earlier `create`
+ * leg of the same resolution (issue #34). A mechanic cannot know the id the
+ * engine allocates -- it has no database handle, which is the whole
+ * mechanism of "every write goes through the audited path" -- so it names
+ * the new entity by the `ref` it chose, and `resolve()` substitutes the
+ * real id when it applies the leg.
+ */
+export type EntityRef = string | { ref: string };
+
 /** One intended write to a single fact key -- the generic shape
  *  `writeConstrainedValue` (constrained.ts) already takes, carried here so a
  *  mechanic can express "change this value" without ever calling that
  *  function itself. */
 export interface IntendedWrite {
   kind: "write";
-  entityId: string;
+  entityId: EntityRef;
   key: string;
   mode: "delta" | "set";
   value: number;
@@ -163,8 +192,8 @@ export interface IntendedWrite {
  *  shape `transferConstrainedValue` (constrained.ts) already takes. */
 export interface IntendedTransfer {
   kind: "transfer";
-  fromEntityId: string;
-  toEntityId: string;
+  fromEntityId: EntityRef;
+  toEntityId: EntityRef;
   key: string;
   amount: number;
   reason?: string | null;
@@ -178,12 +207,36 @@ export interface IntendedTransfer {
  *  `setProjectedValue` (constrained.ts) for what it refuses. */
 export interface IntendedSet {
   kind: "set";
-  entityId: string;
+  entityId: EntityRef;
   key: string;
-  value: string | number | null;
+  /** `{ ref }` names an entity created earlier in this resolution -- the
+   *  new thing becoming this entity's owner, say. */
+  value: string | number | null | { ref: string };
 }
 
-export type IntendedChange = IntendedWrite | IntendedTransfer | IntendedSet;
+/** One intended entity coming into existence (issue #34): a row in the
+ *  projected table for `entityKind`, with `columns` restricted to that
+ *  table's live columns and the game column filled by the engine from the
+ *  proposal. `ref` is the label later legs of this same resolution use for
+ *  it; the engine allocates the id and reports it in `Outcome.created`.
+ *  The engine never learns what the entity is for or what it was made
+ *  from -- "derived from" is the caller's to record. */
+export interface IntendedCreate {
+  kind: "create";
+  ref: string;
+  entityKind: EntityKind;
+  columns: Readonly<Record<string, string | number | null | { ref: string }>>;
+}
+
+/** One intended entity ending (issue #34): its live row deleted, its facts
+ *  closed by the projection trigger. See `destroyProjectedEntity`
+ *  (constrained.ts) for what it refuses. */
+export interface IntendedDestroy {
+  kind: "destroy";
+  entityId: EntityRef;
+}
+
+export type IntendedChange = IntendedWrite | IntendedTransfer | IntendedSet | IntendedCreate | IntendedDestroy;
 
 /**
  * What a mechanic returns. `changes` are intents, not writes -- `resolve()`
@@ -220,6 +273,13 @@ export interface Outcome {
   /** Every `set` this resolution applied, in order (issue #32). Kept apart
    *  from `transitions`, whose values are numbers. */
   sets: SetTransition[];
+  /** Every entity this resolution created, in order, each with the `ref`
+   *  the mechanic labelled it with and the id the engine allocated (issue
+   *  #34). Kept apart from `transitions` and `sets`, so existing callers are
+   *  unchanged. */
+  created: (CreatedEntity & { ref: string })[];
+  /** Every entity this resolution destroyed, in order (issue #34). */
+  destroyed: DestroyedEntity[];
   constraint: NarrationConstraint;
   eventId: string;
 }
@@ -239,7 +299,16 @@ export interface Mechanic {
  *  under -- never a judgement about the proposal, the mechanic, or the
  *  world (see the module doc comment's "records decisions, does not make
  *  them" paragraph). */
-export type ResolveRefusalReason = "unknown-mechanic" | "no-clock" | "expectation-contradicted";
+export type ResolveRefusalReason =
+  | "unknown-mechanic"
+  | "no-clock"
+  | "expectation-contradicted"
+  /** A leg said `{ ref }` and no earlier `create` leg of the same
+   *  resolution defined that ref (issue #34). Refused before any write. */
+  | "unresolved-ref"
+  /** Two `create` legs of one resolution chose the same `ref` (issue #34).
+   *  Refused before any write. */
+  | "duplicate-ref";
 
 /**
  * Refused before dispatch, before any write, or (never, by construction --
@@ -345,35 +414,124 @@ interface ResolutionCauses {
   change_count: number;
 }
 
-function applyChange(change: IntendedChange): ValueTransition[] | SetTransition {
+/** Every `{ ref }` a change carries, in the order it is read (issue #34) --
+ *  the one place the shape of each intent kind's ref-bearing fields is
+ *  known, shared by the pre-transaction check and the apply step. */
+function refsUsedBy(change: IntendedChange): string[] {
+  const refOf = (value: unknown): string[] => (typeof value === "object" && value !== null && "ref" in value ? [String((value as { ref: unknown }).ref)] : []);
+  switch (change.kind) {
+    case "write":
+      return refOf(change.entityId);
+    case "transfer":
+      return [...refOf(change.fromEntityId), ...refOf(change.toEntityId)];
+    case "set":
+      return [...refOf(change.entityId), ...refOf(change.value)];
+    case "create":
+      return Object.values(change.columns).flatMap(refOf);
+    case "destroy":
+      return refOf(change.entityId);
+    default:
+      return [];
+  }
+}
+
+/**
+ * Step 5's precondition (issue #34): every `{ ref }` names a `create` leg
+ * EARLIER in the list, and no two creates share a ref. Checked over the
+ * intent list alone -- a structural property of what the mechanic returned,
+ * decidable with no database at all -- so a bad ref refuses with no
+ * transaction opened and no write attempted, in the same voice as every
+ * other protocol refusal.
+ */
+function assertRefsResolvable(mechanicName: string, changes: readonly IntendedChange[]): void {
+  const defined = new Set<string>();
+  changes.forEach((change, index) => {
+    for (const ref of refsUsedBy(change)) {
+      if (!defined.has(ref)) {
+        throw new ResolveProtocolError(
+          "unresolved-ref",
+          `resolve: leg ${index + 1} of mechanic '${mechanicName}' names ref '${ref}', and no earlier 'create' leg of this ` +
+            `resolution defines it; refused before any write. A ref may only name an entity created by a leg before the one that uses it.`
+        );
+      }
+    }
+    if (change.kind === "create") {
+      if (defined.has(change.ref)) {
+        throw new ResolveProtocolError(
+          "duplicate-ref",
+          `resolve: mechanic '${mechanicName}' creates two entities under the ref '${change.ref}'; refused before any write. ` +
+            `A ref is unique within one resolution.`
+        );
+      }
+      defined.add(change.ref);
+    }
+  });
+}
+
+function deref(value: EntityRef, refs: ReadonlyMap<string, string>): string {
+  if (typeof value === "string") return value;
+  const id = refs.get(value.ref);
+  if (id === undefined) {
+    // Unreachable after assertRefsResolvable; guarded so a future caller of
+    // this function alone still fails loudly.
+    throw new ResolveProtocolError("unresolved-ref", `resolve: ref '${value.ref}' names no entity created in this resolution`);
+  }
+  return id;
+}
+
+function derefValue(value: string | number | null | { ref: string }, refs: ReadonlyMap<string, string>): string | number | null {
+  return typeof value === "object" && value !== null ? deref(value, refs) : value;
+}
+
+type AppliedChange =
+  | { transitions: ValueTransition[] }
+  | { set: SetTransition }
+  | { created: CreatedEntity & { ref: string } }
+  | { destroyed: DestroyedEntity };
+
+function applyChange(change: IntendedChange, gameId: string, refs: Map<string, string>): AppliedChange {
   if (change.kind === "set") {
-    return setProjectedValue({ entityId: change.entityId, key: change.key, value: change.value });
+    return { set: setProjectedValue({ entityId: deref(change.entityId, refs), key: change.key, value: derefValue(change.value, refs) }) };
   }
 
   if (change.kind === "write") {
-    return [
-      writeConstrainedValue({
-        entityId: change.entityId,
-        key: change.key,
-        mode: change.mode,
-        value: change.value,
-        reason: change.reason,
-        bounds: change.bounds,
-      }),
-    ];
+    return {
+      transitions: [
+        writeConstrainedValue({
+          entityId: deref(change.entityId, refs),
+          key: change.key,
+          mode: change.mode,
+          value: change.value,
+          reason: change.reason,
+          bounds: change.bounds,
+        }),
+      ],
+    };
   }
 
   if (change.kind === "transfer") {
     const { from, to } = transferConstrainedValue({
-      fromEntityId: change.fromEntityId,
-      toEntityId: change.toEntityId,
+      fromEntityId: deref(change.fromEntityId, refs),
+      toEntityId: deref(change.toEntityId, refs),
       key: change.key,
       amount: change.amount,
       reason: change.reason,
       fromBounds: change.fromBounds,
       toBounds: change.toBounds,
     });
-    return [from, to];
+    return { transitions: [from, to] };
+  }
+
+  if (change.kind === "create") {
+    const columns: Record<string, string | number | null> = {};
+    for (const [key, value] of Object.entries(change.columns)) columns[key] = derefValue(value, refs);
+    const created = createProjectedEntity({ gameId, entityKind: change.entityKind, columns });
+    refs.set(change.ref, created.entityId);
+    return { created: { ...created, ref: change.ref } };
+  }
+
+  if (change.kind === "destroy") {
+    return { destroyed: destroyProjectedEntity({ entityId: deref(change.entityId, refs) }) };
   }
 
   // Unreachable through the exported types (`IntendedChange` is an
@@ -459,6 +617,9 @@ function resolveProposal(mechanicsByName: Map<string, Mechanic>, proposal: Propo
   const resolutionId = uuidv4();
   const changes = adjudication.changes ?? [];
 
+  // 5's precondition: every ref resolves, before the transaction opens.
+  assertRefsResolvable(mechanicName, changes);
+
   // 5 & 6. Apply every intended change through the one choke point, and
   // record one event -- both inside ONE transaction with the adjudication
   // window nested inside it (adjudication.ts's own doc comment asks for
@@ -471,10 +632,15 @@ function resolveProposal(mechanicsByName: Map<string, Mechanic>, proposal: Propo
     withAdjudicationOpen(gameId, () => {
       const transitions: ValueTransition[] = [];
       const sets: SetTransition[] = [];
+      const created: (CreatedEntity & { ref: string })[] = [];
+      const destroyed: DestroyedEntity[] = [];
+      const refs = new Map<string, string>();
       for (const change of changes) {
-        const applied = applyChange(change);
-        if (Array.isArray(applied)) transitions.push(...applied);
-        else sets.push(applied);
+        const applied = applyChange(change, gameId, refs);
+        if ("transitions" in applied) transitions.push(...applied.transitions);
+        else if ("set" in applied) sets.push(applied.set);
+        else if ("created" in applied) created.push(applied.created);
+        else destroyed.push(applied.destroyed);
       }
 
       // Re-read the clock AFTER every write has landed, inside this same
@@ -506,7 +672,7 @@ function resolveProposal(mechanicsByName: Map<string, Mechanic>, proposal: Propo
         )
         .run(eventId, gameId, postStory.t, adjudication.description ?? null, JSON.stringify(causes));
 
-      return { transitions, sets, eventId, postT: postStory.t };
+      return { transitions, sets, created, destroyed, eventId, postT: postStory.t };
     })
   );
 
@@ -524,6 +690,8 @@ function resolveProposal(mechanicsByName: Map<string, Mechanic>, proposal: Propo
     result: adjudication.result ?? {},
     transitions: applied.transitions,
     sets: applied.sets,
+    created: applied.created,
+    destroyed: applied.destroyed,
     constraint: postConstraint,
     eventId: applied.eventId,
   };

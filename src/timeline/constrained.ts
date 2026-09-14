@@ -6,7 +6,7 @@ import { currentStoryTime } from "./clock.js";
 import { PROJECTED_TABLES, liveColumns } from "./projection.js";
 import type { EntityKind } from "./kinds.js";
 import { constraintsFor, conservedConstraintFor, ConstraintViolationError, CONSERVED_SUM_EPSILON } from "./registry.js";
-import { irreversibleFactFor } from "./irreversible.js";
+import { irreversibleFactFor, listIrreversibleFacts } from "./irreversible.js";
 import { adjudicationOpen } from "./adjudication.js";
 
 /**
@@ -1067,3 +1067,199 @@ export function setProjectedValue(params: { entityId: string; key: string; value
   }
 }
 
+/**
+ * One entity a resolution brought into existence (issue #34). A row, never
+ * a verdict: which kind, the id the engine allocated, where on the timeline
+ * it landed, and the `<kind>.created` event the projection trigger wrote --
+ * design §5.2c's one hop, recorded rather than derived later.
+ */
+export interface CreatedEntity {
+  entityId: string;
+  entityKind: EntityKind;
+  t: T;
+  eventId: string | null;
+}
+
+/** One entity a resolution ended (issue #34): the `<kind>.destroyed` event
+ *  and the `t` its facts were closed at. */
+export interface DestroyedEntity {
+  entityId: string;
+  entityKind: EntityKind;
+  t: T;
+  eventId: string | null;
+}
+
+/** The projection event the trigger just wrote for `rowId` -- found by the
+ *  trigger's own `row_id` token (projection.ts), never by guessing at `t`.
+ *  `json_valid` guards the extraction for the reason `valueHistory` gives. */
+function projectionEventId(db: Database.Database, kind: string, rowId: string): string | null {
+  const row = db
+    .prepare(
+      `SELECT id FROM events WHERE kind = ?
+         AND json_extract(CASE WHEN json_valid(causes) THEN causes END, '$.row_id') = ?
+       ORDER BY rowid DESC LIMIT 1`
+    )
+    .get(kind, rowId) as { id: string } | undefined;
+  return row?.id ?? null;
+}
+
+/**
+ * Inserts one live row into the projected table for `entityKind` (issue
+ * #34) -- the choke point's door for bringing an entity into existence
+ * inside a resolution. The projection insert trigger (projection.ts) does
+ * every piece of timeline work: the `entities` row, one open fact per
+ * non-NULL column, the `<kind>.created` event, the provenance stamp. Nothing
+ * here writes `facts` or `events` directly.
+ *
+ * What it refuses, before any write: a kind with no projected table; the
+ * `game` kind (a resolution belongs to a game and cannot create one); a
+ * caller-supplied `id` (the engine allocates it, because a mechanic has no
+ * database handle and could not know a free one); the column that places
+ * the entity in its game (filled from the proposal, never the mechanic);
+ * and any column the table's `liveColumns()` does not report. Column names
+ * are interpolated only after that check -- they are this codebase's own
+ * `pragma_table_info` vocabulary by then, never a caller's string. Values
+ * are bound. A column the table itself requires and the caller omitted is
+ * SQLite's refusal, not this function's: the engine never learns what a
+ * column means, including whether it is optional.
+ *
+ * Not exported from the library: `resolve()` is its only caller, so an
+ * entity comes into being through a resolution or through the tool layer,
+ * and there is no third way.
+ */
+export function createProjectedEntity(params: {
+  gameId: string;
+  entityKind: EntityKind;
+  columns: Readonly<Record<string, string | number | null>>;
+}): CreatedEntity {
+  const projected = PROJECTED_TABLES.find((p) => p.kind === params.entityKind);
+  if (!projected) {
+    throw new Error(
+      `timeline: '${String(params.entityKind)}' is not a projected entity kind -- a resolution can create only ` +
+        PROJECTED_TABLES.filter((p) => p.kind !== "game")
+          .map((p) => `'${p.kind}'`)
+          .join(", ")
+    );
+  }
+  if (projected.kind === "game") {
+    throw new Error(`timeline: a resolution belongs to a game and cannot create one`);
+  }
+
+  const db = getDatabase();
+  const cols = liveColumns(db, projected.table);
+  const keys = Object.keys(params.columns);
+  for (const key of keys) {
+    if (key === "id") {
+      throw new Error(`timeline: 'id' is allocated by the engine and cannot be supplied for a created ${projected.kind}`);
+    }
+    if (key === projected.gameIdColumn) {
+      throw new Error(
+        `timeline: '${key}' places a created ${projected.kind} in its game and is filled from the proposal, never by the mechanic`
+      );
+    }
+    if (!cols.includes(key)) {
+      throw new Error(
+        `timeline: '${key}' is not a live column of '${projected.table}' -- a created ${projected.kind} has no fact key by that name`
+      );
+    }
+  }
+
+  const id = uuidv4();
+  return withTransaction(() => {
+    const columnList = ["id", projected.gameIdColumn, ...keys];
+    db.prepare(`INSERT INTO ${projected.table} (${columnList.join(", ")}) VALUES (${columnList.map(() => "?").join(", ")})`).run(
+      id,
+      params.gameId,
+      ...keys.map((key) => params.columns[key])
+    );
+    const entity = db.prepare(`SELECT created_at_t FROM entities WHERE id = ?`).get(id) as { created_at_t: number } | undefined;
+    if (!entity) {
+      // Cannot happen while the projection triggers are installed; not a
+      // case to assume silently forever.
+      throw new Error(`timeline: the insert trigger on '${projected.table}' recorded no entity for the row it just projected`);
+    }
+    assertT(entity.created_at_t);
+    return {
+      entityId: id,
+      entityKind: projected.kind,
+      t: entity.created_at_t,
+      eventId: projectionEventId(db, `${projected.kind}.created`, id),
+    };
+  });
+}
+
+/**
+ * Deletes one entity's live row (issue #34) -- the choke point's door for
+ * ending an entity inside a resolution. The projection delete trigger closes
+ * every open fact, sets `destroyed_at_t` and writes `<kind>.destroyed`.
+ *
+ * Refused, before any write: an entity that does not exist, or is already
+ * destroyed, naming it; the `game` kind; and -- the conservative reading
+ * #34 asked to be pinned -- an entity carrying an irreversible fact, as a
+ * typed `ConstraintViolationError` with the one hop attached: destroying the
+ * entity would close that fact, and a fact declared to hold thereafter is
+ * not ended by removing what it is about. A `resolve_only` fact does not
+ * refuse a destroy: closing an interval is not a write of a new value
+ * (src/db/schema.ts's own note on `timeline_facts_resolve_only`), and inside
+ * a resolution the window is open, which is all resolve_only asks.
+ *
+ * Not exported from the library, for the reason `createProjectedEntity`
+ * gives.
+ */
+export function destroyProjectedEntity(params: { entityId: string }): DestroyedEntity {
+  const db = getDatabase();
+  const entity = db.prepare(`SELECT game_id, kind, destroyed_at_t FROM entities WHERE id = ?`).get(params.entityId) as
+    | { game_id: string; kind: EntityKind; destroyed_at_t: number | null }
+    | undefined;
+  if (!entity) {
+    throw new Error(`timeline: cannot destroy entity '${params.entityId}' -- it does not exist`);
+  }
+  if (entity.destroyed_at_t !== null) {
+    throw new Error(`timeline: entity '${params.entityId}' was already destroyed at t=${entity.destroyed_at_t}`);
+  }
+  const projected = PROJECTED_TABLES.find((p) => p.kind === entity.kind);
+  if (!projected) {
+    throw new Error(`timeline: entity '${params.entityId}' has kind '${entity.kind}', which has no projected table to delete from`);
+  }
+  if (projected.kind === "game") {
+    throw new Error(`timeline: a resolution belongs to a game and cannot destroy one`);
+  }
+  const live = db.prepare(`SELECT id FROM ${projected.table} WHERE id = ?`).get(params.entityId);
+  if (!live) {
+    throw new Error(
+      `timeline: no live row in '${projected.table}' for entity '${params.entityId}' -- it may have been destroyed since it was last confirmed to exist`
+    );
+  }
+
+  const [irreversible] = listIrreversibleFacts({ gameId: entity.game_id, entityId: params.entityId });
+  if (irreversible) {
+    throw new ConstraintViolationError(
+      "irreversible",
+      params.entityId,
+      `Entity '${params.entityId}' carries an irreversible fact for key '${irreversible.key}': value '${irreversible.value}' ` +
+        `holds as of t=${irreversible.validFromT}` +
+        (irreversible.openedByEventId !== null
+          ? ` (opened by event '${irreversible.openedByEventId}')`
+          : ` (no event is recorded for when this was opened)`) +
+        `. Destroying the entity would end that fact and is refused.`,
+      irreversible
+    );
+  }
+
+  return withTransaction(() => {
+    db.prepare(`DELETE FROM ${projected.table} WHERE id = ?`).run(params.entityId);
+    const after = db.prepare(`SELECT destroyed_at_t FROM entities WHERE id = ?`).get(params.entityId) as
+      | { destroyed_at_t: number | null }
+      | undefined;
+    if (!after || after.destroyed_at_t === null) {
+      throw new Error(`timeline: the delete trigger on '${projected.table}' recorded no destruction for entity '${params.entityId}'`);
+    }
+    assertT(after.destroyed_at_t);
+    return {
+      entityId: params.entityId,
+      entityKind: projected.kind,
+      t: after.destroyed_at_t,
+      eventId: projectionEventId(db, `${projected.kind}.destroyed`, params.entityId),
+    };
+  });
+}
