@@ -60,6 +60,28 @@ prompts changed. The caller's own effect-resolution code learned the A→B mappi
 elsewhere, and stopped asking the target question to make a leap that belonged in code, not in a
 sentence one question's prompt happened to contain.
 
+## Lesson: a description that implies more than the world models will be planned around
+
+The concrete incident: a world modelled a barrier as **one** part whose integrity, worn to zero, made
+the way through passable. The barrier's own description, and the part's, said it was **one of
+several** identical parts. A model-driven character wore the part to zero, then spent every remaining
+turn working on "the next one", with the way through open and nothing standing in it. It never tried
+to go through. Nothing was wrong with the mechanism, the reader or the model's reasoning: the reasoning
+followed the text exactly, and the text described a world that did not exist.
+
+Two lessons:
+
+1. **A model plans from the prose it is shown, not from the state you store.** Counts, sizes and
+   "one of several" are claims about the world. If a description says there are five of something and
+   your world models one, a careful model will plan for the other four, and the better it reasons the
+   more faithfully it will do so. Write every description to say what the world models, including how
+   many of a thing actually matter: "one loose plank closes the widest gap; with it gone, a person fits
+   through", not "a fence of five planks".
+2. **When a state change makes a new action possible, say so in the words of that action.** A number
+   reaching zero ("integrity went from 5 to 0") tells a model a value changed; it does not tell it that
+   the way through is now open. Render the consequence the mechanism already knows ("the gap can be
+   climbed through now"), from the pairing your own code owns, never inferred from prose.
+
 ## Checklist before you ship a `createTurnReader` question set
 
 - For every `(effect, property)` combination your effects layer accepts, can you point to the exact
@@ -73,6 +95,11 @@ sentence one question's prompt happened to contain.
   intend to let effects touch on it. A description that reads well narratively but never mentions the
   thing an effect needs to cite from it will silently refuse that effect forever, and nothing will
   tell you why except a null result you have to go looking for.
+- Read each description as a stranger would, and list every quantity or "one of several" claim in it.
+  For each one, does your world model it? If not, rewrite the text to match the world, because a model
+  will plan around the text.
+- For each state change that opens up an action (a way through, a thing now within reach), does the
+  actor's outcome name that action, or only the number that changed?
 - When you find a case like this, add it here — generalised, in this file's neutral vocabulary — and
   add a pointer to it in your own project's `CLAUDE.md`. Root `CLAUDE.md`'s "cross-repo invariant
   nothing can check" section names where those pointers live today.
@@ -101,8 +128,20 @@ evocative description that never mentions the thing an effect needs is a silent,
 of that effect — it will not error, it will just never happen.
 ```
 
+```markdown
+## Descriptions say what the world models
+
+Every object description states only the quantities the world actually models. If one part is the
+whole obstacle, the text says one, not "one of several". When a state change opens an action (a way
+through becomes passable), the actor's outcome names the action, from our own code's mapping. See
+run-dmcp's `docs/AUTHORING-GUIDE.md`.
+```
+
 ## Provenance
 
 First entry (2026-09-15), from `the-prisoner`'s `docs/OPEN-VARIANT.md` §19 — see that document for
 the full, game-specific account (in its own vocabulary, which stays there) and how it was verified
 against a live model rather than assumed fixed by inspection alone.
+
+Second entry (2026-09-15), from the same document's §26.1 and §27: a live game with the opposition
+removed, run only to check that the way out could be reached at all, found it reached and never taken.
