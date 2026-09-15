@@ -16,6 +16,13 @@ continues: there, the model holds full adjudication discretion over a world that
 two consumers and is signed by both. Read it before making design decisions; section numbers below
 refer to it. Open work is in GitHub issues, grouped by the phases in §11.
 
+**[docs/AUTHORING-GUIDE.md](docs/AUTHORING-GUIDE.md) is not the spec** — it's a growing, working
+catalogue of how to describe objects, characters and motivations so a world built on this engine
+holds together the first time, plus sample `CLAUDE.md` entries a consumer can copy. If you learn a
+world-authoring lesson while working on any consumer, generalise it into that file (this engine's own
+neutral vocabulary only — no consumer's words, per "This engine has two consumers and belongs to
+neither" below) rather than losing it in one repo.
+
 ## This engine has two consumers and belongs to neither
 
 One consumer's world advances a turn at a time and has a player making uncertain decisions. The
