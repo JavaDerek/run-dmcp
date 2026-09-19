@@ -110,6 +110,43 @@ just arrived mid-game instead of up front. Keeping the two kinds of authoring se
 space, at a specific time — rather than something a transcript merely narrates and nobody could
 check.
 
+## Lesson: in a physical space, the surfaces are objects too
+
+The concrete incident: a location was authored as a room with a handful of things in it and two
+ways out, and one thing's description mentioned what lay beneath it -- loose grit over packed earth.
+Nothing modelled the floor. With both ways out sealed, a model-driven character tried to dig. The
+reader's *effect* question, which must name one of the declared effect kinds, filed the dig under the
+nearest one -- "look under the thing" -- cited a verifiable span, and ruled it possible; the world then
+did nothing a dig would do. A second reading, built specifically to say *"no declared kind names
+this"*, could not say it either. Shown the thing's own description, the model described the dig
+correctly (grit removed, the hollow deepened) and then mapped that, consistently and with a stated
+reason, to *wear* -- damage to whatever the floor is. Which is right. Digging **is** wear on the floor.
+The floor just wasn't anything.
+
+Three lessons:
+
+1. **A model reads an act against what the world contains.** If a description mentions a surface --
+   a floor of packed earth, a plaster ceiling, a damp wall -- and no object stands behind it, an act
+   aimed at that surface has nowhere to land. It falls onto the nearest declared thing, usually
+   whatever sits on top of the surface, and there it becomes a different act with a different
+   property, and the ruling is sound on its own terms. This is the second lesson in this guide again
+   (prose that claims what the world does not model), and it is the largest class of it in any
+   enclosed space: every room has surfaces, and few authors declare them.
+2. **Declare the enclosure's surfaces as objects whenever they could be acted on.** Floor, ceiling,
+   walls -- a small, finite set, which is what makes this a convention rather than per-scenario
+   cleverness. Each is an ordinary item owned by the location: described by material and condition
+   (packed earth, dressed stone, lath and plaster), carrying the property vocabulary that says what
+   could happen to it (`integrity` for anything that can be dug, chipped or broken through), and, where
+   a way through could open, the declared route -- the previous lesson's declared space, applied to a
+   surface. A surface nobody could act on needs no object; say so in its material (solid bedrock) or
+   leave it out. But the one a description *invites* a character to try has to exist before the
+   character tries it, because the character will.
+3. **This is authoring, not mechanism, and the engine is the wrong place for it.** In the engine a
+   location is a name, a description and properties, and an item is owned by a location or a
+   character. A floor is an item. Nothing engine-side is missing, so nothing engine-side should
+   grow a noun for it -- and a game with no physical space at all (a board, a ledger, a negotiation)
+   has no floor to declare, which is the other reason it is a convention here and not a column.
+
 ## Checklist before you ship a `createTurnReader` question set
 
 - For every `(effect, property)` combination your effects layer accepts, can you point to the exact
@@ -128,6 +165,10 @@ check.
   will plan around the text.
 - For each state change that opens up an action (a way through, a thing now within reach), does the
   actor's outcome name that action, or only the number that changed?
+- If your world is a physical space: for every surface a description mentions, or a character could
+  plausibly try -- the floor, the ceiling, each wall -- is there an object behind it with the properties
+  an attempt would need? A surface that exists in prose and not in the world is the hole every
+  model-driven character eventually finds, and the attempt will be filed as something else.
 - When you find a case like this, add it here — generalised, in this file's neutral vocabulary — and
   add a pointer to it in your own project's `CLAUDE.md`. Root `CLAUDE.md`'s "cross-repo invariant
   nothing can check" section names where those pointers live today.
@@ -165,6 +206,16 @@ through becomes passable), the actor's outcome names the action, from our own co
 run-dmcp's `docs/AUTHORING-GUIDE.md`.
 ```
 
+```markdown
+## Surfaces are objects
+
+Every enclosed location declares its floor, ceiling and walls as objects when a character could act
+on them: described by material and condition, carrying the properties an attempt would need
+(`integrity` for anything that can be dug or broken through), and a declared route where one could
+open. A surface the prose mentions and the world does not model will be tried, and the attempt will
+be filed as something else. See run-dmcp's `docs/AUTHORING-GUIDE.md`.
+```
+
 ## Provenance
 
 First entry (2026-09-15), from `the-prisoner`'s `docs/OPEN-VARIANT.md` §19 — see that document for
@@ -175,3 +226,7 @@ Second entry (2026-09-15), from the same document's §26.1 and §27: a live game
 removed, run only to check that the way out could be reached at all, found it reached and never taken.
 
 Third entry (2026-09-19), from `the-prisoner`'s `docs/WORLD-ELABORATION-DESIGN.md` §3.4.
+
+Fourth entry (2026-09-19, night), from `the-prisoner`'s `docs/OPEN-VARIANT.md` §66.6 and §67.5 -- a
+dig that no reading could name because the floor was prose and not an object -- and its owner's
+suggestion the same night that a physical space should declare its surfaces as a matter of course.
