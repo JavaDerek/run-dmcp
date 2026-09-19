@@ -82,6 +82,34 @@ Two lessons:
    the way through is now open. Render the consequence the mechanism already knows ("the gap can be
    climbed through now"), from the pairing your own code owns, never inferred from prose.
 
+## Lesson: declare the space of what an object may come to be; describe what it is
+
+A description states what's true of an object right now: this granary is two-thirds full, its
+timbers sound. That's a claim about the present, and a citation can only ever ground against a claim
+that's already in the text. But some worlds also want an object that can acquire a new fact partway
+through play — the granary later found to have taken on damp, the treasury later found to hold a
+second, hidden ledger — and an acquisition like that has to be authored *somewhere*, or it isn't a
+ruling at all, it's improvisation wearing a ruling's clothes.
+
+The fix is to keep two different kinds of authoring apart, because they answer two different
+questions. **Describing** an object says what it is now, and only the reader questions asked against
+it *today* can cite that text. **Declaring the space** says, up front and separately, what property
+vocabulary a reader is even permitted to name for an object of that kind at all (a granary's
+condition: sound, damp, infested), what band of effort each value costs to establish, and where
+establishing one could lead (damp found in the granary opens a spoilage consequence; a second ledger
+found in the treasury opens an audit one). That declaration is authored once, the same way every
+other property vocabulary in this guide is, and it is never itself a claim about this particular
+granary or this particular treasury — it only says what the *kind* is allowed to become.
+
+Whether a given object actually acquires one of the values in its declared space is play's decision,
+not the author's: a reader question grounds it exactly the way every other ruling in this guide
+grounds, against whatever the object's description says at the moment it's asked. Once granted, the
+new fact joins the object's description going forward the same as any fact authored on day one — it
+just arrived mid-game instead of up front. Keeping the two kinds of authoring separate is what makes
+"the world gained a fact mid-game" auditable data — a specific ruling, against a specific declared
+space, at a specific time — rather than something a transcript merely narrates and nobody could
+check.
+
 ## Checklist before you ship a `createTurnReader` question set
 
 - For every `(effect, property)` combination your effects layer accepts, can you point to the exact
@@ -145,3 +173,5 @@ against a live model rather than assumed fixed by inspection alone.
 
 Second entry (2026-09-15), from the same document's §26.1 and §27: a live game with the opposition
 removed, run only to check that the way out could be reached at all, found it reached and never taken.
+
+Third entry (2026-09-19), from `the-prisoner`'s `docs/WORLD-ELABORATION-DESIGN.md` §3.4.
