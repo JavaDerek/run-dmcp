@@ -1371,6 +1371,65 @@ export function initializeSchema(options?: { migrations?: readonly SchemaMigrati
       SELECT RAISE(ABORT, 'timeline: ''' || NEW.key || ''' on this entity is resolve_only-constrained; direct writes are refused -- this value can only change through the adjudicating call that opens the resolution window');
     END;
   `);
+
+  // Issue #42: a `create` leg of a resolution may declare `bounded`/
+  // `resolve_only`/`monotonic` constraints on the entity it makes, applied
+  // by resolve() inside the SAME transaction as the create -- so a later
+  // leg of the same resolution is already held to them. Two additions to
+  // `resource_constraints`:
+  //
+  //   - min_value/max_value: 'bounded' only, carried on the constraint's own
+  //     row. declareBoundedConstraint() (src/tools/constraint.ts) has no
+  //     need for this -- it enforces whatever `bounds` a caller passes at
+  //     write time against an EXISTING resource's own min_value/max_value
+  //     columns -- but a constraint declared in the same breath as the
+  //     entity it governs is recorded here instead, opaquely: the engine
+  //     stores these bounds and does not interpret them (issue #42's own
+  //     scope note), the same "one column, several kinds, mostly null"
+  //     shape `direction` (monotonic) and `total` (conserved) already use.
+  //   - caused_by_event_id: which `resolution.recorded` event's resolve()
+  //     call declared this constraint -- design §5.2c's one hop of
+  //     causality, recorded rather than derived later. NULL for a
+  //     constraint declared the ordinary way, through
+  //     declareBoundedConstraint/declareMonotonicConstraint/
+  //     declareConservedConstraint/declareResolveOnlyConstraint, none of
+  //     which run inside a resolution and so have no event to point at.
+  //
+  // Idempotent ALTERs, the same idiom RESOURCE_CONSTRAINTS_ADD_FACT_KEY_DDL
+  // uses above -- no CHECK constraint changes here, so no table rebuild is
+  // needed. Placed here, after initializeTimelineSchema() (a few lines up)
+  // rather than beside RESOURCE_CONSTRAINTS_DDL earlier in this function,
+  // so a fresh database's `resource_constraints` picks these up right after
+  // the tables issue #42's writer touches (`events`) already exist.
+  //
+  // `caused_by_event_id` carries NO `REFERENCES events(id)` -- deliberately,
+  // unlike `facts.opened_by_event_id` a few lines up. That column is always
+  // written NULL-then-UPDATEd once its target event already exists (see
+  // this function's own comment on it and projection.ts's insert trigger);
+  // resolve()'s create-leg constraints (src/timeline/resolve.ts, issue #42)
+  // declare a constraint and stamp the resolution's event id in the SAME
+  // statement, before that event row exists (the event is written only
+  // after every change in the resolution has landed, so its own `t` can be
+  // read post-write -- see resolve.ts step 7). An immediate FK here would
+  // refuse every such INSERT. `events.causes` already carries this same
+  // "one hop of provenance, unenforced by a foreign key" shape for every
+  // other event-to-event reference in this codebase (resolution_id, row_id,
+  // fact_id) -- this column follows it rather than being the one exception.
+  try {
+    db.exec(`ALTER TABLE resource_constraints ADD COLUMN min_value REAL`);
+  } catch {
+    // Column already exists.
+  }
+  try {
+    db.exec(`ALTER TABLE resource_constraints ADD COLUMN max_value REAL`);
+  } catch {
+    // Column already exists.
+  }
+  try {
+    db.exec(`ALTER TABLE resource_constraints ADD COLUMN caused_by_event_id TEXT`);
+  } catch {
+    // Column already exists.
+  }
 }
 
 function runConsumerMigrations(

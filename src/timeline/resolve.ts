@@ -5,6 +5,8 @@ import { currentStoryTime } from "./clock.js";
 import { narrationConstraintAt, contradictions, type NarrationConstraint, type Claim, type Contradiction } from "./narration.js";
 import { withAdjudicationOpen } from "./adjudication.js";
 import type { EntityKind } from "./kinds.js";
+import { PROJECTED_TABLES, liveColumns } from "./projection.js";
+import { insertConstraintRow } from "./registry.js";
 import {
   writeConstrainedValue,
   transferConstrainedValue,
@@ -214,18 +216,52 @@ export interface IntendedSet {
   value: string | number | null | { ref: string };
 }
 
+/**
+ * One constraint a `create` leg declares on the entity it makes (issue #42),
+ * applied by `resolve()` step 5 INSIDE the same transaction as the create --
+ * so a later leg of the same resolution is already held to it, and the
+ * whole resolution rolls back together if it is not (see
+ * assertCreateConstraintKeysValid and the `declareCreateConstraints` call in
+ * `resolveProposal` below). Vocabulary matches the existing constraint
+ * family exactly (declareBoundedConstraint/declareMonotonicConstraint/
+ * declareResolveOnlyConstraint, src/tools/constraint.ts) -- `conserved` is
+ * deliberately absent: it is a statement about several EXISTING entities
+ * summing to a total, not about one being created, so a single `create` leg
+ * has nothing to attach it to.
+ *
+ * The engine interprets neither `key` nor any bound below -- it only
+ * confirms, before any write, that `key` names a live column of the
+ * entity's own table (assertCreateConstraintKeysValid). `direction`'s
+ * vocabulary here ('up'/'down') is this field's own; declareCreateConstraints
+ * translates it to the registry's stored 'increasing'/'decreasing' the same
+ * way `entityKind` is translated to a table name -- a structural lookup, not
+ * an interpretation of what either word means (root CLAUDE.md hard rule 4).
+ */
+export type CreateConstraint =
+  | { kind: "bounded"; key: string; minValue: number | null; maxValue: number | null }
+  | { kind: "resolve_only"; key: string }
+  | { kind: "monotonic"; key: string; direction: "up" | "down" };
+
 /** One intended entity coming into existence (issue #34): a row in the
  *  projected table for `entityKind`, with `columns` restricted to that
  *  table's live columns and the game column filled by the engine from the
  *  proposal. `ref` is the label later legs of this same resolution use for
  *  it; the engine allocates the id and reports it in `Outcome.created`.
  *  The engine never learns what the entity is for or what it was made
- *  from -- "derived from" is the caller's to record. */
+ *  from -- "derived from" is the caller's to record.
+ *
+ *  `constraints` (issue #42) is optional and, unlike `columns`, is never a
+ *  column write -- it declares `resource_constraints` rows governing the
+ *  entity this leg creates, the same rows declareBoundedConstraint/
+ *  declareMonotonicConstraint/declareResolveOnlyConstraint would declare
+ *  after the fact, but inside the resolution's own transaction instead of a
+ *  second write path after `resolve()` returns. */
 export interface IntendedCreate {
   kind: "create";
   ref: string;
   entityKind: EntityKind;
   columns: Readonly<Record<string, string | number | null | { ref: string }>>;
+  constraints?: readonly CreateConstraint[];
 }
 
 /** One intended entity ending (issue #34): its live row deleted, its facts
@@ -308,7 +344,10 @@ export type ResolveRefusalReason =
   | "unresolved-ref"
   /** Two `create` legs of one resolution chose the same `ref` (issue #34).
    *  Refused before any write. */
-  | "duplicate-ref";
+  | "duplicate-ref"
+  /** A `create` leg's `constraints` names a `key` that is not a live column
+   *  of the entity it creates (issue #42). Refused before any write. */
+  | "invalid-constraint-key";
 
 /**
  * Refused before dispatch, before any write, or (never, by construction --
@@ -468,6 +507,86 @@ function assertRefsResolvable(mechanicName: string, changes: readonly IntendedCh
   });
 }
 
+/**
+ * Step 5's second precondition (issue #42), checked in the same voice and
+ * at the same point as assertRefsResolvable above: every `constraints`
+ * entry on every `create` leg names a `key` that is a live column of the
+ * projected table for that leg's `entityKind` -- decidable from the schema
+ * alone, with no database write and no dependency on the entity actually
+ * existing yet, because the live column set is a property of the KIND, not
+ * of any one row of it. A bad key refuses with no transaction opened and no
+ * write attempted, naming the key.
+ */
+function assertCreateConstraintKeysValid(mechanicName: string, changes: readonly IntendedChange[]): void {
+  const db = getDatabase();
+  changes.forEach((change, index) => {
+    if (change.kind !== "create" || !change.constraints || change.constraints.length === 0) return;
+    const projected = PROJECTED_TABLES.find((p) => p.kind === change.entityKind);
+    // An entityKind with no projected table is createProjectedEntity's own
+    // refusal to make, inside the transaction -- nothing to validate a
+    // constraint key against here.
+    if (!projected) return;
+    const cols = liveColumns(db, projected.table);
+    for (const constraint of change.constraints) {
+      if (!cols.includes(constraint.key)) {
+        throw new ResolveProtocolError(
+          "invalid-constraint-key",
+          `resolve: leg ${index + 1} of mechanic '${mechanicName}' declares a '${constraint.kind}' constraint on key ` +
+            `'${constraint.key}' for the entity it creates under ref '${change.ref}', and '${constraint.key}' is not a ` +
+            `live column of '${projected.table}' -- refused before any write.`
+        );
+      }
+    }
+  });
+}
+
+/**
+ * Translates every `CreateConstraint` (issue #42) a `create` leg declared
+ * into a `resource_constraints` row, through insertConstraintRow
+ * (registry.ts) -- the same primitive every declare*Constraint()
+ * (src/tools/constraint.ts) call now shares, so this is never a second
+ * write path for that table. Called from INSIDE the resolution's own
+ * transaction (resolveProposal below), immediately after the entity it
+ * governs is created, so `entityId` is real and `eventId` is the id the
+ * resolution's own `resolution.recorded` event will carry.
+ */
+function declareCreateConstraints(params: { gameId: string; entityId: string; constraints: readonly CreateConstraint[]; eventId: string }): void {
+  for (const constraint of params.constraints) {
+    if (constraint.kind === "bounded") {
+      insertConstraintRow({
+        gameId: params.gameId,
+        kind: "bounded",
+        resourceIds: [params.entityId],
+        factKey: constraint.key,
+        minValue: constraint.minValue,
+        maxValue: constraint.maxValue,
+        causedByEventId: params.eventId,
+      });
+    } else if (constraint.kind === "resolve_only") {
+      insertConstraintRow({
+        gameId: params.gameId,
+        kind: "resolve_only",
+        resourceIds: [params.entityId],
+        factKey: constraint.key,
+        causedByEventId: params.eventId,
+      });
+    } else {
+      insertConstraintRow({
+        gameId: params.gameId,
+        kind: "monotonic",
+        resourceIds: [params.entityId],
+        factKey: constraint.key,
+        // This field's own vocabulary ('up'/'down') is translated to the
+        // registry's stored 'increasing'/'decreasing' -- a structural
+        // lookup, not an interpretation of what either word means (see
+        // CreateConstraint's own doc comment).
+        direction: constraint.direction === "up" ? "increasing" : "decreasing",
+        causedByEventId: params.eventId,
+      });
+    }
+  }
+}
+
 function deref(value: EntityRef, refs: ReadonlyMap<string, string>): string {
   if (typeof value === "string") return value;
   const id = refs.get(value.ref);
@@ -617,8 +736,10 @@ function resolveProposal(mechanicsByName: Map<string, Mechanic>, proposal: Propo
   const resolutionId = uuidv4();
   const changes = adjudication.changes ?? [];
 
-  // 5's precondition: every ref resolves, before the transaction opens.
+  // 5's preconditions: every ref resolves, and every create leg's declared
+  // constraint keys are live columns -- both before the transaction opens.
   assertRefsResolvable(mechanicName, changes);
+  assertCreateConstraintKeysValid(mechanicName, changes);
 
   // 5 & 6. Apply every intended change through the one choke point, and
   // record one event -- both inside ONE transaction with the adjudication
@@ -635,12 +756,29 @@ function resolveProposal(mechanicsByName: Map<string, Mechanic>, proposal: Propo
       const created: (CreatedEntity & { ref: string })[] = [];
       const destroyed: DestroyedEntity[] = [];
       const refs = new Map<string, string>();
+      // Generated here, before any change is applied, rather than after the
+      // loop below (as it used to be) -- issue #42's create-leg constraint
+      // declarations (below) need to stamp the SAME event id this
+      // resolution's own `resolution.recorded` event is about to carry, and
+      // that event cannot be written until every change has landed (step 7's
+      // t comes from AFTER the writes). uuidv4() needs nothing from the
+      // database, so generating it early costs nothing and lets both sides
+      // agree on one id.
+      const eventId = uuidv4();
       for (const change of changes) {
         const applied = applyChange(change, gameId, refs);
         if ("transitions" in applied) transitions.push(...applied.transitions);
         else if ("set" in applied) sets.push(applied.set);
-        else if ("created" in applied) created.push(applied.created);
-        else destroyed.push(applied.destroyed);
+        else if ("created" in applied) {
+          created.push(applied.created);
+          // Issue #42: a create leg's declared constraints are applied
+          // immediately, inside this same transaction, once the entity they
+          // govern has a real id -- so a later leg of this same resolution
+          // (still to come in this loop) is already held to them.
+          if (change.kind === "create" && change.constraints && change.constraints.length > 0) {
+            declareCreateConstraints({ gameId, entityId: applied.created.entityId, constraints: change.constraints, eventId });
+          }
+        } else destroyed.push(applied.destroyed);
       }
 
       // Re-read the clock AFTER every write has landed, inside this same
@@ -659,7 +797,6 @@ function resolveProposal(mechanicsByName: Map<string, Mechanic>, proposal: Propo
         );
       }
 
-      const eventId = uuidv4();
       const causes: ResolutionCauses = {
         source: "resolve",
         resolution_id: resolutionId,

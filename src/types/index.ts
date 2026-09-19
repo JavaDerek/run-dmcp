@@ -677,6 +677,24 @@ export interface ResourceConstraint {
   // explicit, optional factKey for exactly that reason.
   factKey: string;
   createdAt: string;
+  // 'bounded' only; null for 'monotonic', 'conserved' and 'resolve_only'
+  // (issue #42). Recorded verbatim from a `create` leg's declared
+  // constraint (src/timeline/resolve.ts's `IntendedCreate.constraints`) --
+  // the engine stores these bounds, it does not interpret them. A write
+  // that must honor them still supplies its own `bounds` at write time
+  // (writeConstrainedValue/IntendedWrite), exactly as every other 'bounded'
+  // constraint already works; this is the passive record of what was
+  // declared, not a second evaluation path.
+  minValue: number | null;
+  maxValue: number | null;
+  // Set when this constraint was declared by a `create` leg's `constraints`
+  // (issue #42) inside a resolution -- the resolution's own
+  // `resolution.recorded` event id, design §5.2c's one hop of causality,
+  // recorded rather than derived later. Null for a constraint declared the
+  // ordinary way, through declareBoundedConstraint/declareMonotonicConstraint/
+  // declareConservedConstraint/declareResolveOnlyConstraint, none of which
+  // run inside a resolution and so have no event to point at.
+  causedByEventId: string | null;
 }
 
 // Time/Calendar types

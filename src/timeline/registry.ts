@@ -1,3 +1,4 @@
+import { v4 as uuidv4 } from "uuid";
 import { getDatabase } from "../db/connection.js";
 import type {
   ConstraintKind,
@@ -33,10 +34,23 @@ import type { IrreversibleFact } from "./irreversible.js";
  * the read side here breaks that cycle before the choke point exists to hit
  * it.
  *
- * Everything that WRITES `resource_constraints` -- insertConstraint() and
- * the declare*() functions, and all the validation that goes with them --
- * stays in src/tools/constraint.ts, which imports the accessors below
- * rather than duplicating the query against resource_constraint_members.
+ * Everything that WRITES `resource_constraints` used to stay entirely in
+ * src/tools/constraint.ts -- insertConstraint() and the declare*()
+ * functions, and all the validation that goes with them. Issue #42 moved
+ * the one raw INSERT (insertConstraintRow() below) down here, because
+ * resolve() (src/timeline/resolve.ts) now also has to write this exact row,
+ * from INSIDE its own transaction, when a `create` leg declares
+ * `bounded`/`resolve_only`/`monotonic` on the entity it makes. Reaching
+ * from src/timeline/ back into src/tools/constraint.ts to get there would
+ * close the identical cycle this module's own doc comment (above) describes
+ * for the choke point: tools/resource.ts already imports tools/constraint.ts
+ * (indirectly, via getResource), and tools/constraint.ts would then import
+ * timeline/resolve.ts's writer, closing tools/* -> timeline/* -> tools/*.
+ * src/tools/constraint.ts's declare*() functions keep every piece of
+ * business validation they always had (game exists, resource exists, no
+ * duplicate, minValue/maxValue already set for 'bounded') and call
+ * insertConstraintRow() only once every check has passed -- they are not
+ * merged away, only pointed at the one place the row is actually written.
  */
 
 /** Absolute tolerance for floating-point sum comparisons on 'conserved'
@@ -80,6 +94,14 @@ export interface ConstraintRow {
   total: number | null;
   fact_key: string;
   created_at: string;
+  // 'bounded' only (issue #42); see ResourceConstraint's own doc comment
+  // (src/types/index.ts) for why these live here opaquely.
+  min_value: number | null;
+  max_value: number | null;
+  // The resolution.recorded event that declared this constraint, when it
+  // was declared by a `create` leg's `constraints` (issue #42); null for
+  // every constraint declared the ordinary way.
+  caused_by_event_id: string | null;
 }
 
 /** The resource ids belonging to a constraint, in insertion order. Exported
@@ -102,6 +124,66 @@ export function rowToConstraint(row: ConstraintRow): ResourceConstraint {
     total: row.total,
     factKey: row.fact_key,
     createdAt: row.created_at,
+    minValue: row.min_value,
+    maxValue: row.max_value,
+    causedByEventId: row.caused_by_event_id,
+  };
+}
+
+/**
+ * The one INSERT for `resource_constraints` (+ its members) -- see this
+ * module's own doc comment on why it lives here rather than in
+ * src/tools/constraint.ts. Every declare*Constraint() function there calls
+ * this only after its own business validation passes; resolve()'s create-leg
+ * declarations (src/timeline/resolve.ts, issue #42) call it directly, from
+ * inside their own transaction, after the leaner pre-transaction check that
+ * module runs (a declared key must be a live column -- see
+ * assertCreateConstraintKeysValid there). Either way this is the only
+ * `INSERT INTO resource_constraints` in the codebase.
+ */
+export function insertConstraintRow(params: {
+  gameId: string;
+  kind: ConstraintKind;
+  resourceIds: readonly string[];
+  direction?: MonotonicDirection | null;
+  total?: number | null;
+  factKey?: string;
+  minValue?: number | null;
+  maxValue?: number | null;
+  causedByEventId?: string | null;
+}): ResourceConstraint {
+  const db = getDatabase();
+  const id = uuidv4();
+  const createdAt = new Date().toISOString();
+  const direction = params.direction ?? null;
+  const total = params.total ?? null;
+  const factKey = params.factKey ?? "value";
+  const minValue = params.minValue ?? null;
+  const maxValue = params.maxValue ?? null;
+  const causedByEventId = params.causedByEventId ?? null;
+
+  db.prepare(
+    `INSERT INTO resource_constraints (id, game_id, kind, direction, total, fact_key, created_at, min_value, max_value, caused_by_event_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(id, params.gameId, params.kind, direction, total, factKey, createdAt, minValue, maxValue, causedByEventId);
+
+  const memberStmt = db.prepare(`INSERT INTO resource_constraint_members (constraint_id, resource_id) VALUES (?, ?)`);
+  for (const resourceId of params.resourceIds) {
+    memberStmt.run(id, resourceId);
+  }
+
+  return {
+    id,
+    gameId: params.gameId,
+    kind: params.kind,
+    resourceIds: [...params.resourceIds],
+    direction,
+    total,
+    factKey,
+    createdAt,
+    minValue,
+    maxValue,
+    causedByEventId,
   };
 }
 

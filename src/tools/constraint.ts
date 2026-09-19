@@ -1,4 +1,3 @@
-import { v4 as uuidv4 } from "uuid";
 import { getDatabase } from "../db/connection.js";
 import { validateGameExists } from "./game.js";
 import { getResource } from "./resource.js";
@@ -8,6 +7,7 @@ import {
   CONSERVED_SUM_EPSILON,
   constraintsFor,
   allConstraintsForEntity,
+  insertConstraintRow,
   type ConstraintRow,
   rowToConstraint,
 } from "../timeline/registry.js";
@@ -83,6 +83,14 @@ export { ConstraintViolationError, CONSERVED_SUM_EPSILON };
  * about the intended value itself.
  */
 
+// The raw INSERT this used to perform directly now lives in
+// insertConstraintRow (src/timeline/registry.js) -- see that module's own
+// doc comment for why (issue #42: resolve() needs to write the identical
+// row from inside its own transaction, and src/timeline/ cannot reach back
+// into src/tools/ to get here without closing a cycle). This wrapper keeps
+// every call site below unchanged; declared constraints from this file
+// always carry a null causedByEventId, because none of these run inside a
+// resolution.
 function insertConstraint(
   gameId: string,
   kind: ConstraintKind,
@@ -91,31 +99,7 @@ function insertConstraint(
   total: number | null,
   factKey: string = "value"
 ): ResourceConstraint {
-  const db = getDatabase();
-  const id = uuidv4();
-  const now = new Date().toISOString();
-
-  db.prepare(
-    `INSERT INTO resource_constraints (id, game_id, kind, direction, total, fact_key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).run(id, gameId, kind, direction, total, factKey, now);
-
-  const memberStmt = db.prepare(
-    `INSERT INTO resource_constraint_members (constraint_id, resource_id) VALUES (?, ?)`
-  );
-  for (const resourceId of resourceIds) {
-    memberStmt.run(id, resourceId);
-  }
-
-  return {
-    id,
-    gameId,
-    kind,
-    resourceIds,
-    direction,
-    total,
-    factKey,
-    createdAt: now,
-  };
+  return insertConstraintRow({ gameId, kind, resourceIds, direction, total, factKey });
 }
 
 /**
