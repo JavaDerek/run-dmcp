@@ -141,7 +141,50 @@ Three lessons:
    surface. A surface nobody could act on needs no object; say so in its material (solid bedrock) or
    leave it out. But the one a description *invites* a character to try has to exist before the
    character tries it, because the character will.
-3. **This is authoring, not mechanism, and the engine is the wrong place for it.** In the engine a
+3. **Declaring the surface rescues acts that NAME the surface, and nothing else. Measured.**
+   This lesson was written from one hand-run probe and then tested properly, and half of it did not
+   survive. A floor was declared as an item owned by the location, described by material and condition,
+   carrying `integrity`. Four digging intents were read five times each, against the same world with and
+   without that object:
+
+   - The two that named the **floor** ("scrape down through the floor with the spoon", "dig an escape
+     tunnel") went from having no target at all -- one of them ruled as damage to the *tool* -- to
+     `floor` / wear / `integrity`, which is the correct reading and reaches the ordinary
+     property-changing path.
+   - The two that named the **thing lying on the floor** ("dig under the loose tile") did not move at
+     all. Same object, same effect, same property, at full agreement, with and without a floor in the
+     world.
+
+   Then the obvious repair was tried and also failed: the floor's description was given the containment
+   in words -- the tile is set into this floor, the hollow beneath it is a dip in the same packed earth
+   -- and the results were identical, key for key, on every item. So the containment being unstated was
+   not the problem either.
+
+   **The reason is structural, and it is the most useful thing in this lesson.** The reader's *target*
+   question is answered from the words of the intent, and says so in its own prompt: cite the words that
+   name the object. When an intent contains a declared object's id or name, that object wins, whatever
+   any description says lies beneath it. No amount of authoring on the surface's side reaches an act
+   whose words name something else. One intent made this plain by answering with the floor's property
+   while refusing to name the floor as the target: it read the surface, named its property, grounded it
+   in the surface's own text, and still would not say the act was aimed there.
+
+   What this changes for an author: **declare the surface, and do not expect it to redirect anything.**
+   An act aimed *through* a thing at what lies under it will be ruled on the thing. If the thing cannot
+   support that act, the ruling will be wrong and sound at the same time -- which is this guide's second
+   lesson again, and the repair belongs on the thing: either declare the property the act will need, or
+   stop the description inviting an act the thing cannot support.
+
+4. **A surface nobody declared does not fail safely.** The same probe found the other half of the cost,
+   and it is worse than a missed ruling. Acts that named no declared object at all -- a character
+   crouching, a character calling out -- were not answered with "nothing here"; they were captured by
+   whatever was nearest and ruled to change it, at full agreement and with a verbatim citation. In one
+   case an act of crouching down was ruled to *open a way out*. Declaring the things such acts are really
+   aimed at (a surface, a character's own body) removed those captures, not by adding a guard but by
+   giving the act somewhere to land. **A reader choosing from a closed list does not reliably answer
+   "none"; it answers with the nearest member.** That is the strongest argument for declaring the
+   obvious, and it is an argument about soundness rather than about richness.
+
+5. **This is authoring, not mechanism, and the engine is the wrong place for it.** In the engine a
    location is a name, a description and properties, and an item is owned by a location or a
    character. A floor is an item. Nothing engine-side is missing, so nothing engine-side should
    grow a noun for it -- and a game with no physical space at all (a board, a ledger, a negotiation)
@@ -213,7 +256,12 @@ Every enclosed location declares its floor, ceiling and walls as objects when a 
 on them: described by material and condition, carrying the properties an attempt would need
 (`integrity` for anything that can be dug or broken through), and a declared route where one could
 open. A surface the prose mentions and the world does not model will be tried, and the attempt will
-be filed as something else. See run-dmcp's `docs/AUTHORING-GUIDE.md`.
+be filed as something else -- or, worse, captured by whatever is nearest and ruled to change it.
+
+Declaring it rescues the attempts that NAME it. It does not redirect an attempt whose words name the
+thing lying on top of it: the reader picks its target from the words of the intent, so an act aimed
+through a thing is ruled on that thing, and the repair belongs there. Measured, not assumed. See
+run-dmcp's `docs/AUTHORING-GUIDE.md`.
 ```
 
 ## Provenance
@@ -230,3 +278,13 @@ Third entry (2026-09-19), from `the-prisoner`'s `docs/WORLD-ELABORATION-DESIGN.m
 Fourth entry (2026-09-19, night), from `the-prisoner`'s `docs/OPEN-VARIANT.md` §66.6 and §67.5 -- a
 dig that no reading could name because the floor was prose and not an object -- and its owner's
 suggestion the same night that a physical space should declare its surfaces as a matter of course.
+
+Fourth entry, points 3 and 4 (2026-09-20), from the measurement that tested the entry above instead of
+trusting it: three arms over a labelled set, five readings each, with the surface declared, with its
+containment authored in words, and with neither. The lesson survived in half: declaring the surface
+moved every act that named the surface and not one act that named the thing on top of it, and authoring
+the containment moved nothing at all. Point 4's captures -- an act of crouching ruled to open a way out
+-- came from the same set. The general finding underneath both, worth more than the surface convention
+itself: **a reader choosing from a closed list of objects picks its target from the words of the intent,
+and does not reliably answer "none".** Any authoring advice that assumes a description can redirect an
+act is wrong for that reason, and this guide has now made that mistake once.
