@@ -21,7 +21,11 @@ catalogue of how to describe objects, characters and motivations so a world buil
 holds together the first time, plus sample `CLAUDE.md` entries a consumer can copy. If you learn a
 world-authoring lesson while working on any consumer, generalise it into that file (this engine's own
 neutral vocabulary only — no consumer's words, per "This engine has two consumers and belongs to
-neither" below) rather than losing it in one repo.
+neither" below) rather than losing it in one repo. Its two newest lessons (2026-09-26): measure a
+`createTurnReader` question set against the population that will actually write to it, not only
+against intents shaped like its own answer keys, and label each disagreement by which layer it
+belongs to; and never let one object's description carry another object's name — least of all a
+plural of it — when your world models exactly one.
 
 ## This engine has two consumers and belongs to neither
 
