@@ -1383,9 +1383,10 @@ export function initializeSchema(options?: { migrations?: readonly SchemaMigrati
   //     need for this -- it enforces whatever `bounds` a caller passes at
   //     write time against an EXISTING resource's own min_value/max_value
   //     columns -- but a constraint declared in the same breath as the
-  //     entity it governs is recorded here instead, opaquely: the engine
-  //     stores these bounds and does not interpret them (issue #42's own
-  //     scope note), the same "one column, several kinds, mostly null"
+  //     entity it governs is recorded here instead, and enforced at the
+  //     choke point against every later write (assertConstraintsAllow,
+  //     src/timeline/constrained.ts) -- compared as numbers, never given a
+  //     meaning -- in the same "one column, several kinds, mostly null"
   //     shape `direction` (monotonic) and `total` (conserved) already use.
   //   - caused_by_event_id: which `resolution.recorded` event's resolve()
   //     call declared this constraint -- design §5.2c's one hop of

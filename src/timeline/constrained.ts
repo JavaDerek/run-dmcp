@@ -236,20 +236,31 @@ export function assertConstraintsAllow(params: {
       }
     }
 
-    if (constraint.kind === "bounded" && bounds) {
-      if (bounds.minValue !== null && intendedValue < bounds.minValue) {
-        throw new ConstraintViolationError(
-          "bounded",
-          entityId,
-          `Resource '${entityId}' is bounded-constrained (min ${bounds.minValue}); rejected value ${intendedValue} instead of clamping.`
-        );
-      }
-      if (bounds.maxValue !== null && intendedValue > bounds.maxValue) {
-        throw new ConstraintViolationError(
-          "bounded",
-          entityId,
-          `Resource '${entityId}' is bounded-constrained (max ${bounds.maxValue}); rejected value ${intendedValue} instead of clamping.`
-        );
+    if (constraint.kind === "bounded") {
+      // Two sources of bounds, both checked, so the tighter side wins. The
+      // write's own `bounds` are how every 'bounded' constraint has always
+      // worked (a resource's min/max columns, supplied by its caller). A
+      // constraint DECLARED with bounds -- a `create` leg's `constraints`
+      // (issue #42) -- carries its own, and holds them against a write that
+      // supplies none: "held bounded from the moment it exists" means the
+      // declaration binds, not that every later writer must repeat it.
+      // Declared nulls leave that side to the write, as before.
+      const declared = { minValue: constraint.minValue ?? null, maxValue: constraint.maxValue ?? null };
+      for (const pair of bounds ? [declared, bounds] : [declared]) {
+        if (pair.minValue !== null && intendedValue < pair.minValue) {
+          throw new ConstraintViolationError(
+            "bounded",
+            entityId,
+            `Resource '${entityId}' is bounded-constrained (min ${pair.minValue}); rejected value ${intendedValue} instead of clamping.`
+          );
+        }
+        if (pair.maxValue !== null && intendedValue > pair.maxValue) {
+          throw new ConstraintViolationError(
+            "bounded",
+            entityId,
+            `Resource '${entityId}' is bounded-constrained (max ${pair.maxValue}); rejected value ${intendedValue} instead of clamping.`
+          );
+        }
       }
     }
 

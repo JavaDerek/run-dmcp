@@ -679,12 +679,13 @@ export interface ResourceConstraint {
   createdAt: string;
   // 'bounded' only; null for 'monotonic', 'conserved' and 'resolve_only'
   // (issue #42). Recorded verbatim from a `create` leg's declared
-  // constraint (src/timeline/resolve.ts's `IntendedCreate.constraints`) --
-  // the engine stores these bounds, it does not interpret them. A write
-  // that must honor them still supplies its own `bounds` at write time
-  // (writeConstrainedValue/IntendedWrite), exactly as every other 'bounded'
-  // constraint already works; this is the passive record of what was
-  // declared, not a second evaluation path.
+  // constraint (src/timeline/resolve.ts's `IntendedCreate.constraints`).
+  // Enforced at the one choke point (`assertConstraintsAllow`,
+  // src/timeline/constrained.ts) against every later write, including one
+  // that supplies no `bounds` of its own; a write that does supply bounds is
+  // held to both, so the tighter side wins. A null side is unbounded by the
+  // declaration and left to the write, as for every constraint declared the
+  // ordinary way.
   minValue: number | null;
   maxValue: number | null;
   // Set when this constraint was declared by a `create` leg's `constraints`

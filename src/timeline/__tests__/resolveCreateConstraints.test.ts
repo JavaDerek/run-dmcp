@@ -89,6 +89,56 @@ describe("resolve: a `create` leg's declared constraints (issue #42)", () => {
   });
 
   // ==========================================================================
+  // 1b. The same, with the write leg supplying NO bounds of its own. The
+  //     issue asks that the created entity be "held bounded ... from the
+  //     moment it exists"; a declared {min, max} that only binds when every
+  //     later writer repeats it is a record, not a constraint. (Found by the
+  //     2026-09-26 audit: test 1 above passed on the write leg's own
+  //     `bounds`, and would have passed with any declared numbers at all.)
+  // ==========================================================================
+  it("a later leg with no bounds of its own is still held to the DECLARED bound, and the whole resolution rolls back", () => {
+    const before = resourceCount();
+    const resolver = resolverFor([
+      { ...grainCreate, constraints: [{ kind: "bounded", key: "value", minValue: 0, maxValue: 100 }] },
+      { kind: "write", entityId: { ref: "grain" }, key: "value", mode: "set", value: 500 },
+    ]);
+
+    expect(() => resolver.resolve({ gameId, mechanic: "SOW" })).toThrow(/bounded-constrained \(max 100\)/);
+    expect(resourceCount()).toBe(before);
+    expect(resolutionRecordedEvents()).toEqual([]);
+  });
+
+  it("the declared bound still holds in a LATER resolution whose write supplies no bounds, below min as well as above max", () => {
+    const outcome = resolverFor([{ ...grainCreate, constraints: [{ kind: "bounded", key: "value", minValue: 10, maxValue: 90 }] }]).resolve({
+      gameId,
+      mechanic: "SOW",
+    });
+    const grainId = outcome.created[0].entityId;
+
+    const writer = (value: number) =>
+      createResolver({
+        mechanics: [{ name: "SET", adjudicate: () => ({ changes: [{ kind: "write", entityId: grainId, key: "value", mode: "set", value }] }) }],
+      }).resolve({ gameId, mechanic: "SET" });
+
+    expect(() => writer(95)).toThrow(/bounded-constrained \(max 90\)/);
+    expect(() => writer(5)).toThrow(/bounded-constrained \(min 10\)/);
+    writer(90); // the bound itself is inside it
+    expect(db.prepare(`SELECT value FROM resources WHERE id = ?`).get(grainId)).toEqual({ value: 90 });
+  });
+
+  it("a declared bound with one open side binds only the side it declares", () => {
+    const outcome = resolverFor([{ ...grainCreate, constraints: [{ kind: "bounded", key: "value", minValue: null, maxValue: 90 }] }]).resolve({
+      gameId,
+      mechanic: "SOW",
+    });
+    const grainId = outcome.created[0].entityId;
+    createResolver({
+      mechanics: [{ name: "SET", adjudicate: () => ({ changes: [{ kind: "write", entityId: grainId, key: "value", mode: "set", value: -40 }] }) }],
+    }).resolve({ gameId, mechanic: "SET" });
+    expect(db.prepare(`SELECT value FROM resources WHERE id = ?`).get(grainId)).toEqual({ value: -40 });
+  });
+
+  // ==========================================================================
   // 2. After the resolution, a direct write to the created resource is
   //    refused by the EXISTING resolve_only trigger -- with no library call
   //    made after resolve() returned. This is the whole point: before this
@@ -210,6 +260,60 @@ describe("resolve: a create leg's declared constraints against an existing datab
       expect(declared.every((c) => c.causedByEventId === outcome.eventId)).toBe(true);
 
       expect(() => db.prepare(`UPDATE resources SET value = ? WHERE id = ?`).run(999, grainId)).toThrow(/resolve_only|adjudicating call/i);
+    } finally {
+      closeDatabase();
+      process.env.DMCP_DB_PATH = ":memory:";
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("resolve: create-leg constraints on a database whose resource_constraints predates issue #42", () => {
+  it("startup adds min_value/max_value/caused_by_event_id to an older table, keeps its rows, and create legs then work", () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), "dmcp-resolve-create-constraints-pre42-"));
+    const dbPath = join(tmpDir, "games.db");
+    try {
+      process.env.DMCP_DB_PATH = dbPath;
+      initializeSchema();
+      const gameId = createGame({ name: "grain depot", setting: "test", style: "test" }).id;
+      const treasury = createResource({ gameId, ownerType: "game", name: "treasury", value: 50, minValue: 0, maxValue: 100 }).id;
+      constraintTools.declareMonotonicConstraint({ gameId, resourceId: treasury, direction: "increasing" });
+      // Roll the table back to its pre-#42 shape: the three columns #42 added are gone.
+      const old = getDatabase();
+      for (const column of ["min_value", "max_value", "caused_by_event_id"]) {
+        old.exec(`ALTER TABLE resource_constraints DROP COLUMN ${column}`);
+      }
+      const columnsOf = () =>
+        (getDatabase().prepare(`SELECT name FROM pragma_table_info('resource_constraints')`).all() as { name: string }[]).map((c) => c.name);
+      expect(columnsOf()).not.toContain("min_value");
+      closeDatabase();
+
+      initializeSchema();
+      expect(columnsOf()).toEqual(expect.arrayContaining(["min_value", "max_value", "caused_by_event_id"]));
+      const kept = constraintTools.listConstraints(gameId, treasury);
+      expect(kept).toHaveLength(1);
+      expect(kept[0]).toMatchObject({ kind: "monotonic", minValue: null, maxValue: null, causedByEventId: null });
+
+      const outcome = createResolver({
+        mechanics: [
+          {
+            name: "SOW",
+            adjudicate: () => ({
+              changes: [
+                {
+                  kind: "create",
+                  ref: "grain",
+                  entityKind: "resource",
+                  columns: { owner_type: "game", name: "grain", value: 50, min_value: 0, max_value: 100, created_at: "2026-01-01T00:00:00.000Z" },
+                  constraints: [{ kind: "bounded", key: "value", minValue: 0, maxValue: 100 }],
+                },
+              ],
+            }),
+          },
+        ],
+      }).resolve({ gameId, mechanic: "SOW" });
+      const declared = constraintTools.listConstraints(gameId, outcome.created[0].entityId);
+      expect(declared).toEqual([expect.objectContaining({ kind: "bounded", minValue: 0, maxValue: 100, causedByEventId: outcome.eventId })]);
     } finally {
       closeDatabase();
       process.env.DMCP_DB_PATH = ":memory:";
