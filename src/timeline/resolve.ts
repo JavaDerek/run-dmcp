@@ -109,8 +109,7 @@ import {
  *      mechanic's name, and the change count -- following
  *      `applyLiveWrite`'s (constrained.ts) `causes` discipline of never
  *      including a `row_id` key, which belongs to the projection triggers'
- *      own vocabulary (see that function's comment on why colliding with it
- *      would make `findOpenedByEventId`'s pick non-deterministic).
+ *      own vocabulary.
  *   7. Build the outcome's constraint AFTER the writes have landed --
  *      re-reading `currentStoryTime` inside the same transaction, after
  *      every change has been applied, so a `sequence`-axis game (whose `t`
@@ -444,8 +443,7 @@ export function createResolver(params: { mechanics: readonly Mechanic[] }): Reso
 /** The shape one `resolution.recorded` event's `causes` JSON carries.
  *  Deliberately no `row_id` key -- see applyLiveWrite's (constrained.ts)
  *  doc comment on why that token belongs to the projection triggers' own
- *  vocabulary and would collide with `findOpenedByEventId`'s pick if reused
- *  here for something else entirely. */
+ *  vocabulary. */
 interface ResolutionCauses {
   source: "resolve";
   resolution_id: string;

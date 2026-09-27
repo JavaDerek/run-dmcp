@@ -8,10 +8,10 @@
 // TEST-ONLY (issue #31's own instruction): no engine code changes in this
 // commit. If a case could not pass without one, it is marked `it.fails`
 // with the finding recorded in its own comment, per that instruction --
-// none of the six needed that; see the file-level summary at the bottom for
-// the one place the issue's own prose did not match what the engine does
-// (case 2's named event), pinned as what was actually observed rather than
-// what was guessed.
+// none of the six needed that. The one place the issue's own prose did not
+// match what the engine does (case 2's named event) is explained at case 2's
+// assertion, pinned as what was actually observed rather than what was
+// guessed.
 //
 // Neutral fixture -- grain, treasury, population -- never a consumer's
 // vocabulary (src/__tests__/engineVocabulary.test.ts). "Proposer A" and
@@ -183,14 +183,20 @@ describe("resolve protocol under contention -- two proposers (design §5.2a, iss
       | undefined;
     expect(namedEvent?.kind).toBe("resource.updated");
     expect(namedEvent?.kind).not.toBe("resolution.recorded");
-    // It is B's write specifically, not merely *an* update event: the
-    // annotation event `applyLiveWrite` also writes carries the resolution
-    // id that produced it, and that resolution is the one under test.
-    const resolutionCauses = db
-      .prepare(`SELECT causes FROM events WHERE game_id = ? AND kind = 'resolution.recorded'`)
-      .get(gameId) as { causes: string };
-    const resolutionId = (JSON.parse(resolutionCauses.causes) as { resolution_id: string }).resolution_id;
-    expect(outcomeB.resolutionId).toBe(resolutionId);
+    // It is B's write specifically, not merely *an* update event: the named
+    // event is the projection event for this very row (`causes.row_id`), at
+    // the same `t` as B's own `resolution.recorded` event -- the one whose
+    // resolution id B's outcome returned.
+    const resolutionEvent = db
+      .prepare(`SELECT at_t, causes FROM events WHERE game_id = ? AND kind = 'resolution.recorded'`)
+      .get(gameId) as { at_t: number; causes: string };
+    expect((JSON.parse(resolutionEvent.causes) as { resolution_id: string }).resolution_id).toBe(outcomeB.resolutionId);
+    const named = db.prepare(`SELECT at_t, causes FROM events WHERE id = ?`).get(found[0].fact.openedByEventId) as {
+      at_t: number;
+      causes: string;
+    };
+    expect(named.at_t).toBe(resolutionEvent.at_t);
+    expect((JSON.parse(named.causes) as { row_id: string }).row_id).toBe(grainId);
   });
 
   // ==========================================================================

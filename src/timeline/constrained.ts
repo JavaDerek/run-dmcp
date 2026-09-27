@@ -445,20 +445,16 @@ function applyLiveWrite(params: {
   const delta = newValue - previousValue;
   const eventId = uuidv4();
 
-  // `causes` deliberately does NOT carry a `row_id` key. irreversible.ts's
-  // `findOpenedByEventId` matches `json_extract(causes, '$.row_id')` to
-  // attach design §5.2c's one hop of provenance, picking the first event at
-  // a given `t` by a random hex id when more than one matches. `row_id` is
-  // the PROJECTION triggers' own token for "the live row this projection
-  // event was generated from" (projection.ts) -- an annotation event this
-  // choke point writes is not a projection event, and if it carried
-  // `row_id` too, a projection event and an annotation event sharing one
-  // `t` (which a constrained write's own UPDATE produces: the `_au`
-  // trigger's `<kind>.updated` event and this `value.changed` event both
-  // land at the same `t`) would make `findOpenedByEventId`'s pick
-  // non-deterministic. `entity_id` is the accurate key for what this event
-  // is about anyway, so using it instead of `row_id` is both the honest
-  // name and the one that can never collide with that lookup.
+  // `causes` carries `entity_id`, not `row_id`. `row_id` is the PROJECTION
+  // triggers' own token for "the live row this projection event was
+  // generated from" (projection.ts), and an annotation event this choke
+  // point writes is not a projection event, so `entity_id` is the honest
+  // name for what it is about. (This once also kept a derived one-hop
+  // lookup deterministic when a projection event and this event shared a
+  // `t`; issue #30 replaced that lookup with the recorded
+  // `facts.opened_by_event_id`, so that reason is gone. `projectionEventId`
+  // below still matches `$.row_id`, but filters by event kind, so it could
+  // not collide either way.)
   const causes = JSON.stringify({
     source: "constrained_write",
     entity_id: entityId,
@@ -837,11 +833,10 @@ interface RankedTransition {
  * Fact transitions are joined to their annotation (if any) by
  * `json_extract(causes, '$.fact_id') = facts.id` -- an EXACT, unique link,
  * because `applyLiveWrite` recorded the fact id at write time. This is
- * deliberately stronger than irreversible.ts's `findOpenedByEventId`, which
- * has to approximate the same relationship via `(at_t, row_id)` because the
- * projection triggers that write `row_id` have no fact id to record at the
- * point they fire (issue #2 predates this module). Here, recording the real
- * id costs nothing extra and removes the approximation entirely.
+ * the same move issue #30 later made for a fact's opening event
+ * (`facts.opened_by_event_id`, stamped by the projection trigger in the
+ * firing that opens the fact): record the edge when it is true rather than
+ * approximate it afterward from `(at_t, row_id)`.
  *
  * `json_valid(causes)` guards every extraction, matching irreversible.ts's
  * `CASE WHEN json_valid(causes) THEN causes END` idiom for the same reason

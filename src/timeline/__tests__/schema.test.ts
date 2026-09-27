@@ -489,7 +489,7 @@ describe("timeline schema", () => {
       // ABORT, per the issue's own test list.
       expect(() =>
         db.prepare("UPDATE facts SET opened_by_event_id = ? WHERE id = ?").run(otherEventId, factId)
-      ).toThrow();
+      ).toThrow(/opened_by_event_id may only be stamped once/);
 
       // Re-asserting the SAME value it already holds is not a change, so it
       // never reaches the guard -- the same idiom every other latch in this
@@ -501,7 +501,7 @@ describe("timeline schema", () => {
       // And it cannot be withdrawn back to NULL either.
       expect(() =>
         db.prepare("UPDATE facts SET opened_by_event_id = NULL WHERE id = ?").run(factId)
-      ).toThrow();
+      ).toThrow(/opened_by_event_id may only be stamped once/);
     });
 
     it("permits valid_to_t NULL -> value exactly once, and rejects a second change", () => {
