@@ -110,6 +110,48 @@ just arrived mid-game instead of up front. Keeping the two kinds of authoring se
 space, at a specific time — rather than something a transcript merely narrates and nobody could
 check.
 
+### A property a mind works on over several acts should read differently as it moves
+
+This extends the lesson above from what an object may *become* to how it *reads* on the way there.
+Declaring the space says which values a property may take; it says nothing about what a mind is shown
+while the value travels between them, and when the answer is "nothing but the number", every act on
+the way reads the same.
+
+The concrete incident: a world modelled one part whose integrity, worn low enough, made a way out
+passable. A model-driven actor wore it down over five turns. Each act was ruled alike, each was answered
+with the same outcome sentence and a flat delta ("integrity went from 85 to 70"), and the part's own
+description never changed, because nothing in it depended on the value. The world already had the
+device that would have fixed this: other objects in the same location carried authored reading bands
+-- a line of description chosen by where a value stands -- and read differently as they moved. The
+part that the whole game turned on had none. From the actor's side, five turns of real progress looked
+like one turn repeated five times, and the only evidence that anything was happening was an integer.
+
+Three lessons:
+
+1. **Author reading bands for any property you expect a mind to move over several acts.** A band is
+   a threshold and a line of description: at or below this value, the object also reads *this*. Each
+   band is a claim about what the object is now, stated in the object's own words, so the actor sees
+   the thing change rather than being told a number changed -- the second lesson in this guide ("say
+   so in the words of that action") applied to the steps before the action opens, not only to the
+   moment it does.
+2. **Author the bands ascending, and silent above the first.** Order them from the lowest threshold up
+   if your lookup takes the first band a value falls at or under; authored the other way, the first
+   and widest band swallows every value beneath it and the others never read. Above the first band,
+   say nothing: an intact object needs no line saying it is intact, and a band that reads "shows no
+   damage" is exactly the absence this engine's hard rule 3 makes unconstructable in rendered state --
+   say what is, never what is absent. The first acts landing silently is fine; they are arithmetic,
+   not texture, and the band that finally reads is worth more for arriving later.
+3. **The bands reach every principal that perceives the object, not only the actor.** A band is part
+   of the object's description, and the description is what anyone who can see the object is shown.
+   Adding bands to a property one character is working on therefore tells every other character who
+   can see it how far the work has gone. That is a gameplay change and usually the right one --
+   visible damage is visible -- but decide it on purpose: if the world means the work to go unseen,
+   the answer is concealment the world models, not a property that silently refuses to read.
+
+Bands are authoring, not mechanism. They need no engine support beyond what the caller already
+renders from state, and a world whose values never move over several acts has no reason to declare
+any.
+
 ## Lesson: in a physical space, the surfaces are objects too
 
 The concrete incident: a location was authored as a room with a handful of things in it and two
@@ -251,6 +293,42 @@ plural or otherwise, that steals the citation. (2) treat one instance as a reaso
 object's description in your catalogue for the same shape: a different object's id or name (plural or
 singular) sitting in text it does not own, left over from an earlier draft or an author's shorthand.
 
+## Lesson: what one principal perceives of another's act is the attempt; the outcome reaches them through the object
+
+The concrete incident: a world with two principals in one location relayed each principal's act to the
+other as one sentence. That sentence was composed from the ruling, *before* the resolution ran, and
+the same string was reused three ways: as the sentence the other principal perceived, as the
+resolution's own description in the ledger, and as a key in a precedent ledger that matched on exact
+text. For most kinds of act the sentence described an attempt ("X works at the part"). For a few it
+described an outcome ("X opens the way out"). On four turns the way out stayed shut -- the resolution
+refused, or changed something short of opening it -- and the other principal was still told the way
+out had been opened. Its mind did what a careful mind should do with a sentence the world handed it:
+it wrote the false fact into its own notes, and spoke it. Nothing in the reader, the mechanism or the
+model's reasoning was wrong. The world had told a bystander something that never happened, in its own
+voice.
+
+Two lessons:
+
+1. **A sentence composed before the resolution can only honestly describe an attempt.** If it is
+   built from the ruling, it is built before the world has decided anything, so it must say what the
+   actor *tried* ("X works to open the way out", "X works to hide the thing"), never what came of it.
+   That holds whether the resolution succeeds or refuses, so compose it so both produce the same
+   string -- which also means a refused attempt a bystander could perceive is still relayed. The
+   bystander saw the reach whether or not the world let it land.
+2. **Let the outcome reach a bystander through the object's own described state.** The world already
+   knows what the object is after the resolution, and its description already says so ("It stands
+   open now"). A bystander who can see the object reads that on its next look, from state -- which is
+   what "the server owns what is true" means, applied to what one principal is told about another.
+   Never let a pre-resolution sentence double as an outcome record: the ledger's description of what
+   happened, and any key that later decisions are matched against, should be either the same honest
+   attempt sentence everywhere or composed after the resolution from its result. A single string
+   that is sometimes an attempt and sometimes a claim is a false record waiting for the one turn the
+   world says no.
+
+A quick audit for any world that relays one principal's acts to another: for every kind of act, read
+the relayed sentence aloud on the assumption that the resolution refused. Any sentence that becomes a
+lie under that assumption is describing an outcome, and should be reworded as the attempt.
+
 ## Checklist before you ship a `createTurnReader` question set
 
 - For every `(effect, property)` combination your effects layer accepts, can you point to the exact
@@ -297,6 +375,12 @@ singular) sitting in text it does not own, left over from an earlier draft or an
   object your world declares, or a plural of one? If your world models exactly one of that other
   object, a plural or bare use of its name will out-cite the singular reference you meant to be
   found, and the fix belongs in the text, not the reader.
+- If one principal is told of another's act: for every kind of act, is the sentence still true when
+  the resolution refuses? If not, it states an outcome; reword it as the attempt, and let the
+  object's own described state carry what actually happened.
+- For each property a mind is expected to move over several acts, does its object read differently
+  at some point along the way, from authored bands ascending and silent above the first? If every act
+  on the way reads the same, the actor is working from a number alone.
 - When you find a case like this, add it here — generalised, in this file's neutral vocabulary — and
   add a pointer to it in your own project's `CLAUDE.md`. Root `CLAUDE.md`'s "cross-repo invariant
   nothing can check" section names where those pointers live today.
@@ -371,6 +455,25 @@ the wrong object's description will win the citation and send the ruling to the 
 run-dmcp's `docs/AUTHORING-GUIDE.md`.
 ```
 
+```markdown
+## Perception is the attempt; the object carries the outcome
+
+What one principal is told of another's act describes the attempt ("X works to open the way out"),
+never an outcome that may not have happened -- the sentence is composed before the resolution, and a
+refused resolution produces the same one. The outcome reaches a bystander through the object's own
+described state ("It stands open now"). No pre-resolution sentence doubles as an outcome record in
+a ledger or as a key later decisions match against. See run-dmcp's `docs/AUTHORING-GUIDE.md`.
+```
+
+```markdown
+## A property worked over several acts reads differently as it moves
+
+Any property a mind is meant to move over several acts carries authored reading bands: a threshold
+and a line of the object's own description. Bands are authored ascending, and say nothing above the
+first (say what is, never what is absent). They reach every principal who perceives the object, which
+is a gameplay change we make on purpose. See run-dmcp's `docs/AUTHORING-GUIDE.md`.
+```
+
 ## Provenance
 
 Sources are named by role, not by name, the way `docs/ARCHITECTURE.md` names consumers: "the
@@ -402,7 +505,14 @@ and does not reliably answer "none".** Any authoring advice that assumes a descr
 act is wrong for that reason, and this guide has now made that mistake once.
 
 Fifth entry (2026-09-26), from the two-principal consumer's `docs/HUMAN-INTENTS-DESIGN.md` §1, §4, §7
-and §8: a serial human-typed game whose reader had been measured only at agreement figures gathered against a
-population that had read its own answer keys, and a whole whose description had already dropped a
-stray count (per the second entry above) but kept a part's name in the plural, which a human intent
-then reached for exactly as predicted.
+and §8: a serial human-typed game whose reader had been measured only at agreement figures gathered
+against a population that had read its own answer keys, and a whole whose description had already
+dropped a stray count (per the second entry above) but kept a part's name in the plural, which a human
+intent then reached for exactly as predicted.
+
+Sixth entry and the reading-bands subsection of the third (2026-09-27), from the two-principal
+consumer's `docs/PLAYTEST-2026-09-27-DESIGN.md` R1 and R7: a human-played game in which the other
+principal was told on four turns that a way out had been opened when it had stayed shut, wrote that
+into its notes and spoke it; and in which five turns of real work on the one part that mattered each
+read exactly the same, while other objects in the same location already read differently as they
+moved.
