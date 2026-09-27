@@ -157,3 +157,15 @@ describe("a range that names no span is rejected with a reason, never silently d
     expect(answer.rejected[0].reason).toBe("range-start-past-end");
   });
 });
+
+describe("review finding, 2026-09-26: null range fields are absent, not a range", () => {
+  it("a quote beside from: null and to: null is read as a quote", async () => {
+    const answer = await readOne({ questionId: GRAIN.id, answerKey: "continued", citation: { sourceId: "short", quote: "the grain", from: null, to: null } });
+    expect(answer.fromSafeDefault).toBe(false);
+    expect(answer.citation).toEqual({ sourceId: "short", quote: "the grain" });
+  });
+  it("a citation whose only fields are nulls is missing-citation", async () => {
+    const answer = await readOne({ questionId: GRAIN.id, answerKey: "continued", citation: { sourceId: "short", quote: null, from: null, to: null } });
+    expect(answer.rejected.map((r) => r.reason)).toEqual(["missing-citation"]);
+  });
+});

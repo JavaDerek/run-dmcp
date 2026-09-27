@@ -7,7 +7,7 @@ import { narrationConstraintAt, contradictions, type NarrationConstraint, type C
 import { withAdjudicationOpen } from "./adjudication.js";
 import type { EntityKind } from "./kinds.js";
 import { PROJECTED_TABLES, liveColumns } from "./projection.js";
-import { insertConstraintRow } from "./registry.js";
+import { insertConstraintRow, constraintsFor } from "./registry.js";
 import {
   writeConstrainedValue,
   transferConstrainedValue,
@@ -145,8 +145,9 @@ export interface Proposal {
   parameters?: Record<string, unknown>;
   expects?: readonly Expectation[];
   /** The principal proposing (issue #40): an entity id. When the game has
-   *  declared a turn order covering the current t, a proposal whose actor is
-   *  not the one due is refused `out-of-turn` before dispatch. Omitted, the
+   *  declared any turn order, a proposal whose actor is not the one due at
+   *  the current t -- including a t no declaration covers yet -- is refused
+   *  `out-of-turn` before dispatch. Omitted, the
    *  proposal is the world's own (time passing, a scheduled consequence) and
    *  is not a turn. Recorded in the resolution's causes either way. */
   actor?: string;
@@ -486,6 +487,26 @@ function refsUsedBy(change: IntendedChange): string[] {
 }
 
 /**
+ * A write leg that supplies no `bounds`, to a key a `bounded` constraint
+ * governs on a resource, is held to that resource's own min/max -- exactly
+ * the bounds `update_resource_value` supplies for the same write
+ * (tools/resource.ts). Without this, a resolution could write straight past a
+ * bound the tool path refuses, because the choke point checks `bounded`
+ * against the bounds a writer hands it and this writer handed none. Found by
+ * the 2026-09-26 review, through a declared mechanic (#41) with no min/max;
+ * a hand-written mechanic had the same hole. Nothing changes for a key with
+ * no `bounded` constraint: supplying bounds there would start CLAMPING writes
+ * that land outside min/max today.
+ */
+function boundedResourceDefault(entityId: string, key: string): { minValue: number | null; maxValue: number | null } | undefined {
+  if (key !== "value" || !constraintsFor(entityId, key).some((c) => c.kind === "bounded")) return undefined;
+  const row = getDatabase().prepare(`SELECT min_value, max_value FROM resources WHERE id = ?`).get(entityId) as
+    | { min_value: number | null; max_value: number | null }
+    | undefined;
+  return row ? { minValue: row.min_value, maxValue: row.max_value } : undefined;
+}
+
+/**
  * Step 5's precondition (issue #34): every `{ ref }` names a `create` leg
  * EARLIER in the list, and no two creates share a ref. Checked over the
  * intent list alone -- a structural property of what the mechanic returned,
@@ -625,15 +646,16 @@ function applyChange(change: IntendedChange, gameId: string, refs: Map<string, s
   }
 
   if (change.kind === "write") {
+    const entityId = deref(change.entityId, refs);
     return {
       transitions: [
         writeConstrainedValue({
-          entityId: deref(change.entityId, refs),
+          entityId,
           key: change.key,
           mode: change.mode,
           value: change.value,
           reason: change.reason,
-          bounds: change.bounds,
+          bounds: change.bounds ?? boundedResourceDefault(entityId, change.key),
         }),
       ],
     };

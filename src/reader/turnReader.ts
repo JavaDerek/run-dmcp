@@ -395,7 +395,8 @@ export function createTurnReader(params: {
  * a whole class of four-word intents was never once ruled.
  *
  * A citation that names no span at all -- absent, `{}`, or a source alone
- * -- is `missing-citation`, reported before any of the above.
+ * -- is `missing-citation`, reported before any of the above. A null field
+ * counts as absent throughout.
  *
  * Defensive against a citation that is missing entirely or missing a field
  * -- a transport is caller-supplied code this module does not control at
@@ -416,11 +417,13 @@ export function resolveCitation(
   // Nothing that could name a span at all -- no citation, `{}`, or a source
   // with neither a quote nor a range. Distinct from `empty-quote` because a
   // reader chasing a quoting problem here would be chasing nothing.
-  if (record.quote === undefined && record.from === undefined && record.to === undefined) {
+  // null is absent: models emit `"from": null` for a field they did not use.
+  const given = (v: unknown) => v !== undefined && v !== null;
+  if (!given(record.quote) && !given(record.from) && !given(record.to)) {
     return { reason: "missing-citation" };
   }
 
-  if (record.from !== undefined || record.to !== undefined) {
+  if (given(record.from) || given(record.to)) {
     const { from, to } = record;
     if (typeof sourceId !== "string") return { reason: "unknown-source-id" };
     const source = sourcesById.get(sourceId);
@@ -641,8 +644,9 @@ async function runLadder(
  * the caller builds the request and gets it answered; the engine verifies the
  * answers and returns the ruling. It never infers anything itself.
  *
- * The result is exactly what `createTurnReader({ questions, transports: [t]
- * }).read(sources)` returns when `t` resolves to `offers`: the offers are rung
+ * For valid input, the result is exactly what `createTurnReader({ questions,
+ * transports: [t] }).read(sources)` returns when `t` resolves to `offers`
+ * (unlike `read()`, this refuses duplicate source ids -- see below): the offers are rung
  * 0, asked every question, and go through the one tally every rung's offers
  * go through, so the verb and the library cannot disagree about what counts.
  * Synchronous, because there is nothing to wait for.

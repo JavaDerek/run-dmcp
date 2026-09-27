@@ -75,6 +75,20 @@ describe("turn order (issue #40)", () => {
       expect(() => declareTurnOrder({ gameId, principals: [b, a], fromT: 12 })).toThrow(/after the latest declaration's fromT \(12\)/);
     });
 
+    it("a turn already covered at the current t cannot be reassigned by a declaration from that same t", () => {
+      declareTurnOrder({ gameId, principals: [a, b], fromT: 12 });
+      advanceTurn({ gameId });
+      expect(() => declareTurnOrder({ gameId, principals: [b, a], fromT: 12 })).toThrow();
+      setStoryTime({ gameId, t: 13 });
+      expect(() => declareTurnOrder({ gameId, principals: [b, a], fromT: 13 })).toThrow(/already covered/);
+      declareTurnOrder({ gameId, principals: [b, a], fromT: 14 });
+      expect(dueAt({ gameId, t: 13 })?.principal).toBe(b);
+    });
+
+    it("the first declaration may start at the current t, since nothing covers it yet", () => {
+      expect(declareTurnOrder({ gameId, principals: [a], fromT: 10 }).fromT).toBe(10);
+    });
+
     it("only on a counter axis: a turn is a count of things that happened", () => {
       const seq = createGame({ name: "seq", setting: "test", style: "test" }).id;
       const e = createResource({ gameId: seq, ownerType: "game", name: "grain", value: 1 }).id;

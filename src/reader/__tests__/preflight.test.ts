@@ -89,7 +89,7 @@ describe("checkGroundings", () => {
     expect(report.targets).toEqual([{ target: "granary.integrity", grounded: 0, uniquelyGrounded: 0 }]);
   });
 
-  it("occurrences are counted without overlap, byte-exact, with no case folding", () => {
+  it("occurrences count every position the span starts at, overlapping included -- a span that can start in two places picks out no one place", () => {
     const report = checkGroundings({
       sources: [{ id: "s", text: "aaaa Grain grain" }],
       targets: ["t"],
@@ -98,11 +98,17 @@ describe("checkGroundings", () => {
         { target: "t", sourceId: "s", quote: "grain" },
       ],
     });
-    expect(report.groundings.map((g) => g.occurrences)).toEqual([2, 1]);
+    expect(report.groundings.map((g) => g.occurrences)).toEqual([3, 1]);
   });
 
   it("refuses duplicate source ids and duplicate targets, which would make every count ambiguous", () => {
     expect(() => checkGroundings({ sources: [SOURCES[0], SOURCES[0]], targets: [], groundings: [] })).toThrow(/duplicate source id/);
     expect(() => checkGroundings({ sources: SOURCES, targets: ["a", "a"], groundings: [] })).toThrow(/duplicate target 'a'/);
+  });
+
+  it("a span that overlaps itself is not unique", () => {
+    const report = checkGroundings({ sources: [{ id: "s", text: "ab ab ab" }], targets: ["t"], groundings: [{ target: "t", sourceId: "s", quote: "ab ab" }] });
+    expect(report.groundings[0].occurrences).toBe(2);
+    expect(report.targets).toEqual([{ target: "t", grounded: 1, uniquelyGrounded: 0 }]);
   });
 });

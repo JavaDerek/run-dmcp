@@ -120,6 +120,9 @@ export interface ClauseRow {
   observed?: number | string | null;
   /** Present for a clause naming another condition. */
   condition?: string;
+  /** The proposal parameter this clause needed and was not given; the clause
+   *  then does not hold. A gate that fails because of it is refused naming it. */
+  missingParameter?: string;
   text?: string;
   holds: boolean;
 }
@@ -180,6 +183,7 @@ export function validateDeclaredRules(rules: DeclaredRules): void {
     const clauses = clausesOf(condition);
     if (!Array.isArray(clauses) || clauses.length === 0) fail(`condition '${condition.id}' needs at least one clause`);
     for (const clause of clauses) {
+      if (typeof clause !== "object" || clause === null) fail(`condition '${condition.id}': a clause must be an object, got ${JSON.stringify(clause)}`);
       if ("condition" in clause) continue;
       const where = `condition '${condition.id}'`;
       checkEntity(where, clause.entity);
@@ -217,6 +221,7 @@ export function validateDeclaredRules(rules: DeclaredRules): void {
     if (typeof mechanic?.name !== "string" || mechanic.name.length === 0) fail(`a mechanic's 'name' must be a non-empty string`);
     if (names.has(mechanic.name)) fail(`duplicate mechanic name '${mechanic.name}'`);
     names.add(mechanic.name);
+    if (mechanic.when !== undefined && !Array.isArray(mechanic.when)) fail(`mechanic '${mechanic.name}': 'when' must be a list of condition ids`);
     for (const id of mechanic.when ?? []) {
       if (!byId.has(id)) fail(`mechanic '${mechanic.name}' is gated on unknown condition '${id}'`);
     }
@@ -230,8 +235,17 @@ export function validateDeclaredRules(rules: DeclaredRules): void {
         checkNumberOperand(where, "amount", leg.amount, false);
         if (leg.sign !== undefined && leg.sign !== 1 && leg.sign !== -1) fail(`${where}: 'sign' must be 1 or -1`);
       }
+      if (leg.kind === "set") {
+        const v = (leg as { value?: unknown }).value;
+        if (!("value" in leg) || !(v === null || typeof v === "string" || (typeof v === "number" && Number.isFinite(v)) || isParamRef(v))) {
+          fail(`${where}: a set leg's 'value' must be a number, a string, null or {param}, got ${JSON.stringify(v)}`);
+        }
+      }
       checkNumberOperand(where, "min", leg.min, true);
       checkNumberOperand(where, "max", leg.max, true);
+      if (typeof leg.min === "number" && typeof leg.max === "number" && leg.min > leg.max) {
+        fail(`${where}: min ${leg.min} is above max ${leg.max}`);
+      }
     }
   }
 }
@@ -258,10 +272,41 @@ function numberOf(operand: NumberOperand, params: Params): number {
   return isParamRef(operand) ? (param(params, operand.param, "number") as number) : operand;
 }
 
-/** Stored fact values are text; a value that reads as a finite number is compared as one. */
+/** Stored fact values are text ("100.0"); one that is a plain decimal
+ *  number -- optional sign, digits, optional fraction and exponent, nothing
+ *  else -- is compared as a number. Hex, padding, "Infinity" and words stay
+ *  strings, compared by exact equality. */
+function isPlainNumber(text: string): boolean {
+  // A character scan, not a pattern: the timeline modules construct no regex
+  // (hard rule 4's guard), and this is a question about characters anyway.
+  const digit = (c: string | undefined) => c !== undefined && c >= "0" && c <= "9";
+  let i = 0;
+  if (text[i] === "-") i++;
+  let digits = 0;
+  while (digit(text[i])) {
+    i++;
+    digits++;
+  }
+  if (text[i] === ".") {
+    i++;
+    while (digit(text[i])) {
+      i++;
+      digits++;
+    }
+  }
+  if (digits === 0) return false;
+  if (text[i] === "e" || text[i] === "E") {
+    i++;
+    if (text[i] === "+" || text[i] === "-") i++;
+    if (!digit(text[i])) return false;
+    while (digit(text[i])) i++;
+  }
+  return i === text.length;
+}
+
 function asNumber(v: string | number | null): number | null {
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
-  if (v === null || v.trim() === "") return null;
+  if (v === null || !isPlainNumber(v)) return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
@@ -269,12 +314,18 @@ function asNumber(v: string | number | null): number | null {
 interface FactIndex {
   value(entityId: string, key: string): string | null;
   byName(name: string): { entityId: string | null; resolution: "resolved" | "none" | "ambiguous" };
+  /** Records a leg's result, so a later leg of the same mechanic reads it. */
+  overlay(entityId: string, key: string, value: string | null): void;
 }
 
-function indexFacts(facts: readonly ConstraintFact[]): FactIndex {
-  const values = new Map<string, string>();
+/** Only facts that HOLD at t: a narration constraint also carries a destroyed
+ *  entity's irreversible facts, which must neither answer a value nor make a
+ *  name ambiguous. */
+function indexFacts(facts: readonly ConstraintFact[], t: T): FactIndex {
+  const values = new Map<string, string | null>();
   const idsByName = new Map<string, Set<string>>();
   for (const fact of facts) {
+    if (fact.validFromT > t || (fact.validToT !== null && fact.validToT <= t)) continue;
     values.set(`${fact.entityId}\u0000${fact.key}`, fact.value);
     if (fact.entityName !== null) {
       const ids = idsByName.get(fact.entityName) ?? new Set<string>();
@@ -284,6 +335,7 @@ function indexFacts(facts: readonly ConstraintFact[]): FactIndex {
   }
   return {
     value: (entityId, key) => values.get(`${entityId}\u0000${key}`) ?? null,
+    overlay: (entityId, key, value) => void values.set(`${entityId}\u0000${key}`, value),
     byName: (name) => {
       const ids = idsByName.get(name);
       if (!ids || ids.size === 0) return { entityId: null, resolution: "none" };
@@ -332,6 +384,13 @@ function evaluateAll(rules: DeclaredRules, facts: FactIndex, params: Params, roo
     if (!condition) throw new Error(`declared rules: unknown condition '${id}'`); // validated away; guarded, not asserted
     const clauses: ClauseRow[] = clausesOf(condition).map((clause) => {
       if ("condition" in clause) return { condition: clause.condition, holds: evaluate(clause.condition).holds };
+      // A parameter the proposal did not carry makes a row, not a throw: a
+      // condition list shows every condition, and only a gate that FAILS on
+      // one refuses (declaredMechanics, below).
+      const missing = [clause.entity, clause.value].find((o) => isParamRef(o) && params[o.param] === undefined) as ParamRef | undefined;
+      if (missing) {
+        return { key: clause.key, op: clause.op, missingParameter: missing.param, ...(clause.text !== undefined ? { text: clause.text } : {}), holds: false };
+      }
       const { entityId, resolution } = resolveEntity(clause.entity, params, facts);
       const declared = isParamRef(clause.value) ? (param(params, clause.value.param, "scalar") as number | string) : clause.value;
       const raw = entityId === null ? null : facts.value(entityId, clause.key);
@@ -376,11 +435,10 @@ export function evaluateConditions(params: {
 }): ConditionRow[] {
   validateDeclaredRules(params.rules);
   assertT(params.t);
-  const facts = indexFacts(narrationConstraintAt({ gameId: params.gameId, t: params.t }).mustHonor);
-  const rows = evaluateAll(params.rules, facts, params.parameters ?? {});
-  return params.rules.conditions
-    .filter((c) => params.for === undefined || c.for === params.for)
-    .flatMap((c) => rows.get(c.id) ?? []);
+  const facts = indexFacts(narrationConstraintAt({ gameId: params.gameId, t: params.t }).mustHonor, params.t);
+  const listed = params.rules.conditions.filter((c) => params.for === undefined || c.for === params.for);
+  const rows = evaluateAll(params.rules, facts, params.parameters ?? {}, listed.map((c) => c.id));
+  return listed.flatMap((c) => rows.get(c.id) ?? []);
 }
 
 // ============================================================================
@@ -400,6 +458,11 @@ function legToChange(
   const max = leg.max === undefined || leg.max === null ? null : numberOf(leg.max, params);
   const bounds = min !== null || max !== null ? { bounds: { minValue: min, maxValue: max } } : {};
   const beforeRaw = facts.value(entityId, leg.key);
+  const recorded = (change: IntendedChange, before: number | string | null, after: number | string | null) => {
+    // A later leg of the same mechanic on the same key reads this one's result.
+    facts.overlay(entityId, leg.key, after === null ? null : String(after));
+    return { change, record: { entityId, key: leg.key, before, after } };
+  };
 
   if (leg.kind === "adjust") {
     const before = beforeRaw === null ? null : asNumber(beforeRaw);
@@ -409,18 +472,15 @@ function legToChange(
     let after = before + (leg.sign ?? 1) * numberOf(leg.amount, params);
     if (min !== null) after = Math.max(min, after);
     if (max !== null) after = Math.min(max, after);
-    return {
-      change: { kind: "write", entityId, key: leg.key, mode: "set", value: after, ...bounds },
-      record: { entityId, key: leg.key, before, after },
-    };
+    return recorded({ kind: "write", entityId, key: leg.key, mode: "set", value: after, ...bounds }, before, after);
   }
 
   const value = isParamRef(leg.value) ? param(params, leg.value.param, "scalar") : leg.value;
   const before = beforeRaw === null ? null : (asNumber(beforeRaw) ?? beforeRaw);
   if (typeof value === "number") {
-    return { change: { kind: "write", entityId, key: leg.key, mode: "set", value, ...bounds }, record: { entityId, key: leg.key, before, after: value } };
+    return recorded({ kind: "write", entityId, key: leg.key, mode: "set", value, ...bounds }, before, value);
   }
-  return { change: { kind: "set", entityId, key: leg.key, value }, record: { entityId, key: leg.key, before, after: value } };
+  return recorded({ kind: "set", entityId, key: leg.key, value }, before, value);
 }
 
 /**
@@ -436,10 +496,18 @@ export function declaredMechanics(rules: DeclaredRules): Mechanic[] {
     name: declared.name,
     adjudicate(input: AdjudicationInput): Adjudication {
       const params = input.parameters ?? {};
-      const facts = indexFacts(input.constraint.mustHonor);
+      const facts = indexFacts(input.constraint.mustHonor, input.t);
       const evaluated = evaluateAll(rules, facts, params, declared.when ?? []);
       const when = (declared.when ?? []).map((id) => ({ id, holds: evaluated.get(id)?.holds === true }));
       const gateHolds = when.every((w) => w.holds);
+      if (!gateHolds) {
+        // A gate that fails only because the proposal lacked a parameter is a
+        // malformed proposal, not a closed gate: refuse it, naming what is missing.
+        const missing = [...evaluated.values()].flatMap((row) => row.clauses).find((c) => c.missingParameter !== undefined);
+        if (missing) {
+          throw new Error(`declared rules: mechanic '${declared.name}' needs parameter '${missing.missingParameter}' to evaluate its gate`);
+        }
+      }
       const legs = gateHolds ? declared.legs : (declared.otherwise ?? []);
       const applied = gateHolds ? "legs" : declared.otherwise && declared.otherwise.length > 0 ? "otherwise" : "none";
       const built = legs.map((leg) => legToChange(leg, params, facts));

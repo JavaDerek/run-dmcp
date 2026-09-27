@@ -74,6 +74,13 @@ export function declareTurnOrder(params: { gameId: string; principals: readonly 
     throw new Error(`declareTurnOrder: fromT ${fromT} is before the game's current t (${story.t}); turns already taken cannot be reordered`);
   }
   const latest = latestDeclaration(gameId);
+  // The current t may already be someone's turn (and a resolution may
+  // already record them acting in it); reassigning it would rewrite that.
+  if (latest && latest.from_t <= story.t && fromT <= story.t) {
+    throw new Error(
+      `declareTurnOrder: t=${story.t} is already covered by the declaration from ${latest.from_t}; a new order can start at t=${story.t + 1} at the earliest`
+    );
+  }
   if (latest && fromT <= latest.from_t) {
     throw new Error(`declareTurnOrder: fromT ${fromT} must come after the latest declaration's fromT (${latest.from_t})`);
   }

@@ -140,3 +140,23 @@ describe("verify_reading: the caller's model answered; the engine verifies and r
     ]);
   });
 });
+
+describe("review finding, 2026-09-26: malformed entries are rows over the wire too", () => {
+  it("null, a string, a number, and a null citation beside a valid answer: the valid answer counts, the rest are rows", async () => {
+    const { isError, body } = await call("verify_reading", {
+      questions: QUESTIONS,
+      sources: SOURCES,
+      offers: [
+        null,
+        "garbage",
+        7,
+        { questionId: "treasury", answerKey: "collected", citation: null },
+        { questionId: "grain-surplus", answerKey: "continued", citation: { sourceId: "ledger", quote: "grain" } },
+      ],
+    });
+    expect(isError).toBe(false);
+    expect(body.answers[0]).toMatchObject({ answerKey: "continued", fromSafeDefault: false });
+    expect(body.answers[1].rejected.map((r: { reason: string }) => r.reason)).toEqual(["missing-citation"]);
+    expect(body.unmatched.map((r: { reason: string }) => r.reason)).toEqual(["malformed-offer", "malformed-offer", "malformed-offer"]);
+  });
+});

@@ -121,18 +121,24 @@ export function registerReaderTools(server: McpServer) {
             // rejects as a row with a reason, and refusing the whole call on
             // schema validation would lose every other answer beside it --
             // the same failure a `[null]` in a transport's list once caused.
-            z.object({
-              questionId: looseLeaf().optional(),
-              answerKey: looseLeaf().optional(),
-              citation: z
-                .object({
-                  sourceId: looseLeaf().optional(),
-                  quote: z.union([z.string().max(LIMITS.CONTENT_MAX), z.number(), z.null()]).optional(),
-                  from: looseLeaf().optional(),
-                  to: looseLeaf().optional(),
-                })
-                .optional(),
-            })
+            z.union([
+              z.object({
+                questionId: looseLeaf().optional(),
+                answerKey: looseLeaf().optional(),
+                citation: z
+                  .object({
+                    sourceId: looseLeaf().optional(),
+                    quote: z.union([z.string().max(LIMITS.CONTENT_MAX), z.number(), z.null()]).optional(),
+                    from: looseLeaf().optional(),
+                    to: looseLeaf().optional(),
+                  })
+                  .nullable()
+                  .optional(),
+              }),
+              // An entry that is not an answer at all -- a model's stray
+              // null or string -- becomes a `malformed-offer` row.
+              looseLeaf(),
+            ])
           )
           .max(1000)
           .describe(

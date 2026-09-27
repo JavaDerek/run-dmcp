@@ -41,7 +41,7 @@ export interface GroundingRow {
   range?: AcceptedCitation["range"];
   /** The citation rule's own reason, when the span does not cite. */
   reason?: RejectionReason;
-  /** Non-overlapping, byte-exact occurrences of the span in its source; 0 when it does not cite. */
+  /** Byte-exact positions the span starts at in its source, overlapping included; 0 when it does not cite. */
   occurrences: number;
   /** Whether `target` is among the targets the caller listed as reachable. */
   reachable: boolean;
@@ -60,9 +60,11 @@ export interface GroundingReport {
   targets: TargetRow[];
 }
 
+/** Every position the span starts at, overlapping included: "ab ab" starts
+ *  twice in "ab ab ab", and a live quote of it would pick out neither. */
 function occurrencesOf(text: string, span: string): number {
   let count = 0;
-  for (let at = text.indexOf(span); at !== -1; at = text.indexOf(span, at + span.length)) count++;
+  for (let at = text.indexOf(span); at !== -1; at = text.indexOf(span, at + 1)) count++;
   return count;
 }
 

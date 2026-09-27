@@ -32,12 +32,16 @@ export function registerConditionTools(server: McpServer, rules: DeclaredRules) 
         gameId: z.string().max(100).describe("The game ID"),
         t: z.number().finite().describe("An opaque ordinal on this game's declared time axis."),
         for: z.string().max(200).optional().describe("Only the conditions declared for this principal."),
+        parameters: z
+          .record(z.string().max(200), z.union([z.string().max(1000), z.number(), z.null()]))
+          .optional()
+          .describe("Values for conditions that take {param} operands. A condition needing one not given is reported with missingParameter, and does not hold."),
       },
       annotations: ANNOTATIONS.READ_ONLY,
     },
-    async ({ gameId, t, for: principal }) => {
+    async ({ gameId, t, for: principal, parameters }) => {
       try {
-        const rows = evaluateConditions({ gameId, t, rules, ...(principal !== undefined ? { for: principal } : {}) });
+        const rows = evaluateConditions({ gameId, t, rules, parameters, ...(principal !== undefined ? { for: principal } : {}) });
         return { content: [{ type: "text", text: JSON.stringify(rows, null, 2) }] };
       } catch (error) {
         log.error("conditions_at failed", { gameId, t, error: (error as Error).message });

@@ -124,3 +124,40 @@ describe("createCoreMcpServer({ rules })", () => {
     );
   });
 });
+
+describe("conditions_at with a parameterised condition (review finding, 2026-09-26)", () => {
+  it("lists the rest, reports the missing parameter, and evaluates it when given", async () => {
+    const { createTestDb, destroyTestDb } = await import("../db/__tests__/testDb.js");
+    const { createGame } = await import("../tools/game.js");
+    const { createResource } = await import("../tools/resource.js");
+    const { InMemoryTransport } = await import("@modelcontextprotocol/sdk/inMemory.js");
+    createTestDb();
+    try {
+      const gameId = createGame({ name: "depot", setting: "test", style: "test" }).id;
+      const grain = createResource({ gameId, ownerType: "game", name: "grain", value: 50 }).id;
+      const rules: DeclaredRules = {
+        conditions: [
+          { id: "mine", for: "steward", all: [{ entity: grain, key: "value", op: ">=", value: 0 }] },
+          { id: "theirs", for: "other", all: [{ entity: { param: "who" }, key: "value", op: ">=", value: 0 }] },
+        ],
+        mechanics: [],
+      };
+      const server = createCoreMcpServer({ rules });
+      const [c, s] = InMemoryTransport.createLinkedPair();
+      const client = new Client({ name: "cond", version: "0" });
+      await Promise.all([server.connect(s), client.connect(c)]);
+      const call = async (args: Record<string, unknown>) => {
+        const r = (await client.callTool({ name: "conditions_at", arguments: args })) as { content: { text: string }[]; isError?: boolean };
+        return { isError: r.isError === true, body: JSON.parse(r.content[0].text) };
+      };
+      expect(await call({ gameId, t: 100, for: "steward" })).toMatchObject({ isError: false, body: [{ id: "mine", holds: true }] });
+      const all = await call({ gameId, t: 100 });
+      expect(all.isError).toBe(false);
+      expect(all.body[1]).toMatchObject({ holds: false, clauses: [{ missingParameter: "who" }] });
+      expect((await call({ gameId, t: 100, parameters: { who: grain } })).body[1].holds).toBe(true);
+      await client.close();
+    } finally {
+      destroyTestDb();
+    }
+  });
+});

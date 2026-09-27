@@ -30,7 +30,9 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type Database from "better-sqlite3";
 import { createTestDb, destroyTestDb } from "../../db/__tests__/testDb.js";
 import { createGame } from "../../tools/game.js";
-import { createResource } from "../../tools/resource.js";
+import { createResource, deleteResource } from "../../tools/resource.js";
+import * as constraintTools from "../../tools/constraint.js";
+import { declareIrreversible } from "../irreversible.js";
 import { createResolver, type Mechanic } from "../resolve.js";
 import { declareTimeAxis, setStoryTime } from "../clock.js";
 import { declaredMechanics, evaluateConditions, validateDeclaredRules, type DeclaredRules } from "../declared.js";
@@ -244,6 +246,92 @@ describe("declared rules (issue #41)", () => {
     });
   });
 
+  describe("review findings, 2026-09-26", () => {
+    const run = (rules: DeclaredRules, mechanic: string, parameters: Record<string, unknown> = {}) =>
+      createResolver({ mechanics: declaredMechanics(rules) }).resolve({ gameId, mechanic, parameters });
+
+    it("a parameterised condition does not break the list: without its parameter it is a row naming the missing parameter", () => {
+      const rules: DeclaredRules = {
+        conditions: [
+          { id: "mine", for: "steward", all: [{ entity: grain, key: "value", op: ">=", value: 0 }] },
+          { id: "theirs", for: "other", all: [{ entity: { param: "who" }, key: "value", op: ">=", value: 0 }] },
+        ],
+        mechanics: [],
+      };
+      expect(evaluateConditions({ gameId, t: 10, rules, for: "steward" }).map((r) => [r.id, r.holds])).toEqual([["mine", true]]);
+      const all = evaluateConditions({ gameId, t: 10, rules });
+      expect(all[1]).toMatchObject({ id: "theirs", holds: false, clauses: [{ missingParameter: "who", holds: false }] });
+      expect(evaluateConditions({ gameId, t: 10, rules, parameters: { who: treasury } })[1].holds).toBe(true);
+    });
+
+    it("two adjust legs on one key compose: the second reads the first's result", () => {
+      const rules: DeclaredRules = {
+        conditions: [],
+        mechanics: [{ name: "TWICE", legs: [
+          { kind: "adjust", entity: grain, key: "value", amount: 1 },
+          { kind: "adjust", entity: grain, key: "value", amount: 2 },
+        ] }],
+      };
+      const outcome = run(rules, "TWICE");
+      expect(valueOf(grain)).toBe(53);
+      expect((outcome.result as { legs: { before: number; after: number }[] }).legs.map((l) => [l.before, l.after])).toEqual([[50, 51], [51, 53]]);
+    });
+
+    it("an adjust with no declared min/max on a bounded-constrained resource is held to the resource's own bounds, as update_resource_value is", () => {
+      constraintTools.declareBoundedConstraint({ gameId, resourceId: grain });
+      const rules: DeclaredRules = { conditions: [], mechanics: [{ name: "FLOOD", legs: [{ kind: "adjust", entity: grain, key: "value", amount: 70 }] }] };
+      expect(() => run(rules, "FLOOD")).toThrow(/bounded-constrained \(max 100\)/);
+      expect(valueOf(grain)).toBe(50);
+    });
+
+    it("a hand-written write with no bounds on a bounded-constrained resource is held to the resource's own bounds too", () => {
+      constraintTools.declareBoundedConstraint({ gameId, resourceId: grain });
+      const ts: Mechanic = { name: "RAW", adjudicate: () => ({ changes: [{ kind: "write", entityId: grain, key: "value", mode: "set", value: 120 }] }) };
+      expect(() => createResolver({ mechanics: [ts] }).resolve({ gameId, mechanic: "RAW" })).toThrow(/bounded-constrained \(max 100\)/);
+    });
+
+    it("{named} resolves among entities whose facts hold at t: a destroyed namesake does not make it ambiguous", () => {
+      const old = createResource({ gameId, ownerType: "game", name: "silo", value: 1, minValue: 0, maxValue: 100 }).id;
+      declareIrreversible({ entityId: old, key: "value" });
+      deleteResource(old);
+      setStoryTime({ gameId, t: 20 });
+      const fresh = createResource({ gameId, ownerType: "game", name: "silo", value: 7, minValue: 0, maxValue: 100 }).id;
+      const rules: DeclaredRules = { conditions: [{ id: "silo", all: [{ entity: { named: "silo" }, key: "value", op: "==", value: 7 }] }], mechanics: [] };
+      expect(evaluateConditions({ gameId, t: 20, rules })[0]).toMatchObject({ holds: true, clauses: [{ entityId: fresh, resolution: "resolved" }] });
+    });
+
+    it("numbers are only what reads as a plain decimal number: hex, padding and words stay strings", () => {
+      const rules: DeclaredRules = {
+        conditions: [
+          { id: "hex", all: [{ entity: grain, key: "value", op: "==", value: "0x32" }] },
+          { id: "padded", all: [{ entity: grain, key: "value", op: "==", value: " 50" }] },
+          { id: "plain", all: [{ entity: grain, key: "value", op: "==", value: "50" }] },
+        ],
+        mechanics: [],
+      };
+      expect(evaluateConditions({ gameId, t: 10, rules }).map((r) => r.holds)).toEqual([false, false, true]);
+    });
+
+    it("an `any` gate holds on its first true clause even when a later clause's parameter is absent", () => {
+      const rules: DeclaredRules = {
+        conditions: [{ id: "either", any: [
+          { entity: grain, key: "value", op: ">=", value: 0 },
+          { entity: { param: "absent" }, key: "value", op: ">=", value: 0 },
+        ] }],
+        mechanics: [{ name: "EITHER", when: ["either"], legs: [{ kind: "adjust", entity: grain, key: "value", amount: 1 }] }],
+      };
+      expect(run(rules, "EITHER").result).toMatchObject({ applied: "legs" });
+    });
+
+    it("a gate that fails because a parameter is absent is refused naming it, not silently treated as false", () => {
+      const rules: DeclaredRules = {
+        conditions: [{ id: "needs", all: [{ entity: { param: "store" }, key: "value", op: ">=", value: 0 }] }],
+        mechanics: [{ name: "NEEDS", when: ["needs"], legs: [] }],
+      };
+      expect(() => run(rules, "NEEDS")).toThrow(/parameter 'store'/);
+    });
+  });
+
   describe("validateDeclaredRules refuses a malformed declaration before anything runs", () => {
     const ok = () => RULES({ grain: "g", treasury: "t" });
     const cases: Array<[string, (r: DeclaredRules) => DeclaredRules, RegExp]> = [
@@ -261,6 +349,12 @@ describe("declared rules (issue #41)", () => {
       ["an unknown operator", (r) => ({ ...r, conditions: [{ id: "c", all: [{ entity: "g", key: "v", op: "~" as never, value: 1 }] }] }), /operator '~'/],
       ["an unknown leg kind", (r) => ({ ...r, mechanics: [{ name: "X", legs: [{ kind: "burn" } as never] }] }), /leg kind 'burn'/],
       ["adjust with a string amount", (r) => ({ ...r, mechanics: [{ name: "X", legs: [{ kind: "adjust", entity: "g", key: "v", amount: "5" as never }] }] }), /amount/],
+      ["a set leg with no value", (r) => ({ ...r, mechanics: [{ name: "X", legs: [{ kind: "set", entity: "g", key: "v", valeu: 1 } as never] }] }), /'value'/],
+      ["a set leg with a boolean value", (r) => ({ ...r, mechanics: [{ name: "X", legs: [{ kind: "set", entity: "g", key: "v", value: true as never }] }] }), /'value'/],
+      ["a set leg with a {named} value", (r) => ({ ...r, mechanics: [{ name: "X", legs: [{ kind: "set", entity: "g", key: "v", value: { named: "x" } as never }] }] }), /'value'/],
+      ["min above max", (r) => ({ ...r, mechanics: [{ name: "X", legs: [{ kind: "adjust", entity: "g", key: "v", amount: 1, min: 10, max: 5 }] }] }), /min 10 is above max 5/],
+      ["a non-list when", (r) => ({ ...r, mechanics: [{ name: "X", when: "granary-full" as never, legs: [] }] }), /'when' must be a list/],
+      ["a null clause", (r) => ({ ...r, conditions: [{ id: "c", all: [null as never] }] }), /clause must be an object/],
     ];
     it("accepts the fixture", () => expect(() => validateDeclaredRules(ok())).not.toThrow());
     for (const [name, mutate, message] of cases) {

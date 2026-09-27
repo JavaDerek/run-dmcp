@@ -127,7 +127,11 @@ describe("resolve: a `create` leg's declared constraints (issue #42)", () => {
   });
 
   it("a declared bound with one open side binds only the side it declares", () => {
-    const outcome = resolverFor([{ ...grainCreate, constraints: [{ kind: "bounded", key: "value", minValue: null, maxValue: 90 }] }]).resolve({
+    // A resource row with no min of its own, so only the declaration speaks for
+    // that side (a resource's own min/max also bind a bounded key's writes --
+    // see resolve.ts's boundedResourceDefault).
+    const openBelow = { ...grainCreate, columns: { ...grainCreate.columns, min_value: null } };
+    const outcome = resolverFor([{ ...openBelow, constraints: [{ kind: "bounded", key: "value", minValue: null, maxValue: 90 }] }]).resolve({
       gameId,
       mechanic: "SOW",
     });
