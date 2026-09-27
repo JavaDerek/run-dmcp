@@ -160,13 +160,40 @@ describe("a malformed offer is a rejected row, never a crash that loses the whol
     expect(result.unmatched.map((r) => r.reason)).toEqual(["malformed-offer"]);
   });
 
-  it("an offer for a real question with no citation at all is rejected under that question, not thrown", async () => {
+  it("an offer for a real question with no citation at all is missing-citation under that question, not thrown", async () => {
     const reader = createTurnReader({
       questions: [GRAIN],
       transports: [returning([{ questionId: GRAIN.id, answerKey: "continued" }])],
     });
     const [grain] = (await reader.read([LEDGER])).answers;
     expect(grain.fromSafeDefault).toBe(true);
+    expect(grain.rejected.map((r) => r.reason)).toEqual(["missing-citation"]);
+  });
+
+  // Measured on a consumer's 3,241 recorded replies: of the 646 discards its
+  // own transcripts showed as "no offer", 634 were an empty citation OBJECT,
+  // `{}` -- a model that decided its answer needed no citation. Calling that "empty-quote" would send a reader looking at
+  // quoting when nothing was quoted at all.
+  it("an empty citation object, or one naming only a source, is missing-citation -- not empty-quote", async () => {
+    const reader = createTurnReader({
+      questions: [GRAIN, TREASURY],
+      transports: [
+        returning([
+          { questionId: GRAIN.id, answerKey: "continued", citation: {} },
+          { questionId: TREASURY.id, answerKey: "collected", citation: { sourceId: "ledger" } },
+        ]),
+      ],
+    });
+    const result = await reader.read([LEDGER]);
+    expect(result.answers.map((a) => a.rejected.map((r) => r.reason))).toEqual([["missing-citation"], ["missing-citation"]]);
+  });
+
+  it("a quote that is present but empty is still empty-quote", async () => {
+    const reader = createTurnReader({
+      questions: [GRAIN],
+      transports: [returning([{ ...GOOD_GRAIN, citation: { sourceId: "ledger", quote: "" } }])],
+    });
+    const [grain] = (await reader.read([LEDGER])).answers;
     expect(grain.rejected.map((r) => r.reason)).toEqual(["empty-quote"]);
   });
 });

@@ -140,6 +140,7 @@ export type ReaderTransport = (request: ReadRequest) => Promise<readonly Transpo
  *  check failed (hard rule 2). */
 export type RejectionReason =
   | "malformed-offer"
+  | "missing-citation"
   | "unknown-question"
   | "unknown-answer-key"
   | "unknown-source-id"
@@ -382,6 +383,9 @@ export function createTurnReader(params: {
  * failure -- short sources overshoot most, and in the consumer that hit it
  * a whole class of four-word intents was never once ruled.
  *
+ * A citation that names no span at all -- absent, `{}`, or a source alone
+ * -- is `missing-citation`, reported before any of the above.
+ *
  * Defensive against a citation that is missing entirely or missing a field
  * -- a transport is caller-supplied code this module does not control at
  * runtime, and a malformed citation must still be rejected mechanically
@@ -392,9 +396,18 @@ function resolveCitation(
   sourcesById: ReadonlyMap<string, ReaderSource>
 ):
   | { citation: AcceptedCitation }
-  | { reason: "unknown-source-id" | "empty-quote" | "quote-not-in-source" | "invalid-range" | "range-start-past-end" } {
+  | {
+      reason: "missing-citation" | "unknown-source-id" | "empty-quote" | "quote-not-in-source" | "invalid-range" | "range-start-past-end";
+    } {
   const record = (typeof citation === "object" && citation !== null ? citation : {}) as Record<string, unknown>;
   const sourceId = record.sourceId;
+
+  // Nothing that could name a span at all -- no citation, `{}`, or a source
+  // with neither a quote nor a range. Distinct from `empty-quote` because a
+  // reader chasing a quoting problem here would be chasing nothing.
+  if (record.quote === undefined && record.from === undefined && record.to === undefined) {
+    return { reason: "missing-citation" };
+  }
 
   if (record.from !== undefined || record.to !== undefined) {
     const { from, to } = record;
