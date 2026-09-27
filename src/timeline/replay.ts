@@ -91,6 +91,20 @@ const ALIVE_AT_T = "e.created_at_t <= ? AND (e.destroyed_at_t IS NULL OR e.destr
  *
  * DECISION(#18): replay() applies no visibility filtering, by decision rather than omission.
  *
+ * DECISION(#18): a per-principal view is the caller's selection; the engine scopes a read to it (entityIds), and holds no principal relation.
+ *
+ * SCOPED, NOT FILTERED (issue #18, decided 2026-09-26). `entityIds` restricts
+ * the snapshot to a selection the CALLER built -- which entities a principal
+ * perceives -- and a scoped snapshot is exactly the unscoped one restricted
+ * to those entities, never a different answer. The first real caller's
+ * measurement settled where the line falls: both of its view builders select
+ * positively and subtract nothing, from game-specific predicates (a
+ * concealment threshold, containers, shared location) the engine has no
+ * business owning. What it could not do was ask for the selection, so it
+ * read the omniscient world and picked from it. The principal relation stays
+ * in the caller; the paragraphs below about omniscience still describe what
+ * an unscoped read returns.
+ *
  * OMNISCIENT, DELIBERATELY (issue #18). This returns every fact valid at
  * `t`, for every entity alive at `t`, with no visibility filtering of any
  * kind. That is a decision, not an omission: per-principal visibility is
@@ -111,12 +125,27 @@ const ALIVE_AT_T = "e.created_at_t <= ? AND (e.destroyed_at_t IS NULL OR e.destr
  * one reads equally well as "visible to everyone" and "visible to no one",
  * and both readings survive review.
  */
-export function replay(params: { gameId: string; t: T }): Snapshot {
+export function replay(params: { gameId: string; t: T; entityIds?: readonly string[] }): Snapshot {
   const { gameId, t } = params;
   // A Date, a string, NaN or +-Infinity gets refused here, loudly, before
   // it can silently compare unequal to every row and produce a confidently
   // wrong empty snapshot.
   assertT(t);
+
+  // Scope (issue #18): the snapshot restricted to a caller's selection. Bound
+  // as ONE JSON array through `json_each`, so the SQL text stays fixed and
+  // the bind count stays constant whatever the list's length -- the same two
+  // properties the paragraph above keeps for the unscoped read. Omitted is
+  // unscoped; `[]` narrows to nothing, as narrationConstraintAt's does.
+  const entityIds = params.entityIds;
+  if (entityIds !== undefined) {
+    if (!Array.isArray(entityIds) || entityIds.some((id) => typeof id !== "string")) {
+      throw new Error(`replay: entityIds must be a list of entity id strings, got ${JSON.stringify(entityIds)}`);
+    }
+    if (entityIds.length === 0) return { gameId, t, entities: [] };
+  }
+  const scope = entityIds === undefined ? null : JSON.stringify(entityIds);
+  const SCOPED = "(? IS NULL OR e.id IN (SELECT value FROM json_each(?)))";
 
   const db = getDatabase();
 
@@ -130,9 +159,10 @@ export function replay(params: { gameId: string; t: T }): Snapshot {
        FROM entities e
        WHERE e.game_id = ?
          AND ${ALIVE_AT_T}
+         AND ${SCOPED}
        ORDER BY e.created_at_t, e.id`
     )
-    .all(gameId, t, t) as EntityRow[];
+    .all(gameId, t, t, scope, scope) as EntityRow[];
 
   const entities: ReplayedEntity[] = entityRows.map((row) => ({
     id: row.id,
@@ -168,11 +198,12 @@ export function replay(params: { gameId: string; t: T }): Snapshot {
        JOIN entities e ON e.id = f.entity_id
        WHERE e.game_id = ?
          AND ${ALIVE_AT_T}
+         AND ${SCOPED}
          AND f.valid_from_t <= ?
          AND (f.valid_to_t IS NULL OR f.valid_to_t > ?)
        ORDER BY f.valid_from_t`
     )
-    .all(gameId, t, t, t, t) as FactRow[];
+    .all(gameId, t, t, scope, scope, t, t) as FactRow[];
 
   for (const factRow of factRows) {
     const entity = byId.get(factRow.entity_id);

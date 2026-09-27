@@ -105,7 +105,9 @@ export interface RenderedState {
 }
 
 export interface StateRenderer {
-  render(params: { gameId: string; t: T }): RenderedState;
+  /** `entityIds` scopes the render to a caller's selection (issue #18), with
+   *  replay()'s semantics: omitted is unscoped, `[]` renders nothing. */
+  render(params: { gameId: string; t: T; entityIds?: readonly string[] }): RenderedState;
 }
 
 /** The validated, defensively-copied, frozen form of one vocabulary entry. */
@@ -269,8 +271,8 @@ function composePhrase(entry: ResolvedVocabularyEntry): string {
  * checks this with `JSON.stringify` equality, the same proof `narration.ts`
  * uses.
  */
-function renderState(vocabulary: ResolvedVocabulary, params: { gameId: string; t: T }): RenderedState {
-  const snapshot = replay({ gameId: params.gameId, t: params.t });
+function renderState(vocabulary: ResolvedVocabulary, params: { gameId: string; t: T; entityIds?: readonly string[] }): RenderedState {
+  const snapshot = replay({ gameId: params.gameId, t: params.t, entityIds: params.entityIds });
 
   const nouns: RenderedNoun[] = [];
   const unnamed: UnnamedFact[] = [];
@@ -329,7 +331,7 @@ function renderState(vocabulary: ResolvedVocabulary, params: { gameId: string; t
 export function createStateRenderer(params: { vocabulary: RenderVocabulary }): StateRenderer {
   const vocabulary = resolveVocabulary(params.vocabulary);
   return {
-    render(renderParams: { gameId: string; t: T }): RenderedState {
+    render(renderParams: { gameId: string; t: T; entityIds?: readonly string[] }): RenderedState {
       return renderState(vocabulary, renderParams);
     },
   };

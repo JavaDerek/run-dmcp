@@ -529,6 +529,19 @@ fact F is not visible to principal P at `t`, a claim asserting F in a payload bu
 prohibited* — derived from the facts, never an authored list of what may not be said, which would be
 §5.2b's rule wearing a costume.
 
+**Decided, 2026-09-26 (#18): the view is the caller's selection; the engine scopes reads to it.** The
+real caller arrived, meeting both halves: two principals that *are* `character` entities. It was
+asked for the measurement #18's deferral named — does its view builder subtract from engine output? —
+and it does not. Both of its builders select positively, from predicates that are its own game's
+(a concealment threshold, what a container holds, who shares a location), and a principal relation
+built from those would be that game's rules entering the core. What it could not do was *ask* for
+its selection: `replay` and `render` read the whole game, so it read the omniscient world and picked
+from it. So the engine's part is a scope, not a model: `replay({ gameId, t, entityIds })` and
+`render({ …, entityIds })` return exactly the unscoped answer restricted to the entities named, with
+`narrationConstraintAt`'s existing semantics (omitted is unscoped, `[]` is nothing). No principal
+concept, no visibility column, and export stays omniscient. What would reopen it is the medium signal
+above arriving for real: two callers sharing a subtraction, with its size.
+
 ---
 
 ## 9. Case study: a music video is a degenerate interactive fiction

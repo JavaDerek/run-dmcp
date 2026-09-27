@@ -41,12 +41,19 @@ export function registerRenderTools(server: McpServer, renderer: StateRenderer) 
             "An opaque ordinal on this game's declared time axis -- never a datetime, and never an index " +
               "into units you might later re-cut."
           ),
+        entityIds: z
+          .array(z.string().max(100))
+          .max(10000)
+          .optional()
+          .describe(
+            "Scope the read to these entities -- a selection you built, such as what one character perceives. Omitted: every entity. An empty list: none. An id not alive at t is simply absent."
+          ),
       },
       annotations: ANNOTATIONS.READ_ONLY,
     },
-    async ({ gameId, t }) => {
+    async ({ gameId, t, entityIds }) => {
       try {
-        const rendered = renderer.render({ gameId, t });
+        const rendered = renderer.render({ gameId, t, entityIds });
         return { content: [{ type: "text", text: JSON.stringify(rendered, null, 2) }] };
       } catch (error) {
         log.error("render_state_at failed", { gameId, t, error: (error as Error).message });
