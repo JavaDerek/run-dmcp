@@ -24,7 +24,7 @@
 //       pre-split server did at the commit before this split began -- plus
 //       the tools added since, each added to the list below by hand in the
 //       commit that added it (issue #39: prepare_reading, verify_reading;
-//       220 now). That
+//       issue #40: declare_turn_order, due_at, advance_turn; 223 now). That
 //       snapshot was captured by running the OLD src/mcp-server.ts directly,
 //       before any file in this split moved, and is checked in below as a
 //       constant -- proof the refactor is behaviour-preserving, not a claim
@@ -185,6 +185,7 @@ const GOLDEN_TOOLS = [
   "add_clue",
   "add_combat_log",
   "advance_time",
+  "advance_turn",
   "apply_game_theme_preset",
   "apply_status_effect",
   "apply_theme_preset",
@@ -220,6 +221,7 @@ const GOLDEN_TOOLS = [
   "declare_fact_irreversible",
   "declare_resource_constraint",
   "declare_time_axis",
+  "declare_turn_order",
   "delete_ability",
   "delete_audio",
   "delete_character",
@@ -236,6 +238,7 @@ const GOLDEN_TOOLS = [
   "delete_resource",
   "delete_secret",
   "delete_timer",
+  "due_at",
   "end_combat",
   "export_story",
   "export_timeline",
@@ -455,8 +458,8 @@ function surfaceOf(server: unknown): Surface {
 describe("the golden surface: the split changed nothing an MCP client can observe", () => {
   const full = surfaceOf(createFullMcpServer());
 
-  it("registers exactly 220 tools, 1 resource, 11 resource templates, 7 prompts", () => {
-    expect(full.tools.length).toBe(220);
+  it("registers exactly 223 tools, 1 resource, 11 resource templates, 7 prompts", () => {
+    expect(full.tools.length).toBe(223);
     expect(full.resources.length).toBe(1);
     expect(full.resourceTemplates.length).toBe(11);
     expect(full.prompts.length).toBe(7);

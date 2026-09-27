@@ -3,6 +3,7 @@ import { z } from "zod";
 import { ANNOTATIONS } from "../utils/tool-annotations.js";
 import { createLogger } from "../utils/logger.js";
 import { replay } from "../timeline/replay.js";
+import { declareTurnOrder, dueAt, advanceTurn } from "../timeline/turns.js";
 import { declareTimeAxis, setStoryTime, currentStoryTime } from "../timeline/clock.js";
 import { declareIrreversible, listIrreversibleFacts } from "../timeline/irreversible.js";
 import { exportTimelineToFile, importTimelineFromFile } from "../timeline/export.js";
@@ -381,5 +382,48 @@ export function registerTimelineTools(server: McpServer) {
         };
       }
     }
+  );
+
+  // Issue #40: a principal is due to act. The engine records whose turn it
+  // is and refuses an out-of-turn `resolve`; it never runs a turn.
+  const turnTool = (name: string, description: string, inputSchema: Record<string, z.ZodTypeAny>, annotations: typeof ANNOTATIONS.READ_ONLY, run: (args: Record<string, unknown>) => unknown) =>
+    server.registerTool(name, { description, inputSchema, annotations }, async (args: Record<string, unknown>) => {
+      try {
+        return { content: [{ type: "text" as const, text: JSON.stringify(run(args), null, 2) }] };
+      } catch (error) {
+        log.error(`${name} failed`, { error: (error as Error).message });
+        return { content: [{ type: "text" as const, text: JSON.stringify({ error: (error as Error).message }) }], isError: true };
+      }
+    });
+
+  turnTool(
+    "declare_turn_order",
+    "Declare which entities act, in what cycle, one per t on this game's counter axis from fromT onward. Append-only: " +
+      "to change the order, declare again from a later t -- earlier turns keep answering as they did. Once declared, a resolve " +
+      "naming an actor who is not due at the current t is refused. The engine records whose turn it is; it never runs one.",
+    {
+      gameId: z.string().max(100).describe("The game ID"),
+      principals: z.array(z.string().max(100)).max(1000).describe("Entity ids, in the order they act."),
+      fromT: tSchema.describe("The first t this order covers. An integer t on the counter axis, not before the current t."),
+    },
+    ANNOTATIONS.UPDATE,
+    (a) => declareTurnOrder({ gameId: a.gameId as string, principals: a.principals as string[], fromT: a.fromT as number })
+  );
+
+  turnTool(
+    "due_at",
+    "Who is due to act at t under this game's declared turn order -- any t, past included -- with the round and " +
+      "position in the cycle. {due: null} when no declaration covers t.",
+    { gameId: z.string().max(100).describe("The game ID"), t: tSchema },
+    ANNOTATIONS.READ_ONLY,
+    (a) => dueAt({ gameId: a.gameId as string, t: a.t as number }) ?? { due: null }
+  );
+
+  turnTool(
+    "advance_turn",
+    "Move this game's clock to the next turn and say who is due there. Moves time only; runs nothing.",
+    { gameId: z.string().max(100).describe("The game ID") },
+    ANNOTATIONS.UPDATE,
+    (a) => advanceTurn({ gameId: a.gameId as string })
   );
 }

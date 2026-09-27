@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 import { getDatabase, withTransaction } from "../db/connection.js";
 import { type T } from "./t.js";
 import { currentStoryTime } from "./clock.js";
+import { dueAt, hasTurnOrder } from "./turns.js";
 import { narrationConstraintAt, contradictions, type NarrationConstraint, type Claim, type Contradiction } from "./narration.js";
 import { withAdjudicationOpen } from "./adjudication.js";
 import type { EntityKind } from "./kinds.js";
@@ -143,6 +144,12 @@ export interface Proposal {
   mechanic: string;
   parameters?: Record<string, unknown>;
   expects?: readonly Expectation[];
+  /** The principal proposing (issue #40): an entity id. When the game has
+   *  declared a turn order covering the current t, a proposal whose actor is
+   *  not the one due is refused `out-of-turn` before dispatch. Omitted, the
+   *  proposal is the world's own (time passing, a scheduled consequence) and
+   *  is not a turn. Recorded in the resolution's causes either way. */
+  actor?: string;
 }
 
 /**
@@ -337,6 +344,10 @@ export interface Mechanic {
 export type ResolveRefusalReason =
   | "unknown-mechanic"
   | "no-clock"
+  /** The proposal named an `actor`, the game has declared a turn order, and
+   *  that actor is not the one due at the current t (issue #40). Refused
+   *  before dispatch. */
+  | "out-of-turn"
   | "expectation-contradicted"
   /** A leg said `{ ref }` and no earlier `create` leg of the same
    *  resolution defined that ref (issue #34). Refused before any write. */
@@ -449,6 +460,8 @@ interface ResolutionCauses {
   resolution_id: string;
   mechanic: string;
   change_count: number;
+  /** Who proposed, when the proposal said (issue #40). */
+  actor?: string;
 }
 
 /** Every `{ ref }` a change carries, in the order it is read (issue #34) --
@@ -692,6 +705,20 @@ function resolveProposal(mechanicsByName: Map<string, Mechanic>, proposal: Propo
   }
   const t = preStory.t;
 
+  // 2b. Turns (issue #40): an actor who is not due is refused before the
+  // mechanic ever sees the proposal. No actor -> not a turn -> no check.
+  if (proposal.actor !== undefined && hasTurnOrder(gameId)) {
+    const due = dueAt({ gameId, t });
+    if (!due || due.principal !== proposal.actor) {
+      throw new ResolveProtocolError(
+        "out-of-turn",
+        `resolve: '${proposal.actor}' proposed at t=${t}, but ` +
+          (due ? `'${due.principal}' is due at t=${t}` : `nobody is due at t=${t}`) +
+          ` under this game's declared turn order. Ask who is due (due_at) or move to the next turn (advance_turn).`
+      );
+    }
+  }
+
   // 3. ONE query builds both the mechanic's read surface AND the inbound
   // precondition check -- see the module doc comment's unification note on
   // why this is the same structure read in two directions, not two
@@ -800,6 +827,7 @@ function resolveProposal(mechanicsByName: Map<string, Mechanic>, proposal: Propo
         resolution_id: resolutionId,
         mechanic: mechanicName,
         change_count: changes.length,
+        ...(proposal.actor !== undefined ? { actor: proposal.actor } : {}),
       };
       getDatabase()
         .prepare(

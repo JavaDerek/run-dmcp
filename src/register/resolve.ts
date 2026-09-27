@@ -55,12 +55,20 @@ export function registerResolveTools(server: McpServer, resolver: Resolver) {
             "Facts this proposal declares it depends on, verified BEFORE the mechanic is dispatched. A caller's " +
               "own declared precondition -- the engine only reports whether it holds, never why it should."
           ),
+        actor: z
+          .string()
+          .max(100)
+          .optional()
+          .describe(
+            "The entity proposing. If the game has declared a turn order, a proposal from anyone not due at the " +
+              "current t is refused (out-of-turn) before the mechanic runs. Omit for the world's own mechanics."
+          ),
       },
       annotations: ANNOTATIONS.UPDATE,
     },
-    async ({ gameId, mechanic, parameters, expects }) => {
+    async ({ gameId, mechanic, parameters, expects, actor }) => {
       try {
-        const outcome = resolver.resolve({ gameId, mechanic, parameters, expects });
+        const outcome = resolver.resolve({ gameId, mechanic, parameters, expects, actor });
         return { content: [{ type: "text", text: JSON.stringify(outcome, null, 2) }] };
       } catch (error) {
         if (error instanceof ResolveProtocolError) {

@@ -298,6 +298,35 @@ export function initializeTimelineSchema(): void {
     END;
   `);
 
+  // Issue #40: a game's declared turn order -- which entities act in what
+  // cycle, from a `from_t` on. Append-only like the timeline it answers for:
+  // `dueAt(t)` for a past t must give the same answer forever, so a
+  // declaration is never edited or removed, only superseded by a later one
+  // from a later `from_t` (turns.ts refuses anything else before insert).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS turn_orders (
+      id TEXT PRIMARY KEY,
+      game_id TEXT NOT NULL,
+      from_t REAL NOT NULL,
+      principals TEXT NOT NULL,
+      declared_at TEXT NOT NULL,
+      UNIQUE (game_id, from_t)
+    );
+    CREATE INDEX IF NOT EXISTS idx_turn_orders_game_from ON turn_orders(game_id, from_t);
+    DROP TRIGGER IF EXISTS timeline_turn_orders_immutable;
+    CREATE TRIGGER timeline_turn_orders_immutable
+    BEFORE UPDATE ON turn_orders
+    BEGIN
+      SELECT RAISE(ABORT, 'timeline: turn orders are append-only; a declaration is superseded, never edited');
+    END;
+    DROP TRIGGER IF EXISTS timeline_turn_orders_no_delete;
+    CREATE TRIGGER timeline_turn_orders_no_delete
+    BEFORE DELETE ON turn_orders
+    BEGIN
+      SELECT RAISE(ABORT, 'timeline: turn orders are append-only; a declaration is superseded, never deleted');
+    END;
+  `);
+
   // Issue #2: the projection layer. Triggers first, so every write from
   // here on appends by construction; reconciliation second, so it backfills
   // against triggers that are already live rather than a stale set. See
