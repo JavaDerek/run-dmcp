@@ -10,6 +10,7 @@
 // The web UI runs by default, as it always has. DMCP_NO_HTTP turns it off, for
 // a host that spawns this as an MCP subprocess and has no use for an admin
 // page it cannot close.
+import { readFileSync } from "node:fs";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 import { closeDatabase } from "../db/connection.js";
@@ -22,6 +23,7 @@ import { startHttpServer } from "../http/server.js";
 import { createMcpServer } from "../rpg/server.js";
 import { httpPortFromEnv, setHttpPort, webUiEnabled } from "../utils/webui.js";
 import { createLogger } from "../utils/logger.js";
+import type { DeclaredRules } from "../timeline/declared.js";
 
 const log = createLogger("bin");
 
@@ -30,7 +32,21 @@ async function main(): Promise<void> {
   // up -- not at import time, and not in any module a consumer might load.
   initializeSchema();
 
-  const server = createMcpServer();
+  // A game's rules as declared data (issue #41): a stock server loads its
+  // mechanics, gates and conditions from a JSON file. Unreadable or invalid
+  // rules stop startup here, loudly -- a server that came up without the
+  // rules it was pointed at would answer every resolve with unknown-mechanic.
+  const rulesPath = process.env.DMCP_RULES_FILE;
+  let rules: DeclaredRules | undefined;
+  if (rulesPath) {
+    try {
+      rules = JSON.parse(readFileSync(rulesPath, "utf8")) as DeclaredRules;
+    } catch (error) {
+      throw new Error(`DMCP_RULES_FILE '${rulesPath}' could not be read as JSON: ${(error as Error).message}`);
+    }
+  }
+
+  const server = createMcpServer(rules ? { rules } : undefined);
 
   if (webUiEnabled(process.env)) {
     const actualPort = await startHttpServer(httpPortFromEnv(process.env));

@@ -40,6 +40,8 @@ import { registerTimelineTools } from "./register/timeline.js";
 import { registerResolveTools } from "./register/resolve.js";
 import { registerRenderTools } from "./register/render.js";
 import { registerReaderTools } from "./register/reader.js";
+import { registerConditionTools } from "./register/conditions.js";
+import { declaredMechanics, validateDeclaredRules, type DeclaredRules } from "./timeline/declared.js";
 import { createResolver, type Mechanic } from "./timeline/resolve.js";
 import { createStateRenderer, type RenderVocabulary } from "./timeline/render.js";
 
@@ -93,7 +95,12 @@ export const SERVER_VERSION = "0.9.0";
 export function createCoreMcpServer(options?: {
   mechanics?: readonly Mechanic[];
   vocabulary?: RenderVocabulary;
+  /** A game's mechanics, gates and conditions as declared data (issue #41):
+   *  its mechanics register beside `mechanics`, and `conditions_at` is
+   *  served. Validated here, so a server with broken rules never comes up. */
+  rules?: DeclaredRules;
 }): McpServer {
+  if (options?.rules) validateDeclaredRules(options.rules);
   const server = new McpServer({
     name: SERVER_NAME,
     version: SERVER_VERSION,
@@ -120,11 +127,13 @@ export function createCoreMcpServer(options?: {
   registerTimelineTools(server);       // replay(t), story-time axis declaration
   registerReaderTools(server);         // prepare_reading, verify_reading -- the turn reader with the model on the caller's side
 
-  const mechanics = options?.mechanics;
-  if (mechanics && mechanics.length > 0) {
+  const mechanics = [...(options?.mechanics ?? []), ...(options?.rules ? declaredMechanics(options.rules) : [])];
+  if (mechanics.length > 0) {
     const resolver = createResolver({ mechanics });
     registerResolveTools(server, resolver); // resolve(), list_mechanics -- only when mechanics are registered
   }
+
+  if (options?.rules) registerConditionTools(server, options.rules); // conditions_at -- only when rules are declared
 
   const vocabulary = options?.vocabulary;
   if (vocabulary) {

@@ -64,6 +64,7 @@ import { createCoreMcpServer } from "../mcp-server.js";
 import { createMcpServer } from "../rpg/server.js";
 import type { Mechanic } from "../timeline/resolve.js";
 import type { RenderVocabulary } from "../timeline/render.js";
+import type { DeclaredRules } from "../timeline/declared.js";
 
 /** grain, treasury, population -- a throwaway fixture vocabulary for
  *  exercising mechanism, never a starter set (design §10). */
@@ -77,6 +78,13 @@ const FIXTURE_VOCABULARY: RenderVocabulary = {
 const FIXTURE_MECHANIC: Mechanic = {
   name: "fixture",
   adjudicate: () => ({ changes: [] }),
+};
+
+/** Present only so `conditions_at` gets registered and its schema walked --
+ *  a server given no declared rules serves no such tool (issue #41). */
+const FIXTURE_RULES: DeclaredRules = {
+  conditions: [{ id: "fixture", all: [{ entity: "fixture", key: "value", op: ">=", value: 0 }] }],
+  mechanics: [],
 };
 
 type JsonSchema = Record<string, unknown>;
@@ -250,7 +258,7 @@ describe("the published schemas are declarations, not pointers", () => {
 
   it("the full assembly publishes no $ref anywhere", async () => {
     const found = await declaredRefs(
-      createMcpServer({ mechanics: [FIXTURE_MECHANIC], vocabulary: FIXTURE_VOCABULARY })
+      createMcpServer({ mechanics: [FIXTURE_MECHANIC], vocabulary: FIXTURE_VOCABULARY, rules: FIXTURE_RULES })
     );
     expect(found, `${found.length} $ref(s) published:\n${found.slice(0, 20).join("\n")}`).toEqual([]);
   });
@@ -265,7 +273,7 @@ describe("every string parameter the engine declares carries a maxLength", () =>
   it("the core server declares no unbounded string", async () => {
     const offenders = unbounded(
       await declaredStringLeaves(
-        createCoreMcpServer({ mechanics: [FIXTURE_MECHANIC], vocabulary: FIXTURE_VOCABULARY })
+        createCoreMcpServer({ mechanics: [FIXTURE_MECHANIC], vocabulary: FIXTURE_VOCABULARY, rules: FIXTURE_RULES })
       )
     );
     expect(offenders, report(offenders)).toEqual([]);
@@ -274,7 +282,7 @@ describe("every string parameter the engine declares carries a maxLength", () =>
   it("the full assembly declares no unbounded string either", async () => {
     const offenders = unbounded(
       await declaredStringLeaves(
-        createMcpServer({ mechanics: [FIXTURE_MECHANIC], vocabulary: FIXTURE_VOCABULARY })
+        createMcpServer({ mechanics: [FIXTURE_MECHANIC], vocabulary: FIXTURE_VOCABULARY, rules: FIXTURE_RULES })
       )
     );
     expect(offenders, report(offenders)).toEqual([]);

@@ -16,6 +16,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createCoreMcpServer } from "../mcp-server.js";
 import type { Mechanic } from "../timeline/resolve.js";
 import type { RenderVocabulary } from "../timeline/render.js";
+import type { DeclaredRules } from "../timeline/declared.js";
 import { registerRpgTools } from "./index.js";
 
 /**
@@ -29,6 +30,7 @@ import { registerRpgTools } from "./index.js";
 export function createMcpServer(options?: {
   mechanics?: readonly Mechanic[];
   vocabulary?: RenderVocabulary;
+  rules?: DeclaredRules;
 }): McpServer {
   const server = createCoreMcpServer(options);
   registerRpgTools(server);

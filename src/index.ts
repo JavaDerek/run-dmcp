@@ -267,6 +267,27 @@ export type {
 export { checkGroundings } from "./reader/preflight.js";
 export type { DeclaredGrounding, GroundingRow, TargetRow, GroundingReport } from "./reader/preflight.js";
 
+// Mechanics, gates and end conditions as declared data (GitHub issue #41): a
+// small JSON declaration -- conditions over facts, and mechanics that adjust or
+// set facts when their gate conditions hold -- turned into ordinary Mechanics
+// for createResolver, and evaluated at any t for a principal's condition list.
+// Anything the declaration cannot say stays a hand-written Mechanic.
+export { declaredMechanics, evaluateConditions, validateDeclaredRules } from "./timeline/declared.js";
+export type {
+  DeclaredRules,
+  DeclaredCondition,
+  DeclaredMechanic,
+  DeclaredLeg,
+  ConditionClause,
+  FactClause,
+  ComparisonOp,
+  EntityOperand,
+  NumberOperand,
+  ParamRef,
+  ConditionRow,
+  ClauseRow,
+} from "./timeline/declared.js";
+
 // Timeline export (design §6) -- the boundary that keeps both halves honest:
 // conversational authoring upstream of a frozen artifact, deterministic
 // consumers downstream of it. These are exported as library functions first
