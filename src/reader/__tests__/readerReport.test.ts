@@ -209,3 +209,10 @@ describe("reporting changes nothing about what counts", () => {
     ]);
   });
 });
+
+describe("duplicate source ids (decided 2026-09-27)", () => {
+  it("read() refuses them, as verifyAnswers and the verbs do -- a citation to a shared id cannot be checked", async () => {
+    const reader = createTurnReader({ questions: [GRAIN], transports: [returning([GOOD_GRAIN])] });
+    await expect(reader.read([LEDGER, { id: "ledger", text: "something else" }])).rejects.toThrow(/duplicate source id 'ledger'/);
+  });
+});

@@ -321,8 +321,9 @@ export function validateQuestions(questions: readonly ReaderQuestion[]): void {
 }
 
 /** A citation names its source by id, so two sources sharing one make a
- *  citation ambiguous. Checked where a caller hands sources over for
- *  verification (`verifyAnswers`, and the MCP verbs over it). */
+ *  citation ambiguous. Checked everywhere sources are handed over: `read()`
+ *  (which rejects), `verifyAnswers`, and the MCP verbs over it. Until
+ *  2026-09-27 `read()` let the last duplicate win silently. */
 export function validateSourceIds(sources: readonly ReaderSource[]): void {
   const seen = new Set<string>();
   for (const source of sources) {
@@ -595,6 +596,7 @@ async function runLadder(
   attemptsPerTransport: number,
   sources: readonly ReaderSource[]
 ): Promise<ReaderResult> {
+  validateSourceIds(sources);
   const tally = createTally(questions, sources);
   const rungs: RungReport[] = [];
 
@@ -644,9 +646,9 @@ async function runLadder(
  * the caller builds the request and gets it answered; the engine verifies the
  * answers and returns the ruling. It never infers anything itself.
  *
- * For valid input, the result is exactly what `createTurnReader({ questions,
- * transports: [t] }).read(sources)` returns when `t` resolves to `offers`
- * (unlike `read()`, this refuses duplicate source ids -- see below): the offers are rung
+ * The result is exactly what `createTurnReader({ questions, transports: [t]
+ * }).read(sources)` returns when `t` resolves to `offers`, and both refuse
+ * duplicate source ids: the offers are rung
  * 0, asked every question, and go through the one tally every rung's offers
  * go through, so the verb and the library cannot disagree about what counts.
  * Synchronous, because there is nothing to wait for.
