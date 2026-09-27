@@ -483,7 +483,7 @@ without a real caller) and what keeps this from becoming a licence to build for 
 
 | Layer | Contains | Why |
 |---|---|---|
-| **Core** | entities, facts, events, `replay(t)`, `changes_within(t0,t1)`, the constraint family, the resolve protocol and constraint, timeline export, the turn reader, the state-to-text projection *mechanism* | Generic, with at least one real caller. Not narrative furniture. |
+| **Core** | entities, facts, events, `replay(t)`, `changes_within(t0,t1)`, the constraint family, the resolve protocol and constraint, timeline export, the turn reader, the state-to-text projection *mechanism*, declared rules and conditions (#41), a declared turn order (#40) | Generic, with at least one real caller. Not narrative furniture. |
 | **Core, and this is the correction** | factions, relationships-with-history, secrets, resources, locations, items | brink's spine. If these go up into the RPG layer, brink cannot consume the package without dragging the RPG layer with it — which defeats the split. They are entity/property concepts, not RPG ones. |
 | **RPG layer** | dice, combat, abilities, status effects, random tables, quests | Genuinely game-shaped. Optional dependency. |
 | **brink** | the eight mechanics, prestige, DEFCON, flashpoints, cohesion, crises, compellence, accords, occupation, seats, GM persona, situation room, refresh pipeline | Geopolitical content. Never in the engine. |
@@ -653,6 +653,18 @@ section is brink's.
    Beijing about trade"* as engagement with the South China Sea.
 4. **Fact granularity** — too coarse and `replay(t)` returns prose that cannot be checked; too fine
    and authoring becomes data entry. Driven by what the checks need, not by what is describable.
+   *Settled as a rule, 2026-09-26 (#21): granularity is decided per key, as checks arrive, never
+   globally.* **Floor:** a key is too coarse when a contradiction against it cannot be detected by
+   comparing values structurally — if the only possible check reads English, split it (hard rule 4 as
+   a schema constraint). **Ceiling:** a key is too fine when no declared check reads it and no rendered
+   projection emits it — a caller writing code to drop or re-derive `changes_within` rows is the
+   signature. **Free floor, already in force:** any property that may ever be declared `irreversible`
+   has its own key, because contradiction is whole-value comparison under one key. **The tell of the
+   right grain:** each key has exactly one declarable comparator — the grain a constraint can attach
+   to is the grain a check can use. **Joints, not units:** keys follow the world's joints, never the
+   caller's unit boundaries (§14's failure on the identity axis). A rendering signal is not a
+   splitting signal: a continuous value a vocabulary cannot name exactly is answered by bands in the
+   vocabulary, not by cutting the fact.
 
 ---
 
@@ -748,9 +760,9 @@ reproduce current state (§13).
 
 ### Still genuinely open, and not blocking
 
-**Fact granularity** (§12.4) — too coarse and `replay(t)` returns prose that cannot be checked, too
-fine and authoring becomes data entry. It resolves once there are real checks to drive it, which is
-Phase 2 at the earliest. Recorded rather than guessed at.
+**Fact granularity** (§12.4) — no longer one open question but a rule applied one key at a time, as
+checks arrive; §12.4 holds it. Recorded there rather than guessed at, and the next key that needs
+deciding is decided against it.
 
 ---
 
