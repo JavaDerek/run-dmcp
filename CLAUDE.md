@@ -21,11 +21,16 @@ catalogue of how to describe objects, characters and motivations so a world buil
 holds together the first time, plus sample `CLAUDE.md` entries a consumer can copy. If you learn a
 world-authoring lesson while working on any consumer, generalise it into that file (this engine's own
 neutral vocabulary only — no consumer's words, per "This engine has two consumers and belongs to
-neither" below) rather than losing it in one repo. Its two newest lessons (2026-09-26): measure a
-`createTurnReader` question set against the population that will actually write to it, not only
-against intents shaped like its own answer keys, and label each disagreement by which layer it
-belongs to; and never let one object's description carry another object's name — least of all a
-plural of it — when your world models exactly one.
+neither" below) rather than losing it in one repo. Its two newest lessons (2026-09-27): what one
+principal perceives of another's act describes the attempt, never an outcome that may not have
+happened — the object's own described state carries the outcome, and no sentence composed before the
+resolution doubles as an outcome record; and a property a mind works on over several acts should read
+differently as it moves (reading bands, ascending, silent above the first, seen by everyone who
+perceives the object). The two before them (2026-09-26): measure a `createTurnReader` question set
+against the population that will actually write to it, not only against intents shaped like its own
+answer keys, and label each disagreement by which layer it belongs to; and never let one object's
+description carry another object's name — least of all a plural of it — when your world models
+exactly one.
 
 **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is the map, not the territory** — C4 levels 1 to 3
 (context, containers, components) of the built tree, ending in a table of which test enforces each
