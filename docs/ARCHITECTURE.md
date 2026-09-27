@@ -16,7 +16,10 @@ This document only explains how the built thing is arranged so those two are eas
 
 **Consumers are described by role, not by name.** The engine belongs to none of them, and the
 vocabulary guard (`src/__tests__/engineVocabulary.test.ts`) enforces that in every file but
-DESIGN.md. Where a role below has a real instance, DESIGN.md §8 and the folder above this repository
+DESIGN.md, for every consumer whose vocabulary the engine has met: the two that signed the design
+(one world advancing a turn at a time with a player; one with no player and units of duration) and
+a third that arrived after it (two principals in one location, contending over the same physical
+state). Where a role below has a real instance, DESIGN.md §8 and the folder above this repository
 name it.
 
 The diagrams are Mermaid. Levels 1 and 2 use Mermaid's C4 notation; level 3 uses flowcharts,
@@ -524,7 +527,7 @@ when it is crossed, and the test is the durable record; this document is the map
 | Core never reaches `src/rpg/`; core + tabletop = 223 / 1 / 11 / 7, disjoint | `src/__tests__/layerBoundary.test.ts` | Names the chain, or the diff against the golden surface |
 | A consumer can drive a whole world through library calls, with its own tables via the migration hook | `src/__tests__/consumerSurface.test.ts` | The library-only path fails |
 | Every string input is bounded; no published `$ref` | `src/__tests__/schemaBounds.test.ts` | Walks the bytes of `tools/list` over an in-memory transport |
-| No consumer's vocabulary in the tree, tracked or untracked, except `docs/DESIGN.md` | `src/__tests__/engineVocabulary.test.ts` | Names the file and the word |
+| No consumer's vocabulary in the tree, tracked or untracked, except `docs/DESIGN.md` -- all three consumers', by role: the turn-based one with a player, the one with no player and units of duration, and the two-principal one in one location | `src/__tests__/engineVocabulary.test.ts` | Names the file and the word |
 | `DECISION(#N):` markers are well-formed and never silently deleted | `src/__tests__/deferredDecisions.test.ts` | The marker set shrank |
 | The reader has no vendor SDK or network code | `src/reader/__tests__/noVendorTransports.test.ts` | An import that should not exist |
 | The HTTP API has no writing verb | `e2e/specs/api-readonly.spec.ts` | A non-GET route |

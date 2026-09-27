@@ -4,7 +4,12 @@
 // consumers were in the room when it was designed and they are deliberately
 // unlike each other: a geopolitical roleplay whose world advances one turn at a
 // time, and a music-video pipeline whose units have duration and no player at
-// all. Neither may become the reason the engine exists.
+// all. Neither may become the reason the engine exists. A third arrived later,
+// named in neither design document: a game with two principals in one
+// location, contending over the same physical state, whose mind-to-mind moves
+// are ruled by a referee through the resolve protocol. It is held to the same
+// line, for the same reason -- a consumer that arrives after the design is
+// signed is no less able to make the engine its own.
 //
 // That intention cannot survive as a rule people remember. The predecessor's
 // own history shows why: `resource_history` and `relationship_history` were
@@ -20,8 +25,11 @@
 // WHAT THIS IS NOT: a check that the engine is free of narrative vocabulary.
 // Dice, combat, quests and factions are inherited and generic — they belong to
 // the RPG layer above the core, not to any one client. The forbidden list is
-// specifically the vocabulary of the two named consumers, plus terms that could
-// only have come from one of them.
+// specifically the vocabulary of the consumers the engine has (three, by
+// role), plus terms that could only have come from one of them. For the same
+// reason the third consumer's list leaves out cell, bar, file, door, window
+// and lock: ordinary English and ordinary interactive fiction, which a world
+// of any genre is entitled to.
 //
 // WHERE FIXTURES COME FROM: grain, treasury, population. A throwaway vocabulary
 // for exercising the mechanism, never a starter set anyone should build on.
@@ -150,6 +158,38 @@ const FORBIDDEN: Array<{ pattern: RegExp; what: string; why: string }> = [
     pattern: /\bgeopolitic(s|al)\b/i,
     what: "the domain of one consumer",
     why: "if the engine describes itself by one client's genre, the second client is already a guest.",
+  },
+  {
+    pattern: /\bwardens?\b|\bprisoners?\b/i,
+    what: "a third consumer's two principals, by their roles",
+    why:
+      "the engine has characters, and a resolve protocol that rules what one of them attempts. That " +
+      "one principal holds the other in one location and the other contends to get out is a third " +
+      "consumer's fiction -- two principals, one location, contended physical state. The second word " +
+      "is also that consumer's own name, which is the worst form of this (see the last entry).",
+  },
+  {
+    pattern: /\bVoss\b|\bCroft\b/,
+    what: "a third consumer's character names",
+    why:
+      "characters are rows a game creates. A name the engine knows is a world the engine was " +
+      "written for. Case-sensitive on purpose: a lowercase croft is a small farm, and a farm sim " +
+      "may keep one.",
+  },
+  {
+    pattern: /\bspoons?\b/i,
+    what: "a third consumer's improvised tool",
+    why:
+      "the engine has items and properties an effect can change. Which object a character works a " +
+      "part loose with is the game's content; fixtures use grain, treasury, population.",
+  },
+  {
+    pattern: /\bcustody\b/i,
+    what: "a third consumer's name for holding a thing against another principal",
+    why:
+      "the engine has item ownership and bounded resources. That holding a thing means keeping it " +
+      "from someone, and what it costs to take it back, is one game's mechanic registered BY that " +
+      "game (design §5.2a).",
   },
   {
     pattern: /\bbrink\b|\bvideo client\b/i,

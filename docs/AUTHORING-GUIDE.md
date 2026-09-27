@@ -147,7 +147,7 @@ Three lessons:
    carrying `integrity`. Four digging intents were read five times each, against the same world with and
    without that object:
 
-   - The two that named the **floor** ("scrape down through the floor with the spoon", "dig an escape
+   - The two that named the **floor** ("scrape down through the floor with the tool", "dig an escape
      tunnel") went from having no target at all -- one of them ruled as damage to the *tool* -- to
      `floor` / wear / `integrity`, which is the correct reading and reaches the ordinary
      property-changing path.
@@ -373,18 +373,23 @@ run-dmcp's `docs/AUTHORING-GUIDE.md`.
 
 ## Provenance
 
-First entry (2026-09-15), from `the-prisoner`'s `docs/OPEN-VARIANT.md` §19 — see that document for
-the full, game-specific account (in its own vocabulary, which stays there) and how it was verified
-against a live model rather than assumed fixed by inspection alone.
+Sources are named by role, not by name, the way `docs/ARCHITECTURE.md` names consumers: "the
+two-principal consumer" is the game with two principals in one location contending over the same
+physical state, and the folder above this repository names it.
+
+First entry (2026-09-15), from the two-principal consumer's `docs/OPEN-VARIANT.md` §19 — see that
+document for the full, game-specific account (in its own vocabulary, which stays there) and how it
+was verified against a live model rather than assumed fixed by inspection alone.
 
 Second entry (2026-09-15), from the same document's §26.1 and §27: a live game with the opposition
 removed, run only to check that the way out could be reached at all, found it reached and never taken.
 
-Third entry (2026-09-19), from `the-prisoner`'s `docs/WORLD-ELABORATION-DESIGN.md` §3.4.
+Third entry (2026-09-19), from the two-principal consumer's `docs/WORLD-ELABORATION-DESIGN.md` §3.4.
 
-Fourth entry (2026-09-19, night), from `the-prisoner`'s `docs/OPEN-VARIANT.md` §66.6 and §67.5 -- a
-dig that no reading could name because the floor was prose and not an object -- and its owner's
-suggestion the same night that a physical space should declare its surfaces as a matter of course.
+Fourth entry (2026-09-19, night), from the two-principal consumer's `docs/OPEN-VARIANT.md` §66.6
+and §67.5 -- a dig that no reading could name because the floor was prose and not an object -- and its
+owner's suggestion the same night that a physical space should declare its surfaces as a matter of
+course.
 
 Fourth entry, points 3 and 4 (2026-09-20), from the measurement that tested the entry above instead of
 trusting it: three arms over a labelled set, five readings each, with the surface declared, with its
@@ -396,8 +401,8 @@ itself: **a reader choosing from a closed list of objects picks its target from 
 and does not reliably answer "none".** Any authoring advice that assumes a description can redirect an
 act is wrong for that reason, and this guide has now made that mistake once.
 
-Fifth entry (2026-09-26), from `the-prisoner`'s `docs/HUMAN-INTENTS-DESIGN.md` §1, §4, §7 and §8: a
-serial human-typed game whose reader had been measured only at agreement figures gathered against a
+Fifth entry (2026-09-26), from the two-principal consumer's `docs/HUMAN-INTENTS-DESIGN.md` §1, §4, §7
+and §8: a serial human-typed game whose reader had been measured only at agreement figures gathered against a
 population that had read its own answer keys, and a whole whose description had already dropped a
 stray count (per the second entry above) but kept a part's name in the plural, which a human intent
 then reached for exactly as predicted.

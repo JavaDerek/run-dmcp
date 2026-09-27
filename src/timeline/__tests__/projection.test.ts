@@ -338,7 +338,7 @@ describe("projection: update -- the five-case table, per column", () => {
     const character = createCharacter({ gameId: game.id, name: "treasury keeper", isPlayer: false });
     const nameFactBefore = openFactForKey(db, character.id, "name");
 
-    updateCharacter(character.id, { name: "grain warden" });
+    updateCharacter(character.id, { name: "grain steward" });
 
     expect(factsForKey(db, character.id, "name").length).toBe(2);
     const closed = factsForKey(db, character.id, "name").find((r) => r.id === nameFactBefore?.id);
@@ -738,7 +738,7 @@ describe("projection: opened_by_event_id -- the one hop of causality is stamped,
 
   it("every fact a create firing opens carries that firing's own event id", () => {
     const game = createGame({ name: "grain depot", setting: "test", style: "test" });
-    const character = createCharacter({ gameId: game.id, name: "grain warden", isPlayer: false });
+    const character = createCharacter({ gameId: game.id, name: "grain steward", isPlayer: false });
 
     const createdEventId = creationEventId(game.id, "character.created", character.id);
 
@@ -770,7 +770,7 @@ describe("projection: opened_by_event_id -- the one hop of causality is stamped,
 
   it("a delete firing (_ad) stamps nothing -- it only closes facts, it opens none", () => {
     const game = createGame({ name: "grain depot", setting: "test", style: "test" });
-    const character = createCharacter({ gameId: game.id, name: "grain warden", isPlayer: false });
+    const character = createCharacter({ gameId: game.id, name: "grain steward", isPlayer: false });
     const createdEventId = creationEventId(game.id, "character.created", character.id);
 
     expect(deleteCharacter(character.id)).toBe(true);

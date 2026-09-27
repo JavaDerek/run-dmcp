@@ -228,14 +228,14 @@ describe("checkpoint: it can go red -- each of the four divergence reasons, plan
     // opened a new one, then write through the real tool exactly as any
     // caller would -- updateCharacter has no idea the trigger is gone.
     db.exec(`DROP TRIGGER IF EXISTS timeline_characters_au`);
-    updateCharacter(keeper.id, { name: "grain warden" });
+    updateCharacter(keeper.id, { name: "grain steward" });
 
     const divergences = timelineDivergences(game.id);
     const found = divergences.find((d) => d.reason === "value" && d.entityId === keeper.id && d.key === "name");
     expect(found, describeDivergences(divergences)).toBeDefined();
     expect(found?.table).toBe("characters");
     expect(found?.kind).toBe("character");
-    expect(found?.live).toBe("grain warden");
+    expect(found?.live).toBe("grain steward");
     expect(found?.replayed).toBe("treasury keeper");
 
     // Reconciliation closes the stale open fact (its value no longer

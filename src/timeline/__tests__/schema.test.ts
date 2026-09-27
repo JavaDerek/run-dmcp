@@ -336,7 +336,7 @@ describe("timeline schema", () => {
       }
 
       // And the column is live for anything written from here on.
-      const character = createCharacter({ gameId: legacyGame.id, name: "grain warden", isPlayer: false });
+      const character = createCharacter({ gameId: legacyGame.id, name: "grain steward", isPlayer: false });
       const newFact = db
         .prepare(`SELECT opened_by_event_id FROM facts WHERE entity_id = ? AND key = 'name'`)
         .get(character.id) as { opened_by_event_id: string | null };
