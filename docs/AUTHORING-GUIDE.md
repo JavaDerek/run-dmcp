@@ -269,6 +269,11 @@ singular) sitting in text it does not own, left over from an earlier draft or an
 - If two questions must stay consistent with each other, put the constraint in every prompt that
   needs it, and prefer enforcing it in code over the prompt doing the whole job — a prompt sentence is
   a plea; a value your code looks up is a fact.
+- Declare, as data, which span of each object's description grounds each property your effects can
+  reach, and run `checkGroundings()` over it before play (and in CI): a reachable target with
+  `grounded: 0` can never be cited, a span with `occurrences` above 1 picks out no one place, and a
+  span whose target is `reachable: false` is prose describing something nothing can act on. It
+  checks your declarations with the reader's own citation rule; it never reads the prose for you.
 - Write each object's description to literally contain groundable language for every property you
   intend to let effects touch on it. A description that reads well narratively but never mentions the
   thing an effect needs to cite from it will silently refuse that effect forever, and nothing will
