@@ -278,7 +278,7 @@ export function sourceWords(text: string): SourceWord[] {
  * own declared `answerKeys` must be unconstructable, which is why
  * `safeDefault` membership is checked here rather than trusted.
  */
-function validateQuestions(questions: readonly ReaderQuestion[]): void {
+export function validateQuestions(questions: readonly ReaderQuestion[]): void {
   const seenIds = new Set<string>();
 
   for (const question of questions) {
@@ -317,6 +317,17 @@ function validateQuestions(questions: readonly ReaderQuestion[]): void {
           `one of its own answerKeys (${answerKeys.join(", ")})`
       );
     }
+  }
+}
+
+/** A citation names its source by id, so two sources sharing one make a
+ *  citation ambiguous. Checked where a caller hands sources over for
+ *  verification (`verifyAnswers`, and the MCP verbs over it). */
+export function validateSourceIds(sources: readonly ReaderSource[]): void {
+  const seen = new Set<string>();
+  for (const source of sources) {
+    if (seen.has(source.id)) throw new Error(`duplicate source id '${source.id}'`);
+    seen.add(source.id);
   }
 }
 
@@ -619,4 +630,46 @@ async function runLadder(
   }
 
   return { answers: tally.answers(), unmatched: tally.unmatched(), rungs };
+}
+
+/**
+ * Verifies one list of answers a caller's own model produced, by the same
+ * rule a `read()` applies to a rung's offers (GitHub issue #39: intent in,
+ * ruling out, with the ruling model outside the engine). For a caller that
+ * cannot hand the engine a transport -- a client reaching it over MCP, whose
+ * model runs on its own side -- this is the second of the verb's two steps:
+ * the caller builds the request and gets it answered; the engine verifies the
+ * answers and returns the ruling. It never infers anything itself.
+ *
+ * The result is exactly what `createTurnReader({ questions, transports: [t]
+ * }).read(sources)` returns when `t` resolves to `offers`: the offers are rung
+ * 0, asked every question, and go through the one tally every rung's offers
+ * go through, so the verb and the library cannot disagree about what counts.
+ * Synchronous, because there is nothing to wait for.
+ *
+ * The question set is validated as `createTurnReader` validates it. A
+ * non-list `offers` throws rather than reading as "no offers": at this
+ * boundary the CALLER parsed its model's reply, so a non-list is the caller's
+ * bug, not a rung failure to record. Individual malformed entries inside the
+ * list are still rows (`malformed-offer`), as on the ladder.
+ */
+export function verifyAnswers(params: {
+  questions: readonly ReaderQuestion[];
+  sources: readonly ReaderSource[];
+  offers: readonly TransportAnswer[];
+}): ReaderResult {
+  validateQuestions(params.questions);
+  validateSourceIds(params.sources);
+  if (!Array.isArray(params.offers)) {
+    throw new Error(`verifyAnswers: offers must be a list of answers, got ${JSON.stringify(params.offers)}`);
+  }
+  const tally = createTally(params.questions, params.sources);
+  const asked = tally.remaining();
+  tally.asked(0, asked);
+  for (const offer of params.offers) tally.offer(0, offer);
+  return {
+    answers: tally.answers(),
+    unmatched: tally.unmatched(),
+    rungs: [{ rung: 0, asked: asked.map((q) => q.id), attempts: [{ outcome: "answered", offers: params.offers.length }] }],
+  };
 }

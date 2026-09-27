@@ -39,6 +39,7 @@ import { registerMcpResources } from "./register/mcp-resources.js";
 import { registerTimelineTools } from "./register/timeline.js";
 import { registerResolveTools } from "./register/resolve.js";
 import { registerRenderTools } from "./register/render.js";
+import { registerReaderTools } from "./register/reader.js";
 import { createResolver, type Mechanic } from "./timeline/resolve.js";
 import { createStateRenderer, type RenderVocabulary } from "./timeline/render.js";
 
@@ -117,6 +118,7 @@ export function createCoreMcpServer(options?: {
   registerDisplayTools(server);        // Display/Theme Configuration
   registerBatchTools(server);          // Batch Operations (multi-entity, workflows -- entity/property only)
   registerTimelineTools(server);       // replay(t), story-time axis declaration
+  registerReaderTools(server);         // prepare_reading, verify_reading -- the turn reader with the model on the caller's side
 
   const mechanics = options?.mechanics;
   if (mechanics && mechanics.length > 0) {

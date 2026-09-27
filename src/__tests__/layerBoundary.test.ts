@@ -21,7 +21,10 @@
 //   (b) GOLDEN SURFACE: the post-split, fully assembled server
 //       (`createMcpServer` from src/rpg/index.ts) registers EXACTLY the same
 //       218 tools, 1 resource, 11 resource templates and 7 prompts as the
-//       pre-split server did at the commit before this split began. That
+//       pre-split server did at the commit before this split began -- plus
+//       the tools added since, each added to the list below by hand in the
+//       commit that added it (issue #39: prepare_reading, verify_reading;
+//       220 now). That
 //       snapshot was captured by running the OLD src/mcp-server.ts directly,
 //       before any file in this split moved, and is checked in below as a
 //       constant -- proof the refactor is behaviour-preserving, not a claim
@@ -337,6 +340,7 @@ const GOLDEN_TOOLS = [
   "next_turn",
   "pin_note",
   "prepare_pause",
+  "prepare_reading",
   "present_choices",
   "push_external_update",
   "record_choice",
@@ -396,6 +400,7 @@ const GOLDEN_TOOLS = [
   "update_secret",
   "update_timer",
   "use_ability",
+  "verify_reading",
 ];
 
 const GOLDEN_RESOURCES = ["dmcp://games"];
@@ -450,8 +455,8 @@ function surfaceOf(server: unknown): Surface {
 describe("the golden surface: the split changed nothing an MCP client can observe", () => {
   const full = surfaceOf(createFullMcpServer());
 
-  it("registers exactly 218 tools, 1 resource, 11 resource templates, 7 prompts", () => {
-    expect(full.tools.length).toBe(218);
+  it("registers exactly 220 tools, 1 resource, 11 resource templates, 7 prompts", () => {
+    expect(full.tools.length).toBe(220);
     expect(full.resources.length).toBe(1);
     expect(full.resourceTemplates.length).toBe(11);
     expect(full.prompts.length).toBe(7);
