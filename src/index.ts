@@ -260,6 +260,13 @@ export type {
   RungReport,
 } from "./reader/turnReader.js";
 
+// A preflight over a declared world (GitHub issue #37): caller-declared
+// spans checked by the turn reader's own citation rule before play -- which
+// reachable targets nothing can cite, which spans are not unique, which
+// spans name a target nothing can reach. Rows, never a verdict.
+export { checkGroundings } from "./reader/preflight.js";
+export type { DeclaredGrounding, GroundingRow, TargetRow, GroundingReport } from "./reader/preflight.js";
+
 // Timeline export (design §6) -- the boundary that keeps both halves honest:
 // conversational authoring upstream of a frozen artifact, deterministic
 // consumers downstream of it. These are exported as library functions first

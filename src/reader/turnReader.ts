@@ -402,7 +402,7 @@ export function createTurnReader(params: {
  * runtime, and a malformed citation must still be rejected mechanically
  * rather than throwing out of this function and aborting the whole read.
  */
-function resolveCitation(
+export function resolveCitation(
   citation: unknown,
   sourcesById: ReadonlyMap<string, ReaderSource>
 ):
