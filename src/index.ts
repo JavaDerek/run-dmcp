@@ -240,7 +240,7 @@ export type {
 // scans for a consumer's language. The engine is provably ignorant of what is
 // on the other end of a rung, which is also why the ladder's ORDER is the
 // caller's: it never learns which rung is local and which is hosted.
-export { createTurnReader } from "./reader/turnReader.js";
+export { createTurnReader, sourceWords } from "./reader/turnReader.js";
 export type {
   TurnReader,
   ReaderQuestion,
@@ -252,6 +252,12 @@ export type {
   AnsweredQuestion,
   RejectedOffer,
   RejectionReason,
+  QuotedCitation,
+  RangedCitation,
+  AcceptedCitation,
+  SourceWord,
+  RungAttempt,
+  RungReport,
 } from "./reader/turnReader.js";
 
 // Timeline export (design §6) -- the boundary that keeps both halves honest:

@@ -257,6 +257,15 @@ singular) sitting in text it does not own, left over from an earlier draft or an
   object and exact words in its description that would grade a citation for it? If the answer is "it
   depends which object the model names," that dependency needs to be resolved by your own code, not
   left to the model to get consistently right across two independent answers.
+- Let the model cite by word range (`{sourceId, from, to}`), numbering each source's words for its
+  prompt with `sourceWords()` -- the same function the engine rebuilds the quote from -- rather than
+  asking it to retype a span. A retyped quote comes back lowercased, elided or re-punctuated and is
+  thrown away; a range cannot misquote, and an end that overshoots a short source is clamped rather
+  than dropped.
+- Before concluding that a model "said nothing" for a question, read the result's `rungs` and that
+  answer's `askedOfRungs` and `rejected`: a rung that threw, a rung that offered nothing for the
+  question, and an offer discarded on a named conjunct of the citation rule are three different
+  problems with three different fixes, and they all fall to the same safe default.
 - If two questions must stay consistent with each other, put the constraint in every prompt that
   needs it, and prefer enforcing it in code over the prompt doing the whole job — a prompt sentence is
   a plea; a value your code looks up is a fact.

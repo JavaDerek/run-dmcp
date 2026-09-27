@@ -100,11 +100,32 @@ export interface ReadRequest {
   sources: readonly ReaderSource[];
 }
 
-/** What a transport returns: KEYS and citations, never prose. */
+/** A citation by quote: `quote` must occur byte-exact in the source named. */
+export interface QuotedCitation {
+  sourceId: string;
+  quote: string;
+}
+
+/** A citation by word range (GitHub issue #35): words `from` through `to` of
+ *  the source named, numbered from 1 exactly as `sourceWords()` numbers them.
+ *  The engine rebuilds it into a quote -- the source sliced from the first
+ *  character of word `from` to the last of word `to` -- and holds that quote
+ *  to the same rule as a typed one. A range can only name a substring of its
+ *  source, so it makes misquoting unconstructable rather than instructing
+ *  against it. */
+export interface RangedCitation {
+  sourceId: string;
+  from: number;
+  to: number;
+}
+
+/** What a transport returns: KEYS and citations, never prose. A citation
+ *  that carries `from` or `to` is read as a range and any `quote` beside it
+ *  is not read; otherwise it is read as a quote. */
 export interface TransportAnswer {
   questionId: string;
   answerKey: string;
-  citation: { sourceId: string; quote: string };
+  citation: QuotedCitation | RangedCitation;
 }
 
 /** An injected capability, not a call this module makes itself -- see the
@@ -118,23 +139,38 @@ export type ReaderTransport = (request: ReadRequest) => Promise<readonly Transpo
  *  Never a severity, never a score -- a row names exactly which mechanical
  *  check failed (hard rule 2). */
 export type RejectionReason =
+  | "malformed-offer"
   | "unknown-question"
   | "unknown-answer-key"
   | "unknown-source-id"
   | "quote-not-in-source"
   | "empty-quote"
+  | "invalid-range"
+  | "range-start-past-end"
   | "duplicate-answer";
 
 /** One discarded offer, carried verbatim so a reviewer can see exactly what
  *  was offered and why it did not count -- never summarised, never
  *  scored. `rung` is the index into the caller's own `transports` array
  *  that produced this offer; the engine reports the position, it does not
- *  interpret what that position means. */
+ *  interpret what that position means. `offer` is typed `unknown` in
+ *  spirit: for `malformed-offer` it is whatever the transport put in its
+ *  list, which may not be an object at all. */
 export interface RejectedOffer {
   reason: RejectionReason;
   rung: number;
   /** The offer exactly as the transport returned it. */
   offer: TransportAnswer;
+}
+
+/** An accepted citation, always as a quote. `range` is present when the
+ *  offer cited by range: the span actually quoted, with `to` clamped to the
+ *  source's last word (issue #35's overshoot). The offer as given is in
+ *  `AnsweredQuestion.acceptedOffer`, so a clamp is visible, never silent. */
+export interface AcceptedCitation {
+  sourceId: string;
+  quote: string;
+  range?: { from: number; to: number };
 }
 
 /** One row of the result: a question's final answer, whether it came from
@@ -151,8 +187,33 @@ export interface AnsweredQuestion {
   answeredByRung: number | null;
   /** `null` when `fromSafeDefault` is true -- a default was never cited
    *  against anything, because nothing was accepted for it to cite. */
-  citation: { sourceId: string; quote: string } | null;
+  citation: AcceptedCitation | null;
+  /** The accepted offer exactly as the transport gave it (issue #36);
+   *  `null` when nothing was accepted. */
+  acceptedOffer: TransportAnswer | null;
+  /** Every rung this question was put to, in order (issue #36). Empty means
+   *  it was never asked; non-empty with no `rejected` rows and no
+   *  acceptance means the rungs asked offered nothing for it -- and
+   *  `ReaderResult.rungs` says whether each of those rungs answered at all. */
+  askedOfRungs: readonly number[];
   rejected: readonly RejectedOffer[];
+}
+
+/** What one call to one rung came back as (issue #36). A record of what
+ *  happened, never a judgement of the transport: `threw` carries the thrown
+ *  value as a string, exactly as the transport raised it. */
+export type RungAttempt =
+  | { outcome: "answered"; offers: number }
+  | { outcome: "threw"; error: string }
+  | { outcome: "not-a-list" };
+
+/** Every rung that was called, in order, with the questions it was asked and
+ *  each attempt within its `attemptsPerTransport` budget. A rung never
+ *  called -- because every question was already answered -- is not listed. */
+export interface RungReport {
+  rung: number;
+  asked: readonly string[];
+  attempts: readonly RungAttempt[];
 }
 
 export interface ReaderResult {
@@ -161,9 +222,12 @@ export interface ReaderResult {
    *  what order a transport's own response array happened to list them. */
   answers: readonly AnsweredQuestion[];
   /** Offers naming a `questionId` that is not any question this read
-   *  declared -- cannot be attached to a row in `answers` because there is
-   *  no question for it to belong to. Always `reason: "unknown-question"`. */
+   *  declared, or that are not offers at all (`malformed-offer`) -- cannot
+   *  be attached to a row in `answers` because there is no question for
+   *  them to belong to. */
   unmatched: readonly RejectedOffer[];
+  /** What each rung that was called came back as (issue #36). */
+  rungs: readonly RungReport[];
 }
 
 export interface TurnReader {
@@ -174,6 +238,33 @@ export interface TurnReader {
    *  answered in are the caller's declared capability, not something that
    *  changes turn to turn. */
   read(sources: readonly ReaderSource[]): Promise<ReaderResult>;
+}
+
+/** One word of a source, as a range citation numbers it (issue #35). */
+export interface SourceWord {
+  /** 1-based, the number a range names. */
+  index: number;
+  word: string;
+  /** Offsets into the source text: `text.slice(start, end) === word`. */
+  start: number;
+  end: number;
+}
+
+/**
+ * The words of a source as a range citation numbers them: each maximal run
+ * of non-whitespace, numbered from 1. Exported so a caller that shows its
+ * model numbered words builds that numbering from the same function the
+ * rebuild uses -- two numberings that disagree by one word would cite the
+ * wrong span without any error. Lexical only: punctuation stays on its word
+ * and nothing is split by what it means (hard rule 4).
+ */
+export function sourceWords(text: string): SourceWord[] {
+  const words: SourceWord[] = [];
+  for (const match of text.matchAll(/\S+/g)) {
+    const start = match.index ?? 0;
+    words.push({ index: words.length + 1, word: match[0], start, end: start + match[0].length });
+  }
+  return words;
 }
 
 /**
@@ -277,48 +368,81 @@ export function createTurnReader(params: {
  * (`String.prototype.includes`, no case folding, no trimming, no fuzzy
  * matching) inside that source's text. An offer that fails two conjuncts is
  * rejected either way -- which reason it carries is a reporting detail, not
- * a difference in whether it counts. Returns the first failing reason, or
- * `null` when the citation is accepted -- see the module doc comment's
- * rule-4 discussion for why this literal presence test does not become the
- * pattern-matching-meaning it is built beside.
+ * a difference in whether it counts. Returns the accepted citation, or the
+ * first failing reason -- see the module doc comment's rule-4 discussion for
+ * why this literal presence test does not become the pattern-matching-meaning
+ * it is built beside.
+ *
+ * A RANGE (issue #35) is rebuilt into a quote first, then held to the same
+ * rule -- which a rebuilt quote always passes, being a slice of the source.
+ * Its own conjuncts: both ends integers with 1 <= from <= to
+ * (`invalid-range`), and `from` naming a real word (`range-start-past-end`).
+ * A `to` past the last word is CLAMPED to it, not rejected: the span cites
+ * what is there plus nothing. Dropping those instead was the recorded
+ * failure -- short sources overshoot most, and in the consumer that hit it
+ * a whole class of four-word intents was never once ruled.
  *
  * Defensive against a citation that is missing entirely or missing a field
  * -- a transport is caller-supplied code this module does not control at
  * runtime, and a malformed citation must still be rejected mechanically
  * rather than throwing out of this function and aborting the whole read.
  */
-function checkCitation(
-  citation: TransportAnswer["citation"] | null | undefined,
+function resolveCitation(
+  citation: unknown,
   sourcesById: ReadonlyMap<string, ReaderSource>
-): "unknown-source-id" | "empty-quote" | "quote-not-in-source" | null {
-  const sourceId = citation?.sourceId;
-  const quote = citation?.quote;
+):
+  | { citation: AcceptedCitation }
+  | { reason: "unknown-source-id" | "empty-quote" | "quote-not-in-source" | "invalid-range" | "range-start-past-end" } {
+  const record = (typeof citation === "object" && citation !== null ? citation : {}) as Record<string, unknown>;
+  const sourceId = record.sourceId;
 
+  if (record.from !== undefined || record.to !== undefined) {
+    const { from, to } = record;
+    if (typeof sourceId !== "string") return { reason: "unknown-source-id" };
+    const source = sourcesById.get(sourceId);
+    if (!source) return { reason: "unknown-source-id" };
+    if (!Number.isInteger(from) || !Number.isInteger(to) || (from as number) < 1 || (from as number) > (to as number)) {
+      return { reason: "invalid-range" };
+    }
+    const words = sourceWords(source.text);
+    if ((from as number) > words.length) return { reason: "range-start-past-end" };
+    const end = Math.min(to as number, words.length);
+    const quote = source.text.slice(words[(from as number) - 1].start, words[end - 1].end);
+    return { citation: { sourceId, quote, range: { from: from as number, to: end } } };
+  }
+
+  const quote = record.quote;
   if (typeof quote !== "string" || quote.length === 0) {
-    return "empty-quote";
+    return { reason: "empty-quote" };
   }
   if (typeof sourceId !== "string") {
-    return "unknown-source-id";
+    return { reason: "unknown-source-id" };
   }
   const source = sourcesById.get(sourceId);
   if (!source) {
-    return "unknown-source-id";
+    return { reason: "unknown-source-id" };
   }
   if (!source.text.includes(quote)) {
-    return "quote-not-in-source";
+    return { reason: "quote-not-in-source" };
   }
-  return null;
+  return { citation: { sourceId, quote } };
 }
 
 interface AcceptedAnswer {
   answerKey: string;
   rung: number;
-  citation: { sourceId: string; quote: string };
+  citation: AcceptedCitation;
+  offer: TransportAnswer;
 }
 
 /**
- * Runs the fallback ladder for one `read()` call. `accepted` accumulates
- * across rungs, keyed by `questionId` -- once a question is in this map its
+ * The per-read bookkeeping every offer goes through, whichever rung (or, for
+ * `verifyAnswers`, whichever caller) produced it. There is exactly one path
+ * from "an offer" to "accepted" or "a rejected row with a reason", and this
+ * is it -- so the ladder and a one-shot verification cannot disagree about
+ * what counts.
+ *
+ * `accepted` is keyed by `questionId` -- once a question is in this map its
  * answer is FINAL for this read: the next rung's request omits it (rule 4,
  * "questions already answered validly are NOT re-asked"), and any further
  * offer for it from any rung -- including a non-compliant transport that
@@ -329,114 +453,157 @@ interface AcceptedAnswer {
  * both are the same check, `accepted.has(questionId)`, evaluated at the
  * moment each offer is processed.
  */
+function createTally(questions: readonly ReaderQuestion[], sources: readonly ReaderSource[]) {
+  const questionsById = new Map(questions.map((q) => [q.id, q]));
+  const sourcesById = new Map(sources.map((s) => [s.id, s]));
+
+  const accepted = new Map<string, AcceptedAnswer>();
+  const rejectedByQuestion = new Map<string, RejectedOffer[]>();
+  const askedByQuestion = new Map<string, number[]>();
+  const unmatched: RejectedOffer[] = [];
+
+  function reject(reason: RejectionReason, rung: number, offer: TransportAnswer, questionId: string | null): void {
+    const row: RejectedOffer = { reason, rung, offer };
+    if (questionId === null || !questionsById.has(questionId)) {
+      unmatched.push(row);
+      return;
+    }
+    const existing = rejectedByQuestion.get(questionId);
+    if (existing) {
+      existing.push(row);
+    } else {
+      rejectedByQuestion.set(questionId, [row]);
+    }
+  }
+
+  return {
+    remaining(): ReaderQuestion[] {
+      return questions.filter((q) => !accepted.has(q.id));
+    },
+
+    asked(rung: number, asked: readonly ReaderQuestion[]): void {
+      for (const q of asked) {
+        const rungs = askedByQuestion.get(q.id);
+        if (rungs) rungs.push(rung);
+        else askedByQuestion.set(q.id, [rung]);
+      }
+    },
+
+    offer(rung: number, offer: TransportAnswer): void {
+      // A transport is caller code: an entry may not be an object at all.
+      // That is a row, never a throw that loses every other offer in the list.
+      if (typeof offer !== "object" || offer === null || typeof offer.questionId !== "string") {
+        reject("malformed-offer", rung, offer, null);
+        return;
+      }
+      const question = questionsById.get(offer.questionId);
+      if (!question) {
+        reject("unknown-question", rung, offer, null);
+        return;
+      }
+      if (accepted.has(offer.questionId)) {
+        reject("duplicate-answer", rung, offer, offer.questionId);
+        return;
+      }
+      if (!question.answerKeys.includes(offer.answerKey)) {
+        // Coercion to keys that ACTUALLY exist -- exact membership or
+        // nothing (rule 2). No fuzzy match, no case fold, no "nearest key".
+        reject("unknown-answer-key", rung, offer, offer.questionId);
+        return;
+      }
+      const cited = resolveCitation(offer.citation, sourcesById);
+      if ("reason" in cited) {
+        reject(cited.reason, rung, offer, offer.questionId);
+        return;
+      }
+      accepted.set(offer.questionId, { answerKey: offer.answerKey, rung, citation: cited.citation, offer });
+    },
+
+    answers(): AnsweredQuestion[] {
+      return questions.map((question) => {
+        const rejected = rejectedByQuestion.get(question.id) ?? [];
+        const askedOfRungs = askedByQuestion.get(question.id) ?? [];
+        const win = accepted.get(question.id);
+        if (win) {
+          return {
+            questionId: question.id,
+            answerKey: win.answerKey,
+            fromSafeDefault: false,
+            answeredByRung: win.rung,
+            citation: win.citation,
+            acceptedOffer: win.offer,
+            askedOfRungs,
+            rejected,
+          };
+        }
+        // Every rung that could answer this question was exhausted (or none
+        // were ever registered) -- the caller's own declared safe direction,
+        // never the engine's guess (rule 3).
+        return {
+          questionId: question.id,
+          answerKey: question.safeDefault,
+          fromSafeDefault: true,
+          answeredByRung: null,
+          citation: null,
+          acceptedOffer: null,
+          askedOfRungs,
+          rejected,
+        };
+      });
+    },
+
+    unmatched(): RejectedOffer[] {
+      return unmatched;
+    },
+  };
+}
+
+/**
+ * Runs the fallback ladder for one `read()` call, recording what each rung
+ * that was called came back as (issue #36) alongside the answers.
+ */
 async function runLadder(
   questions: readonly ReaderQuestion[],
   transports: readonly ReaderTransport[],
   attemptsPerTransport: number,
   sources: readonly ReaderSource[]
 ): Promise<ReaderResult> {
-  const questionsById = new Map(questions.map((q) => [q.id, q]));
-  const sourcesById = new Map(sources.map((s) => [s.id, s]));
-
-  const accepted = new Map<string, AcceptedAnswer>();
-  const rejectedByQuestion = new Map<string, RejectedOffer[]>();
-  const unmatched: RejectedOffer[] = [];
-
-  function reject(reason: RejectionReason, rung: number, offer: TransportAnswer): void {
-    const row: RejectedOffer = { reason, rung, offer };
-    const question = questionsById.get(offer.questionId);
-    if (!question) {
-      unmatched.push(row);
-      return;
-    }
-    const existing = rejectedByQuestion.get(offer.questionId);
-    if (existing) {
-      existing.push(row);
-    } else {
-      rejectedByQuestion.set(offer.questionId, [row]);
-    }
-  }
+  const tally = createTally(questions, sources);
+  const rungs: RungReport[] = [];
 
   for (let rung = 0; rung < transports.length; rung++) {
-    const remaining = questions.filter((q) => !accepted.has(q.id));
+    const remaining = tally.remaining();
     if (remaining.length === 0) break; // every question already answered -- nothing left for any further rung
 
     const transport = transports[rung];
+    const attempts: RungAttempt[] = [];
     let answers: readonly TransportAnswer[] | null = null;
+    tally.asked(rung, remaining);
 
     for (let attempt = 0; attempt < attemptsPerTransport; attempt++) {
       try {
         const result = await transport({ questions: remaining, sources });
         if (Array.isArray(result)) {
+          attempts.push({ outcome: "answered", offers: result.length });
           answers = result;
           break;
         }
         // Unusable output -- treated identically to a throw: retry within
         // this rung's budget, then fall through to the next rung.
-      } catch {
+        attempts.push({ outcome: "not-a-list" });
+      } catch (error) {
         // Threw or rejected -- retry within this rung's budget, then fall
-        // through to the next rung. The engine does not distinguish WHY a
-        // rung failed; it only advances.
+        // through to the next rung. What was thrown is recorded as given;
+        // the engine does not interpret it.
+        attempts.push({ outcome: "threw", error: String(error) });
       }
     }
 
+    rungs.push({ rung, asked: remaining.map((q) => q.id), attempts });
     if (answers === null) continue; // rung exhausted; the next rung sees the same `remaining` set
 
-    for (const offer of answers) {
-      const question = questionsById.get(offer.questionId);
-      if (!question) {
-        reject("unknown-question", rung, offer);
-        continue;
-      }
-      if (accepted.has(offer.questionId)) {
-        reject("duplicate-answer", rung, offer);
-        continue;
-      }
-      if (!question.answerKeys.includes(offer.answerKey)) {
-        // Coercion to keys that ACTUALLY exist -- exact membership or
-        // nothing (rule 2). No fuzzy match, no case fold, no "nearest key".
-        reject("unknown-answer-key", rung, offer);
-        continue;
-      }
-      const citationProblem = checkCitation(offer.citation, sourcesById);
-      if (citationProblem) {
-        reject(citationProblem, rung, offer);
-        continue;
-      }
-
-      accepted.set(offer.questionId, {
-        answerKey: offer.answerKey,
-        rung,
-        citation: { sourceId: offer.citation.sourceId, quote: offer.citation.quote },
-      });
-    }
+    for (const offer of answers) tally.offer(rung, offer);
   }
 
-  const answersOut: AnsweredQuestion[] = questions.map((question) => {
-    const rejected = rejectedByQuestion.get(question.id) ?? [];
-    const win = accepted.get(question.id);
-    if (win) {
-      return {
-        questionId: question.id,
-        answerKey: win.answerKey,
-        fromSafeDefault: false,
-        answeredByRung: win.rung,
-        citation: win.citation,
-        rejected,
-      };
-    }
-    // Every rung that could answer this question was exhausted (or none
-    // were ever registered) -- the caller's own declared safe direction,
-    // never the engine's guess (rule 3).
-    return {
-      questionId: question.id,
-      answerKey: question.safeDefault,
-      fromSafeDefault: true,
-      answeredByRung: null,
-      citation: null,
-      rejected,
-    };
-  });
-
-  return { answers: answersOut, unmatched };
+  return { answers: tally.answers(), unmatched: tally.unmatched(), rungs };
 }
