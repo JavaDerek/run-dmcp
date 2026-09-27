@@ -28,7 +28,7 @@
 // is reachable from it.
 // The assembled core server is NOT here. It moved to "run-dmcp/server"
 // (src/server.ts) so that importing mechanism stops loading it: building a
-// server costs the MCP SDK and twenty-one register modules, and a consumer
+// server costs the MCP SDK and twenty-three register modules, and a consumer
 // reaching for `LIMITS` or `createGame` was paying for both -- 97.4ms per
 // process against 46.8ms without it, cold, at 0.3.0. Enforced by
 // src/__tests__/assemblyBoundary.test.ts, which walks this file's runtime

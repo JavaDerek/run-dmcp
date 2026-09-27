@@ -2,7 +2,7 @@
 //
 // This is a SEPARATE entry point (`run-dmcp/server`) from the core library
 // (`run-dmcp`, src/index.ts) for one reason, and it is a cost. Building a
-// server means loading the MCP SDK and twenty-one register modules; wanting
+// server means loading the MCP SDK and twenty-three register modules; wanting
 // `LIMITS` or `createGame` does not. While these lived on the same entry,
 // every consumer paid for both -- 97.4ms per process against 46.8ms for the
 // mechanism alone, measured cold at 0.3.0 over nine spawns, on a consumer

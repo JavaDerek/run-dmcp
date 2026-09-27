@@ -27,6 +27,11 @@ against intents shaped like its own answer keys, and label each disagreement by 
 belongs to; and never let one object's description carry another object's name — least of all a
 plural of it — when your world models exactly one.
 
+**[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is the map, not the territory** — C4 levels 1 to 3
+(context, containers, components) of the built tree, ending in a table of which test enforces each
+boundary it draws. Its counts are pinned to tests; when a pinned count changes, change it there in
+the same commit.
+
 ## This engine has two consumers and belongs to neither
 
 One consumer's world advances a turn at a time and has a player making uncertain decisions. The
@@ -128,10 +133,11 @@ to be kept up to date.
 other.** `src/index.ts` (`run-dmcp`) and `src/rpg/index.ts` (`run-dmcp/rpg`) are mechanism —
 functions, constants, types. `src/server.ts` (`run-dmcp/server`) and `src/rpg/server.ts`
 (`run-dmcp/rpg/server`) are assembly, and they are the only ones that may reach `src/mcp-server.ts`
-or `src/http/`. Assembly costs the MCP SDK, twenty-one register modules and express; mechanism does
-not, and 0.3.0 charged for both on every import — 97.4ms per process against 47.0ms cold, and
-67.4ms against 38.0ms for a consumer that already has the SDK warm and imports both entries. Quote
-the second pair when the question is what a consumer saves; the first is this package's entry cost. `src/__tests__/assemblyBoundary.test.ts` walks
+or `src/http/`. Assembly costs the MCP SDK, twenty-three register modules (thirty-one with the
+tabletop layer) and express; mechanism does not, and 0.3.0 charged for both on every import —
+97.4ms per process against 47.0ms cold, and 67.4ms against 38.0ms for a consumer that already has
+the SDK warm and imports both entries. Quote the second pair when the question is what a consumer
+saves; the first is this package's entry cost. `src/__tests__/assemblyBoundary.test.ts` walks
 the *runtime* import graph (type-only imports excluded, since they are erased) and fails naming the
 chain. Re-welding them is one convenient re-export, which is why it is a test and not a note.
 

@@ -44,6 +44,9 @@ intervals rather than by a history table beside them. The former `resource_histo
 `relationship_history` tables no longer accept writes. See [docs/DESIGN.md](docs/DESIGN.md), which is
 the authority, §5.4 for that decision and §11 for the order the rest lands in.
 
+For a map of how the pieces fit — system context, containers and components, and the test that
+enforces each boundary — see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ## Running it, and depending on it
 
 These are two different things, and the package keeps them apart.
@@ -69,9 +72,9 @@ dependency, not part of the engine (see [docs/DESIGN.md](docs/DESIGN.md) §8).
 | **core** | `run-dmcp` | `run-dmcp/server` → `createCoreMcpServer` |
 | **+ tabletop** | `run-dmcp/rpg` | `run-dmcp/rpg/server` → `createMcpServer` |
 
-Assembling a server means loading the MCP SDK, twenty-one register modules and (for the full
-assembly) the web UI. Wanting `createGame` or `LIMITS` does not, and until 0.4.0 both entries
-charged for it anyway: the core entry cost 97.4ms per process cold and costs 47.0ms now, which is
+Assembling a server means loading the MCP SDK, twenty-three register modules (thirty-one with the
+tabletop layer) and, for the full assembly, the web UI. Wanting `createGame` or `LIMITS` does not,
+and until 0.4.0 both entries charged for it anyway: the core entry cost 97.4ms per process cold and costs 47.0ms now, which is
 below the MCP SDK's own 55.0ms, because without the assembly it no longer loads the SDK at all.
 
 A consumer that *does* build a server loads the SDK regardless, so it saves less than that

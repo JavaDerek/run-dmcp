@@ -93,6 +93,7 @@
   ],
   "files": [
     "dist/",
+    "client/dist/",
     "!dist/**/__tests__/**",
     "!dist/**/*.test.*",
     "!dist/**/*.spec.*",

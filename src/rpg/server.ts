@@ -4,7 +4,7 @@
 // A SEPARATE entry point (`run-dmcp/rpg/server`) from the layer's mechanism
 // (`run-dmcp/rpg`, src/rpg/index.ts), for the reason src/server.ts states
 // one level down: assembling a server costs the MCP SDK, the core's
-// twenty-one register modules and express, and calling `roll()` or
+// thirty-one register modules and express, and calling `roll()` or
 // `startCombat()` does not. 123.6ms per process against 87.5ms, cold, at
 // 0.3.0, on a consumer that imports this layer thirteen times for tool
 // functions and calls `createMcpServer` never.

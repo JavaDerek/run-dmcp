@@ -1,0 +1,11 @@
+# Present so that npm pack does NOT read client/.gitignore, which lists `dist`.
+#
+# npm-packlist honours a subdirectory's .npmignore, or failing that its
+# .gitignore, and never a nested package.json that is not a workspace. The
+# root package.json `files` field names client/dist/ as part of the tarball;
+# without this file, client/.gitignore would strike it back out and an
+# npm-installed run-dmcp would serve the "Vue app not built" page instead of
+# the viewer. src/__tests__/packaging.test.ts holds this.
+#
+# Nothing else under client/ is in the tarball: the root `files` field is an
+# allow-list and only names client/dist/.

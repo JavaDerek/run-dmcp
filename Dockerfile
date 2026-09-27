@@ -33,5 +33,8 @@ RUN mkdir -p /app/data
 # Set environment
 ENV NODE_ENV=production
 
-# MCP servers use stdio transport
+# MCP is served over stdio. The web viewer (JSON API, SSE and the SPA) binds
+# DMCP_HTTP_PORT, 3456 by default, unless DMCP_NO_HTTP is set; publish it with
+# `-p 3456:3456` when you want the viewer, and set DMCP_NO_HTTP=1 when you do not.
+EXPOSE 3456
 ENTRYPOINT ["node", "dist/bin/run-dmcp.js"]
