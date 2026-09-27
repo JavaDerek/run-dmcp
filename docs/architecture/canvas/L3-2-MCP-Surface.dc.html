@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>run-dmcp core MCP surface</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F5F2EA;color:#1F1E1B;font-family:"IBM Plex Sans",system-ui,sans-serif}
+a{color:#2E5A87}a:hover{color:#1F3F62}
+svg text{font-family:"IBM Plex Sans",system-ui,sans-serif;fill:#1F1E1B}
+svg text.t{font-size:14px;font-weight:600}
+svg text.s{font-size:11.5px;fill:#5C5850}
+svg text.m{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:13px;font-weight:500;fill:#1F1E1B}
+svg text.n{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;fill:#2E5A87}
+svg text.p{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;fill:#2E5A87;letter-spacing:.04em}
+svg text.h{font-family:"Fraunces",Georgia,serif;font-weight:700}
+svg text.e{font-size:11.5px;fill:#3F3C36;paint-order:stroke;stroke:#F5F2EA;stroke-width:5px;stroke-linejoin:round}
+svg .panel rect{fill:#EEEAE0;stroke:#D2CBB9;stroke-width:1.2}
+svg .chip rect{fill:#FFFFFF;stroke:#8A8577;stroke-width:1.2}
+svg .blue rect{fill:#E6EDF5;stroke:#2E5A87;stroke-width:1.8}
+svg .ext rect{fill:#E7E2D6;stroke:#7B766B;stroke-width:1.2}
+svg .clay rect{fill:#F8E9E1;stroke:#B4532F;stroke-width:2}
+svg .edge{fill:none;stroke:#5C5850;stroke-width:1.6;marker-end:url(#arr)}
+svg .edge.nm{marker-end:none}
+svg .edge.d{stroke-dasharray:6 5}
+</style>
+</helmet>
+<div style="width: 1800px; height: 1100px; box-sizing: border-box; display: flex; flex-direction: column; background: #F5F2EA; overflow: hidden">
+  <div style="padding: 36px 56px 0; display: flex; align-items: baseline; gap: 22px">
+    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #2E5A87; letter-spacing: 0.08em; text-transform: uppercase">Level 3.2 · Components</div>
+    <div style="font-family: 'Fraunces', Georgia, serif; font-size: 34px; font-weight: 700; line-height: 1">Core MCP surface: two tiers, and the exceptions are the point</div>
+  </div>
+  <div style="padding: 8px 56px 0; font-size: 14px; color: #5C5850">Tier 1 is plain functions a library consumer calls in-process. Tier 2 wraps them as MCP tools with bounded zod schemas. Five register modules skip tier 1 and call the timeline directly.</div>
+  <svg viewBox="0 0 1800 880" width="1800" height="880" style="display: block" role="img" aria-label="Component diagram of the core MCP surface">
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#5C5850"></path></marker>
+    </defs>
+
+    <!-- SDK -->
+    <g class="ext">
+      <rect x="40" y="400" width="200" height="100" rx="8"></rect>
+      <text class="t" x="60" y="430">MCP SDK</text>
+      <text class="n" x="60" y="452">@modelcontextprotocol/sdk</text>
+      <text class="s" x="60" y="472">McpServer · registerTool</text>
+      <text class="s" x="60" y="488">registerResource</text>
+    </g>
+
+    <!-- assembly -->
+    <g class="panel"><rect x="300" y="300" width="300" height="260" rx="12"></rect></g>
+    <text class="p" x="320" y="328">assembly — run-dmcp/server</text>
+    <g class="blue">
+      <rect x="320" y="340" width="260" height="70" rx="8"></rect>
+      <text class="m" x="336" y="364">server.ts</text>
+      <text class="s" x="336" y="384">re-export shim; a separate specifier</text>
+      <text class="s" x="336" y="400">so mechanism never loads assembly</text>
+    </g>
+    <g class="blue">
+      <rect x="320" y="430" width="260" height="110" rx="8"></rect>
+      <text class="m" x="336" y="454">mcp-server.ts</text>
+      <text class="s" x="336" y="474">createCoreMcpServer(</text>
+      <text class="s" x="336" y="490">  mechanics?, vocabulary?, rules?)</text>
+      <text class="s" x="336" y="510">a flat, hand-written sequence of</text>
+      <text class="s" x="336" y="526">register calls; opens no database</text>
+    </g>
+
+    <!-- utils -->
+    <g class="panel"><rect x="300" y="600" width="300" height="260" rx="12"></rect></g>
+    <text class="p" x="320" y="628">src/utils · src/schemas — cross-cutting</text>
+    <g class="chip">
+      <rect x="320" y="640" width="260" height="100" rx="8"></rect>
+      <text class="m" x="336" y="664">validation.ts</text>
+      <text class="s" x="336" y="684">LIMITS: the published ceilings</text>
+      <text class="s" x="336" y="700">validatedSchemas getters: a fresh zod</text>
+      <text class="s" x="336" y="716">instance per access, so no $ref is ever</text>
+      <text class="s" x="336" y="732">published</text>
+    </g>
+    <g class="chip">
+      <rect x="320" y="760" width="260" height="80" rx="8"></rect>
+      <text class="m" x="336" y="784">output-schemas · schemas/index</text>
+      <text class="s" x="336" y="804">tool-annotations · verbosity · errors</text>
+      <text class="s" x="336" y="820">output schemas carry no bounds, on purpose</text>
+    </g>
+
+    <!-- register panel -->
+    <g class="panel"><rect x="680" y="20" width="420" height="840" rx="12"></rect></g>
+    <text class="p" x="700" y="48">src/register — tier 2: MCP registration</text>
+    <g class="blue">
+      <rect x="700" y="70" width="380" height="300" rx="8"></rect>
+      <text class="t" x="716" y="96">18 domain register modules</text>
+      <text class="s" x="716" y="114">registerXTools(server): one registerTool per tool,</text>
+      <text class="s" x="716" y="128">handler calls tier 1 and wraps content + structuredContent</text>
+      <text class="n" x="716" y="156">core · 22</text><text class="n" x="830" y="156">time · 13</text><text class="n" x="970" y="156">pause · 15</text>
+      <text class="n" x="716" y="174">world · 6</text><text class="n" x="830" y="174">secrets · 9</text><text class="n" x="970" y="174">images · 14</text>
+      <text class="n" x="716" y="192">character · 10</text><text class="n" x="830" y="192">relationships · 7</text><text class="n" x="970" y="192">audio · 11</text>
+      <text class="n" x="716" y="210">inventory · 6</text><text class="n" x="830" y="210">tags · 5</text><text class="n" x="970" y="210">display · 10</text>
+      <text class="n" x="716" y="228">narrative · 8</text><text class="n" x="830" y="228">factions · 8</text><text class="n" x="970" y="228">batch · 4</text>
+      <text class="n" x="716" y="246">resources · 11</text><text class="n" x="830" y="246">notes · 9</text>
+      <text class="s" x="716" y="280">resources.ts wraps two tier-1 modules (resource, constraint);</text>
+      <text class="s" x="716" y="296">core.ts is the largest, not an orchestrator.</text>
+      <text class="s" x="716" y="320">Every string input carries a maxLength from LIMITS;</text>
+      <text class="s" x="716" y="336">schemaBounds.test.ts checks the bytes of tools/list.</text>
+      <text class="t" x="716" y="360" fill="#2E5A87">168 tools</text>
+    </g>
+    <g class="chip">
+      <rect x="700" y="390" width="380" height="110" rx="8"></rect>
+      <text class="m" x="716" y="414">timeline.ts</text>
+      <text class="s" x="716" y="434">13 tools straight onto the timeline primitives:</text>
+      <text class="s" x="716" y="450">replay_world_at · changes_within · export/import_timeline</text>
+      <text class="s" x="716" y="466">declare_time_axis · declare_fact_irreversible</text>
+      <text class="s" x="716" y="482">narration_constraint_at · declare_turn_order · due_at · advance_turn</text>
+    </g>
+    <g class="chip">
+      <rect x="700" y="520" width="380" height="110" rx="8" stroke-dasharray="7 5"></rect>
+      <text class="m" x="716" y="544">resolve.ts · conditions.ts · render.ts</text>
+      <text class="s" x="716" y="564">resolve, list_mechanics · conditions_at · render_state_at</text>
+      <text class="s" x="716" y="580">registered only when the assembling caller injects</text>
+      <text class="s" x="716" y="596">mechanics, declared rules, or a render vocabulary.</text>
+      <text class="s" x="716" y="612">The stock binary gets the first three via DMCP_RULES_FILE.</text>
+    </g>
+    <g class="chip">
+      <rect x="700" y="650" width="380" height="70" rx="8"></rect>
+      <text class="m" x="716" y="674">reader.ts</text>
+      <text class="s" x="716" y="694">prepare_reading · verify_reading — the model on the caller's side</text>
+    </g>
+    <g class="chip">
+      <rect x="700" y="740" width="380" height="90" rx="8"></rect>
+      <text class="m" x="716" y="764">mcp-resources.ts</text>
+      <text class="s" x="716" y="784">dmcp:// URIs: 1 resource, 9 templates</text>
+      <text class="s" x="716" y="800">games · game and its state, characters, locations, map,</text>
+      <text class="s" x="716" y="816">history, rules · character · location</text>
+    </g>
+
+    <!-- tools panel -->
+    <g class="panel"><rect x="1180" y="20" width="300" height="420" rx="12"></rect></g>
+    <text class="p" x="1200" y="48">src/tools — tier 1: mechanism</text>
+    <g class="blue">
+      <rect x="1200" y="70" width="260" height="340" rx="8"></rect>
+      <text class="t" x="1216" y="96">20 modules</text>
+      <text class="s" x="1216" y="114">all star-exported from run-dmcp</text>
+      <text class="n" x="1216" y="142">game</text><text class="n" x="1340" y="142">notes</text>
+      <text class="n" x="1216" y="160">world</text><text class="n" x="1340" y="160">tags</text>
+      <text class="n" x="1216" y="178">character</text><text class="n" x="1340" y="178">time</text>
+      <text class="n" x="1216" y="196">faction</text><text class="n" x="1340" y="196">timers</text>
+      <text class="n" x="1216" y="214">relationship</text><text class="n" x="1340" y="214">rules</text>
+      <text class="n" x="1216" y="232">resource</text><text class="n" x="1340" y="232">pause</text>
+      <text class="n" x="1216" y="250">constraint</text><text class="n" x="1340" y="250">display</text>
+      <text class="n" x="1216" y="268">inventory</text><text class="n" x="1340" y="268">images</text>
+      <text class="n" x="1216" y="286">secrets</text><text class="n" x="1340" y="286">audio</text>
+      <text class="n" x="1216" y="304">narrative</text><text class="n" x="1340" y="304">image-prompt</text>
+      <text class="s" x="1216" y="336">plain functions over getDatabase(),</text>
+      <text class="s" x="1216" y="352">called lazily; return typed objects,</text>
+      <text class="s" x="1216" y="368">never MCP envelopes; write constrained</text>
+      <text class="s" x="1216" y="384">values through constrained.ts</text>
+    </g>
+
+    <!-- core and events -->
+    <g class="chip">
+      <rect x="1560" y="60" width="200" height="100" rx="8"></rect>
+      <text class="m" x="1576" y="84">events/emitter.ts</text>
+      <text class="s" x="1576" y="104">in-process SSE bus for the</text>
+      <text class="s" x="1576" y="120">web viewer; four tier-1</text>
+      <text class="s" x="1576" y="136">modules emit after a write</text>
+    </g>
+    <g class="clay">
+      <rect x="1560" y="440" width="200" height="300" rx="10"></rect>
+      <text class="p" x="1576" y="466" fill="#B4532F">board 3.1</text>
+      <text class="t" x="1576" y="490">Timeline and</text>
+      <text class="t" x="1576" y="508">persistence core</text>
+      <text class="s" x="1576" y="536">db/connection · db/schema</text>
+      <text class="s" x="1576" y="556">constrained.ts · registry.ts</text>
+      <text class="s" x="1576" y="572">replay · changes · export</text>
+      <text class="s" x="1576" y="588">clock · turns · irreversible</text>
+      <text class="s" x="1576" y="604">narration · render · declared</text>
+      <text class="s" x="1576" y="620">resolve</text>
+      <text class="s" x="1576" y="644">reader/turnReader</text>
+      <text class="s" x="1576" y="660">reader/preflight</text>
+    </g>
+
+    <!-- edges -->
+    <path class="edge" d="M450 410 V430"></path>
+    <path class="edge" d="M320 485 H280 V450 H240"></path>
+    <path class="edge" d="M580 485 H680"></path>
+    <text class="e" x="588" y="478">22 register</text>
+    <text class="e" x="588" y="494">calls + resources</text>
+
+    <path class="edge" d="M1080 220 H1200"></path>
+    <text class="e" x="1140" y="212" text-anchor="middle">wraps</text>
+
+    <path class="edge" d="M680 700 H600"></path>
+    <text class="e" x="640" y="692" text-anchor="middle">zod bounds</text>
+
+    <path class="edge" d="M1460 110 H1560"></path>
+    <text class="e" x="1510" y="102" text-anchor="middle">emit</text>
+
+    <path class="edge" d="M1460 300 H1510 V500 H1560"></path>
+    <text class="e" x="1470" y="292">constrained writes · registry</text>
+
+    <path class="edge nm" d="M1080 445 H1130"></path>
+    <path class="edge nm" d="M1080 575 H1130"></path>
+    <path class="edge nm" d="M1080 685 H1130"></path>
+    <path class="edge nm" d="M1080 785 H1130"></path>
+    <path class="edge nm" d="M1130 445 V785"></path>
+    <path class="edge" d="M1130 700 H1560"></path>
+    <text class="e" x="1140" y="692">direct calls into src/timeline and src/reader — no tier-1 partner</text>
+
+    <!-- totals -->
+    <text class="s" x="1180" y="480">Totals for the core assembly:</text>
+    <text class="t" x="1180" y="502">183 tools unconditionally · 187 with every</text>
+    <text class="t" x="1180" y="520">optional feature · 1 resource · 9 templates</text>
+    <text class="s" x="1180" y="544">The tabletop layer (3.3) adds 40 tools, 2 templates and 7</text>
+    <text class="s" x="1180" y="560">prompts: the 223 / 1 / 11 / 7 golden surface pinned by</text>
+    <text class="s" x="1180" y="576">layerBoundary.test.ts. Tool names are the published API</text>
+    <text class="s" x="1180" y="592">and change with issues; tools/list on a running server is</text>
+    <text class="s" x="1180" y="608">the authority, not this board.</text>
+  </svg>
+  <div style="padding: 14px 56px 0; display: flex; gap: 18px; align-items: center; font-size: 12px; color: #5C5850; border-top: 1px solid #DDD7C9; margin: 0 56px">
+    <span>Presentation copy of <span style="font-family: 'IBM Plex Mono', monospace">docs/ARCHITECTURE.md</span>, §3.2. Drawn from run-dmcp 0.10.0 on 2026-09-27.</span>
+    <span style="margin-left: auto; padding: 4px 10px; border-radius: 999px; background: #F8E9E1; color: #93412A; font-weight: 600">Expected drift: fast</span>
+    <span>tool counts move with every feature issue; packaging.test.ts pins only the module counts</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1800,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

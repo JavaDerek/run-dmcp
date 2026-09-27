@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>run-dmcp containers</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F5F2EA;color:#1F1E1B;font-family:"IBM Plex Sans",system-ui,sans-serif}
+a{color:#2E5A87}a:hover{color:#1F3F62}
+svg text{font-family:"IBM Plex Sans",system-ui,sans-serif;fill:#1F1E1B}
+svg text.t{font-size:15px;font-weight:600}
+svg text.s{font-size:12px;fill:#5C5850}
+svg text.m{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;fill:#2E5A87}
+svg text.h{font-family:"Fraunces",Georgia,serif;font-weight:700}
+svg text.e{font-size:11.5px;fill:#3F3C36;paint-order:stroke;stroke:#F5F2EA;stroke-width:5px;stroke-linejoin:round}
+svg .node rect{fill:#FFFFFF;stroke:#1F1E1B;stroke-width:1.4}
+svg .ext rect{fill:#E7E2D6;stroke:#7B766B;stroke-width:1.2}
+svg .blue rect{fill:#E6EDF5;stroke:#2E5A87;stroke-width:1.8}
+svg .teal rect{fill:#E2EFEC;stroke:#23746E;stroke-width:1.8}
+svg .slate path,svg .slate ellipse{fill:#E4E2DC;stroke:#45423C;stroke-width:1.6}
+svg .paper rect{fill:#F1EEE5;stroke:#8A8577;stroke-width:1.4}
+svg .bound rect{fill:none;stroke:#B4532F;stroke-width:1.6;stroke-dasharray:10 7}
+svg .person circle,svg .person path{fill:none;stroke:#5C5850;stroke-width:1.8}
+svg .edge{fill:none;stroke:#5C5850;stroke-width:1.6;marker-end:url(#arr)}
+svg .edge.nm{marker-end:none}
+svg .edge.d{stroke-dasharray:6 5}
+</style>
+</helmet>
+<div style="width: 1700px; height: 1000px; box-sizing: border-box; display: flex; flex-direction: column; background: #F5F2EA; overflow: hidden">
+  <div style="padding: 36px 56px 0; display: flex; align-items: baseline; gap: 22px">
+    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #B4532F; letter-spacing: 0.08em; text-transform: uppercase">Level 2 · Containers</div>
+    <div style="font-family: 'Fraunces', Georgia, serif; font-size: 34px; font-weight: 700; line-height: 1">Five containers, and the first is the third with a main()</div>
+  </div>
+  <div style="padding: 8px 56px 0; font-size: 14px; color: #5C5850">One Node process hosts MCP over stdio and an optional read-only web API. The library is the same code linked into a consumer's own process, against its own database.</div>
+  <svg viewBox="0 0 1700 780" width="1700" height="780" style="display: block" role="img" aria-label="Container diagram">
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#5C5850"></path></marker>
+    </defs>
+
+    <!-- system boundary -->
+    <g class="bound"><rect x="260" y="150" width="1060" height="590" rx="16"></rect></g>
+    <text class="h" x="282" y="180" font-size="18" fill="#B4532F">run-dmcp</text>
+    <text class="s" x="282" y="724">one source tree, two shapes: a process you run, or a library you import</text>
+
+    <!-- externals, top -->
+    <g class="ext">
+      <rect x="300" y="20" width="360" height="90" rx="8"></rect>
+      <text class="t" x="320" y="48">MCP host · scripted MCP client</text>
+      <text class="s" x="320" y="70">Spawns the binary as a subprocess and speaks</text>
+      <text class="s" x="320" y="86">JSON-RPC on its stdin and stdout.</text>
+    </g>
+    <g class="node person">
+      <rect x="760" y="20" width="260" height="90" rx="10"></rect>
+      <circle cx="796" cy="52" r="13"></circle><path d="M778 96 q18 -30 36 0"></path>
+      <text class="t" x="832" y="56">Game viewer</text>
+      <text class="s" x="832" y="78">in a browser</text>
+    </g>
+    <g class="ext">
+      <rect x="1380" y="210" width="280" height="200" rx="8"></rect>
+      <text class="t" x="1400" y="240">Consumer application</text>
+      <text class="t" x="1400" y="260">process</text>
+      <text class="s" x="1400" y="286">Node. Imports the package at an</text>
+      <text class="s" x="1400" y="302">exact pin.</text>
+      <text class="s" x="1400" y="326">Its own database, its own cwd,</text>
+      <text class="s" x="1400" y="342">its own event bus.</text>
+      <text class="s" x="1400" y="366">May connect a server it assembles</text>
+      <text class="s" x="1400" y="382">to any MCP transport it likes.</text>
+    </g>
+    <g class="ext">
+      <rect x="20" y="540" width="200" height="120" rx="8"></rect>
+      <text class="t" x="40" y="568">Caller-supplied</text>
+      <text class="t" x="40" y="588">media URL</text>
+      <text class="s" x="40" y="612">the host's generator output;</text>
+      <text class="s" x="40" y="628">the engine's only outbound call</text>
+    </g>
+
+    <!-- containers -->
+    <g class="blue">
+      <rect x="300" y="210" width="360" height="200" rx="10"></rect>
+      <text class="t" x="320" y="240">Application process</text>
+      <text class="m" x="320" y="260">src/bin/run-dmcp.ts · Node 20</text>
+      <text class="s" x="320" y="286">= run-dmcp/rpg/server + main()</text>
+      <text class="s" x="320" y="306">initializeSchema → generated timeline triggers</text>
+      <text class="s" x="320" y="322">→ optional DMCP_RULES_FILE → createMcpServer</text>
+      <text class="s" x="320" y="338">→ HTTP unless DMCP_NO_HTTP → stdio transport</text>
+      <text class="s" x="320" y="362">SIGINT / SIGTERM close the database and exit.</text>
+      <text class="s" x="320" y="378">Shipped as the npm bin and the Docker entrypoint.</text>
+    </g>
+    <g class="teal">
+      <rect x="760" y="210" width="260" height="160" rx="10"></rect>
+      <text class="t" x="780" y="240">Web viewer</text>
+      <text class="m" x="780" y="260">client/ · Vue 3 · vue-router · d3</text>
+      <text class="s" x="780" y="286">Read-only SPA, 20 routes.</text>
+      <text class="s" x="780" y="302">Live refresh over SSE.</text>
+      <text class="s" x="780" y="318">Types are a hand-kept mirror.</text>
+      <text class="s" x="780" y="342">In the tarball from the release</text>
+      <text class="s" x="780" y="358">after 0.10.0; in the image already.</text>
+    </g>
+    <g class="blue">
+      <rect x="1050" y="210" width="240" height="200" rx="10" stroke-dasharray="7 5"></rect>
+      <text class="t" x="1070" y="240">Library</text>
+      <text class="m" x="1070" y="260">npm run-dmcp · 4 ESM entries</text>
+      <text class="s" x="1070" y="286">mechanism: run-dmcp, run-dmcp/rpg</text>
+      <text class="s" x="1070" y="302">assembly: run-dmcp/server,</text>
+      <text class="s" x="1070" y="318">run-dmcp/rpg/server</text>
+      <text class="s" x="1070" y="342">Importing starts nothing.</text>
+      <text class="s" x="1070" y="358">Runs inside the importer's process</text>
+      <text class="s" x="1070" y="374">with the importer's connection.</text>
+    </g>
+    <g class="paper">
+      <rect x="300" y="540" width="240" height="120" rx="10"></rect>
+      <text class="t" x="320" y="568">Media store</text>
+      <text class="m" x="320" y="588">filesystem</text>
+      <text class="s" x="320" y="612">images/ and audio/ beside the db.</text>
+      <text class="s" x="320" y="628">The db holds a relative file_path.</text>
+      <text class="s" x="320" y="644">Not projected; not in exports.</text>
+    </g>
+    <g class="slate">
+      <path d="M640 560 v120 a150 18 0 0 0 300 0 v-120"></path>
+      <ellipse cx="790" cy="560" rx="150" ry="18"></ellipse>
+    </g>
+    <text class="t" x="660" y="602">Game database</text>
+    <text class="m" x="660" y="622">SQLite · WAL · better-sqlite3</text>
+    <text class="s" x="660" y="644">~30 domain tables + entities · facts · events.</text>
+    <text class="s" x="660" y="660">Dual-write by triggers regenerated at start.</text>
+    <text class="s" x="660" y="676">One file. One connection per process.</text>
+
+    <!-- edges -->
+    <path class="edge" d="M480 110 V210"></path>
+    <text class="e" x="492" y="132">MCP JSON-RPC over stdio</text>
+    <text class="e" x="492" y="148">223 tools · 1 resource · 11 templates · 7 prompts</text>
+
+    <path class="edge" d="M890 110 V210"></path>
+    <text class="e" x="902" y="165">browser</text>
+
+    <path class="edge" d="M660 270 H760"></path>
+    <text class="e" x="710" y="262" text-anchor="middle" font-size="11">serves client/dist</text>
+    <path class="edge" d="M760 320 H660"></path>
+    <text class="e" x="710" y="343" text-anchor="middle" font-size="11">GET /api · SSE</text>
+    <text class="e" x="710" y="358" text-anchor="middle" font-size="11">image bytes</text>
+
+    <path class="edge" d="M1380 310 H1290"></path>
+    <text class="e" x="1335" y="301" text-anchor="middle">ESM import</text>
+    <text class="e" x="1335" y="333" text-anchor="middle">in-process</text>
+
+    <path class="edge" d="M360 410 V540"></path>
+    <text class="e" x="372" y="480">Node fs + sharp</text>
+
+    <path class="edge" d="M560 410 V500 H790 V540"></path>
+    <text class="e" x="575" y="494">SQL · one connection · triggers append the timeline</text>
+
+    <path class="edge nm" d="M1170 410 V500 H800"></path>
+    <text class="e" x="1182" y="480">its own connection;</text>
+    <text class="e" x="1182" y="496">initializeSchema({ migrations }) first</text>
+
+    <path class="edge" d="M300 380 H120 V540"></path>
+    <text class="e" x="132" y="462">HTTP GET on</text>
+    <text class="e" x="132" y="478">store_image / store_audio</text>
+
+    <text class="s" x="300" y="768">Two processes on one database file are two SQLite connections. The in-process event bus never crosses that line: SSE reflects only writes made in the process that serves it.</text>
+  </svg>
+  <div style="padding: 14px 56px 0; display: flex; gap: 18px; align-items: center; font-size: 12px; color: #5C5850; border-top: 1px solid #DDD7C9; margin: 0 56px">
+    <span>Presentation copy of <span style="font-family: 'IBM Plex Mono', monospace">docs/ARCHITECTURE.md</span>, Level 2. Drawn from run-dmcp 0.10.0 on 2026-09-27.</span>
+    <span style="margin-left: auto; padding: 4px 10px; border-radius: 999px; background: #F6EEDC; color: #7A5410; font-weight: 600">Expected drift: medium</span>
+    <span>changes when a container or a protocol changes</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1700,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

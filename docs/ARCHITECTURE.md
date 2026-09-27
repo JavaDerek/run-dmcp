@@ -69,6 +69,8 @@ C4Context
   Rel(engine, media, "fetches the finished file on store_image / store_audio", "HTTP GET of a caller-supplied URL")
 ```
 
+*Styled copy: [Level 1 board](architecture/boards/Main.png); see [Presentation copies](#presentation-copies-and-how-fast-they-rot).*
+
 ### What the context diagram is saying
 
 - **The player is two hops away.** run-dmcp never sees natural language from a player. The host's
@@ -126,6 +128,8 @@ C4Container
   Rel(lib, db, "the consumer's own connection; initializeSchema({ migrations }) runs the consumer's tables first", "SQL, synchronous")
   Rel(lib, media, "same media tools", "Node fs")
 ```
+
+*Styled copy: [Level 2 board](architecture/boards/L2-Containers.png); see [Presentation copies](#presentation-copies-and-how-fast-they-rot).*
 
 ### The containers
 
@@ -223,6 +227,8 @@ flowchart TB
   preflight --> turnReader
 ```
 
+*Styled copy: [board 3.1](architecture/boards/L3-1-Timeline-Core.png).*
+
 | Component | Source | Responsibility |
 |---|---|---|
 | **Connection and data path** | `src/db/connection.ts` | The single lazily opened handle; `DMCP_DB_PATH` → XDG → cwd resolution; `withTransaction`. Everything below depends on it. |
@@ -287,6 +293,8 @@ flowchart LR
   readerReg --> core
   resReg --> core
 ```
+
+*Styled copy: [board 3.2](architecture/boards/L3-2-MCP-Surface.png).*
 
 **Tier 1, `src/tools/*.ts`**, is twenty modules of plain exported functions (`createCharacter`,
 `updateResourceValue`, …). Each calls `getDatabase()` lazily, does its own existence checks, writes
@@ -398,6 +406,8 @@ flowchart LR
   combat & quest --> events
 ```
 
+*Styled copy: [board 3.3](architecture/boards/L3-3-Tabletop.png).*
+
 Three things are worth knowing that the directory listing does not show:
 
 - **It adds 40 tools, 2 resource templates and 7 prompts**, and the union with the core is exactly
@@ -455,6 +465,8 @@ flowchart LR
   components -->|"img src"| imgDelivery
 ```
 
+*Styled copy: [board 3.4](architecture/boards/L3-4-HTTP-Viewer.png).*
+
 - **Read-only is structural.** Every route is `GET`; `e2e/specs/api-readonly.spec.ts` fails if a
   writing verb appears. There is no authentication and no CORS middleware: this is a local viewer
   for the person running the game, not a hardened API.
@@ -476,9 +488,12 @@ flowchart LR
 
 ## Presentation copies, and how fast they rot
 
-A hand-laid, styled copy of each of the six diagrams above lives on a Claude Design canvas:
-<https://claude.ai/artifact/Qu38NzWrAXNvb29i6h83Na> (private; share from the canvas if someone else
-needs it). Those boards exist for onboarding, a README hero, or a talk. **They are not the source
+A hand-laid, styled copy of each of the six diagrams above lives in [architecture/](architecture/)
+in this repository: the board sources under `canvas/`, rendered PNGs under `boards/`, and a
+`render.mjs` that regenerates the PNGs with Playwright's Chromium. The same sources are published
+to a Claude Design canvas, <https://claude.ai/artifact/Qu38NzWrAXNvb29i6h83Na> (private; share
+from the canvas if someone else needs it). Those boards exist for onboarding, a README hero, or a
+talk. **They are not the source
 of truth and are never edited by hand.** The Mermaid in this file is what CI sees and what a pull
 request diffs; a board is regenerated from this file when the file changes, and when the two
 disagree, this file wins.

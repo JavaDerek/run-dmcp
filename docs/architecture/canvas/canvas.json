@@ -1,0 +1,91 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "L2-Containers.dc.html": {
+      "h": 1000,
+      "title": "Level 2 · Containers",
+      "w": 1700,
+      "x": 1680,
+      "y": 0
+    },
+    "L3-1-Timeline-Core.dc.html": {
+      "h": 1200,
+      "title": "Level 3.1 · Timeline and persistence core",
+      "w": 1800,
+      "x": 0,
+      "y": 1120
+    },
+    "L3-2-MCP-Surface.dc.html": {
+      "h": 1100,
+      "title": "Level 3.2 · Core MCP surface",
+      "w": 1800,
+      "x": 1880,
+      "y": 1120
+    },
+    "L3-3-Tabletop.dc.html": {
+      "h": 1000,
+      "title": "Level 3.3 · Tabletop layer",
+      "w": 1600,
+      "x": 0,
+      "y": 2440
+    },
+    "L3-4-HTTP-Viewer.dc.html": {
+      "h": 1100,
+      "title": "Level 3.4 · HTTP server and web viewer",
+      "w": 1800,
+      "x": 1680,
+      "y": 2440
+    },
+    "Main.dc.html": {
+      "h": 1000,
+      "title": "Level 1 · System context",
+      "w": 1600,
+      "x": 0,
+      "y": 0
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-09-27T15:10:00Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "view": "canvas"
+  },
+  "notes": {
+    "drift": {
+      "fill": "orange",
+      "text": "These boards are presentation copies of the six Mermaid diagrams in run-dmcp/docs/ARCHITECTURE.md.\n\nThe Markdown is the source of truth and is what CI sees. These pictures are regenerated from it, never edited by hand, and they WILL drift:\n\n• Level 3 boards go stale first — a new register module, a new timeline file, a moved route.\n• Level 2 drifts when a container or a protocol changes.\n• Level 1 drifts only when a new kind of consumer or surface appears.\n\nEach board's footer states the version it was drawn from and its expected drift. When a board disagrees with the Markdown, the Markdown wins.",
+      "w": 420,
+      "x": 3480,
+      "y": 0
+    },
+    "t1": {
+      "kind": "title1",
+      "maxW": 3380,
+      "text": "run-dmcp — C4 architecture, presentation copies (levels 1 and 2)",
+      "w": 240,
+      "x": 0,
+      "y": -300
+    },
+    "t2": {
+      "kind": "title1",
+      "maxW": 3680,
+      "text": "Level 3 — components, in four cuts along the tested seams",
+      "w": 240,
+      "x": 0,
+      "y": 820
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "L2-Containers.dc.html",
+    "L3-1-Timeline-Core.dc.html",
+    "L3-2-MCP-Surface.dc.html",
+    "L3-3-Tabletop.dc.html",
+    "L3-4-HTTP-Viewer.dc.html"
+  ],
+  "pages": [],
+  "title": "run-dmcp Architecture Diagrams"
+}

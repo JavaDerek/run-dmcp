@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>run-dmcp system context</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F5F2EA;color:#1F1E1B;font-family:"IBM Plex Sans",system-ui,sans-serif}
+a{color:#2E5A87}a:hover{color:#1F3F62}
+svg text{font-family:"IBM Plex Sans",system-ui,sans-serif;fill:#1F1E1B}
+svg text.t{font-size:15px;font-weight:600}
+svg text.s{font-size:12px;fill:#5C5850}
+svg text.m{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:12px;fill:#2E5A87}
+svg text.h{font-family:"Fraunces",Georgia,serif;font-weight:700}
+svg text.e{font-size:11.5px;fill:#3F3C36;paint-order:stroke;stroke:#F5F2EA;stroke-width:5px;stroke-linejoin:round}
+svg .node rect{fill:#FFFFFF;stroke:#1F1E1B;stroke-width:1.4}
+svg .ext rect{fill:#E7E2D6;stroke:#7B766B;stroke-width:1.2}
+svg .clay rect{fill:#F8E9E1;stroke:#B4532F;stroke-width:2.2}
+svg .person circle,svg .person path{fill:none;stroke:#5C5850;stroke-width:1.8}
+svg .edge{fill:none;stroke:#5C5850;stroke-width:1.6;marker-end:url(#arr)}
+svg .edge.d{stroke-dasharray:6 5}
+</style>
+</helmet>
+<div style="width: 1600px; height: 1000px; box-sizing: border-box; display: flex; flex-direction: column; background: #F5F2EA; overflow: hidden">
+  <div style="padding: 36px 56px 0; display: flex; align-items: baseline; gap: 22px">
+    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #B4532F; letter-spacing: 0.08em; text-transform: uppercase">Level 1 · System context</div>
+    <div style="font-family: 'Fraunces', Georgia, serif; font-size: 34px; font-weight: 700; line-height: 1">run-dmcp in its surroundings</div>
+  </div>
+  <div style="padding: 8px 56px 0; font-size: 14px; color: #5C5850">The player is two hops away. A model in an MCP host narrates and classifies; the engine resolves, remembers, and can say what the world looked like at any t.</div>
+  <svg viewBox="0 0 1600 780" width="1600" height="780" style="display: block" role="img" aria-label="System context diagram">
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#5C5850"></path></marker>
+    </defs>
+
+    <!-- people -->
+    <g class="node person">
+      <rect x="56" y="48" width="240" height="104" rx="10"></rect>
+      <circle cx="92" cy="82" r="13"></circle><path d="M74 128 q18 -30 36 0" ></path>
+      <text class="t" x="128" y="86">Player</text>
+      <text class="s" x="128" y="106">Plays through an LLM host.</text>
+      <text class="s" x="128" y="122">Never talks to the engine.</text>
+    </g>
+    <g class="node person">
+      <rect x="56" y="300" width="240" height="104" rx="10"></rect>
+      <circle cx="92" cy="334" r="13"></circle><path d="M74 380 q18 -30 36 0"></path>
+      <text class="t" x="128" y="338">Game viewer</text>
+      <text class="s" x="128" y="358">Watches a running game in a</text>
+      <text class="s" x="128" y="374">browser: map, people, history.</text>
+    </g>
+    <g class="node person">
+      <rect x="56" y="560" width="240" height="104" rx="10"></rect>
+      <circle cx="92" cy="594" r="13"></circle><path d="M74 640 q18 -30 36 0"></path>
+      <text class="t" x="128" y="598">Operator</text>
+      <text class="s" x="128" y="618">Starts the binary or container,</text>
+      <text class="s" x="128" y="634">sets DMCP_*, runs loaders.</text>
+    </g>
+
+    <!-- MCP host -->
+    <g class="ext">
+      <rect x="640" y="40" width="360" height="120" rx="8"></rect>
+      <text class="t" x="660" y="70">MCP host with an LLM</text>
+      <text class="s" x="660" y="92">Claude Desktop, Claude Code, the MCP Inspector,</text>
+      <text class="s" x="660" y="108">or any MCP client. The model narrates;</text>
+      <text class="s" x="660" y="124">the engine resolves and remembers.</text>
+    </g>
+
+    <!-- the system -->
+    <g class="clay">
+      <rect x="640" y="330" width="360" height="220" rx="12"></rect>
+      <text class="h" x="664" y="378" font-size="34">run-dmcp</text>
+      <text class="m" x="830" y="378">0.10.0</text>
+      <text class="s" x="664" y="408">Owns what is true in a game world,</text>
+      <text class="s" x="664" y="424">and when it was true.</text>
+      <text class="s" x="664" y="452">MCP server over stdio</text>
+      <text class="s" x="664" y="468">Read-only web viewer</text>
+      <text class="s" x="664" y="484">Importable library, four entries</text>
+      <text class="s" x="664" y="516">SQLite underneath; one generated timeline.</text>
+    </g>
+
+    <!-- right column externals -->
+    <g class="ext">
+      <rect x="1180" y="40" width="360" height="110" rx="8"></rect>
+      <text class="t" x="1200" y="68">Media generator</text>
+      <text class="s" x="1200" y="90">Image or speech generation the host runs itself,</text>
+      <text class="s" x="1200" y="106">e.g. a ComfyUI or TTS server. The engine never</text>
+      <text class="s" x="1200" y="122">calls it to generate; it fetches a finished file.</text>
+    </g>
+    <g class="ext">
+      <rect x="1180" y="230" width="360" height="110" rx="8"></rect>
+      <text class="t" x="1200" y="258">Consumer application</text>
+      <text class="s" x="1200" y="280">A Node process that imports the package at an</text>
+      <text class="s" x="1200" y="296">exact pin and runs the engine in-process against</text>
+      <text class="s" x="1200" y="312">its own database. May assemble its own MCP server.</text>
+    </g>
+    <g class="ext">
+      <rect x="1180" y="420" width="360" height="110" rx="8"></rect>
+      <text class="t" x="1200" y="448">Scripted MCP client</text>
+      <text class="s" x="1200" y="470">A bulk loader or probe that spawns the binary,</text>
+      <text class="s" x="1200" y="486">reads tools/list for the declared limits, and</text>
+      <text class="s" x="1200" y="502">creates a world of hundreds of rooms.</text>
+    </g>
+    <g class="ext">
+      <rect x="1180" y="610" width="360" height="110" rx="8" stroke-dasharray="7 5"></rect>
+      <text class="t" x="1200" y="638">Spec-only consumer</text>
+      <text class="s" x="1200" y="660">Reimplements the timeline core (DESIGN.md §5.1)</text>
+      <text class="s" x="1200" y="676">in another language, behind a seam meant to be</text>
+      <text class="s" x="1200" y="692">swapped for the engine later. No runtime link.</text>
+    </g>
+
+    <!-- edges -->
+    <path class="edge" d="M296 100 H640"></path>
+    <text class="e" x="340" y="93">plays, in natural language</text>
+
+    <path class="edge" d="M820 160 V330"></path>
+    <text class="e" x="832" y="236">spawns; MCP JSON-RPC over stdio</text>
+    <text class="e" x="832" y="252">223 tools · 12 resources · 7 prompts</text>
+
+    <path class="edge" d="M1000 100 H1180"></path>
+    <text class="e" x="1012" y="121">asks for an image</text>
+    <text class="e" x="1012" y="136">or a voice line</text>
+
+    <path class="edge" d="M1000 330 L1180 150"></path>
+    <text class="e" x="1046" y="290">fetches the file</text>
+    <text class="e" x="1046" y="305">HTTP GET by URL</text>
+
+    <path class="edge" d="M296 352 H585 V400 H640"></path>
+    <text class="e" x="310" y="344">HTTP GET + SSE · port 3456</text>
+
+    <path class="edge" d="M296 612 H615 V480 H640"></path>
+    <text class="e" x="310" y="604">CLI or docker run · DMCP_* environment</text>
+
+    <path class="edge" d="M1180 285 L1000 380"></path>
+    <text class="e" x="1090" y="352" text-anchor="middle" font-size="11">npm · exact pin · ESM in-process</text>
+
+    <path class="edge" d="M1180 475 L1000 440"></path>
+    <text class="e" x="1100" y="432" text-anchor="middle">MCP over stdio · bulk creation</text>
+
+    <path class="edge d" d="M1180 665 L1000 500"></path>
+    <text class="e" x="1090" y="602" text-anchor="middle" font-size="11">tracks DESIGN.md §5.1 by hand · no code</text>
+
+    <!-- legend -->
+    <g class="person">
+      <circle cx="516" cy="716" r="8"></circle><path d="M505 740 q11 -18 22 0"></path>
+    </g>
+    <text class="s" x="536" y="732">Person</text>
+    <g class="clay"><rect x="610" y="706" width="56" height="28" rx="6"></rect></g>
+    <text class="s" x="676" y="726">The system</text>
+    <g class="ext"><rect x="770" y="706" width="56" height="28" rx="6"></rect></g>
+    <text class="s" x="836" y="726">External system</text>
+    <path class="edge d" d="M956 720 H1010"></path>
+    <text class="s" x="1020" y="726">Design-only link</text>
+  </svg>
+  <div style="padding: 14px 56px 0; display: flex; gap: 18px; align-items: center; font-size: 12px; color: #5C5850; border-top: 1px solid #DDD7C9; margin: 0 56px">
+    <span>Presentation copy of <span style="font-family: 'IBM Plex Mono', monospace">docs/ARCHITECTURE.md</span>, Level 1. Drawn from run-dmcp 0.10.0 on 2026-09-27.</span>
+    <span style="margin-left: auto; padding: 4px 10px; border-radius: 999px; background: #E2EFEC; color: #1E5E59; font-weight: 600">Expected drift: slow</span>
+    <span>changes only when a new kind of consumer or surface appears</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1600,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
