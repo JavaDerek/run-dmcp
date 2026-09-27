@@ -474,6 +474,29 @@ flowchart LR
 
 ---
 
+## Presentation copies, and how fast they rot
+
+A hand-laid, styled copy of each of the six diagrams above lives on a Claude Design canvas:
+<https://claude.ai/artifact/Qu38NzWrAXNvb29i6h83Na> (private; share from the canvas if someone else
+needs it). Those boards exist for onboarding, a README hero, or a talk. **They are not the source
+of truth and are never edited by hand.** The Mermaid in this file is what CI sees and what a pull
+request diffs; a board is regenerated from this file when the file changes, and when the two
+disagree, this file wins.
+
+Expect the boards to drift, and expect the detailed ones to drift first:
+
+| Board | Goes stale when | Expected drift |
+|---|---|---|
+| Level 3.1 to 3.4, components | a file is added under `src/timeline/`, a register module or route lands, a view is added | fast, with almost every feature issue |
+| Level 2, containers | a container, protocol or deployment shape changes | medium, a few times a year |
+| Level 1, system context | a new kind of consumer or a new outward surface appears | slow, rarely |
+
+Each board's footer states the version it was drawn from and its expected drift, and the canvas
+carries the same note beside the boards. When a pinned count in this file changes, the board that
+quotes it is wrong until it is regenerated; that is acceptable, and the footer says so.
+
+---
+
 ## Boundaries that are enforced
 
 The architecture above is not a convention. Each line in it that matters has a test that goes red
