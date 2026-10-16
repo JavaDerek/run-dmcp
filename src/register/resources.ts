@@ -250,19 +250,42 @@ export function registerResourceTools(server: McpServer) {
         "'bounded': the resource must already have minValue and/or maxValue set (via create_resource/update_resource) -- once declared, writes outside those bounds are REJECTED instead of the default silent clamp. " +
         "'monotonic': the resource's value may only move in one direction ('increasing' = never decreases, 'decreasing' = never increases); holding steady is always allowed. " +
         "'conserved': declares a set of 2+ resources that must always sum to a fixed total -- the members' current values must already sum to `total` (this does not rewrite them to match). Once declared, update_resource_value REJECTS direct writes to any member (ambiguous -- it can't know where the offsetting change comes from); use transfer_resource_value to move value between two members of the set atomically instead. A resource can belong to at most one 'conserved' set at a time. " +
-        "'resolve_only': every DIRECT write to the given fact key is refused -- both update_resource_value and transfer_resource_value -- so it can move only through an adjudicating call. Scoped to one fact key (factKey, default 'value'); a resource can hold a separate 'resolve_only' declaration per fact key.",
+        "'resolve_only': every DIRECT write to the given fact key is refused -- both update_resource_value and transfer_resource_value -- so it can move only through an adjudicating call. Scoped to one fact key (factKey, default 'value'); a resource can hold a separate 'resolve_only' declaration per fact key. " +
+        "'improvisable': declares that this value MAY receive bounded improvised rulings, with an ordered list of tiers, each with a cap (the most one ruling may move the value) and optionally requiresConfirmation (a ruling under that tier must carry a confirmation reference). Ordinary writes are unaffected; an improvised ruling against a value without this declaration, under an undeclared tier, past the tier's cap, or missing a required confirmation is refused. Scoped to one fact key (factKey, default 'value').",
       inputSchema: {
         gameId: z.string().max(100).describe("The game ID"),
-        kind: z.enum(["bounded", "monotonic", "conserved", "resolve_only"]).describe("Constraint kind"),
-        resourceId: z.string().max(100).optional().describe("Required for 'bounded', 'monotonic' or 'resolve_only': the resource to constrain"),
+        kind: z.enum(["bounded", "monotonic", "conserved", "resolve_only", "improvisable"]).describe("Constraint kind"),
+        resourceId: z
+          .string()
+          .max(100)
+          .optional()
+          .describe("Required for 'bounded', 'monotonic', 'resolve_only' or 'improvisable': the resource to constrain"),
         resourceIds: z.array(z.string().max(100)).optional().describe("Required for 'conserved': 2 or more resource IDs that must sum to `total`"),
         direction: z.enum(["increasing", "decreasing"]).optional().describe("Required for 'monotonic': the only direction the value may move"),
         total: z.number().optional().describe("Required for 'conserved': the fixed sum the resource set must maintain"),
-        factKey: z.string().max(100).optional().describe("For 'resolve_only' only: the fact key the constraint governs, defaulting to 'value'"),
+        factKey: z
+          .string()
+          .max(100)
+          .optional()
+          .describe("For 'resolve_only' or 'improvisable' only: the fact key the constraint governs, defaulting to 'value'"),
+        tiers: z
+          .array(
+            z.object({
+              key: z.string().max(LIMITS.NAME_MAX).describe("The tier's key -- a token the engine compares for equality, never reads"),
+              cap: z.number().describe("The most one improvised ruling under this tier may move the value (absolute amount, above zero)"),
+              requiresConfirmation: z
+                .boolean()
+                .optional()
+                .describe("A ruling under this tier must carry a confirmation reference (default false)"),
+            })
+          )
+          .max(LIMITS.ARRAY_MAX)
+          .optional()
+          .describe("Required for 'improvisable': the ordered tiers, each with its own cap"),
       },
       annotations: ANNOTATIONS.CREATE,
     },
-    async ({ gameId, kind, resourceId, resourceIds, direction, total, factKey }) => {
+    async ({ gameId, kind, resourceId, resourceIds, direction, total, factKey, tiers }) => {
       try {
         let constraint;
         if (kind === "bounded") {
@@ -276,6 +299,9 @@ export function registerResourceTools(server: McpServer) {
         } else if (kind === "resolve_only") {
           if (!resourceId) throw new Error("resourceId is required for a 'resolve_only' constraint");
           constraint = constraintTools.declareResolveOnlyConstraint({ gameId, resourceId, factKey });
+        } else if (kind === "improvisable") {
+          if (!resourceId || !tiers) throw new Error("resourceId and tiers are required for an 'improvisable' constraint");
+          constraint = constraintTools.declareImprovisableConstraint({ gameId, resourceId, factKey, tiers });
         } else {
           if (!resourceIds || total === undefined) {
             throw new Error("resourceIds and total are required for a 'conserved' constraint");

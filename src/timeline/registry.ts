@@ -3,6 +3,7 @@ import { getDatabase } from "../db/connection.js";
 import type {
   ConstraintKind,
   DeclaredConstraintKind,
+  ImprovisableTier,
   MonotonicDirection,
   ResourceConstraint,
 } from "../types/index.js";
@@ -102,6 +103,9 @@ export interface ConstraintRow {
   // was declared by a `create` leg's `constraints` (issue #42); null for
   // every constraint declared the ordinary way.
   caused_by_event_id: string | null;
+  // 'improvisable' only: the declared tiers as JSON, written by
+  // insertConstraintRow() below and nowhere else.
+  tiers: string | null;
 }
 
 /** The resource ids belonging to a constraint, in insertion order. Exported
@@ -127,6 +131,7 @@ export function rowToConstraint(row: ConstraintRow): ResourceConstraint {
     minValue: row.min_value,
     maxValue: row.max_value,
     causedByEventId: row.caused_by_event_id,
+    tiers: row.tiers === null || row.tiers === undefined ? null : (JSON.parse(row.tiers) as ImprovisableTier[]),
   };
 }
 
@@ -151,6 +156,7 @@ export function insertConstraintRow(params: {
   minValue?: number | null;
   maxValue?: number | null;
   causedByEventId?: string | null;
+  tiers?: readonly ImprovisableTier[] | null;
 }): ResourceConstraint {
   const db = getDatabase();
   const id = uuidv4();
@@ -161,11 +167,24 @@ export function insertConstraintRow(params: {
   const minValue = params.minValue ?? null;
   const maxValue = params.maxValue ?? null;
   const causedByEventId = params.causedByEventId ?? null;
+  const tiers = params.tiers ? params.tiers.map((t) => ({ key: t.key, cap: t.cap, requiresConfirmation: t.requiresConfirmation })) : null;
 
   db.prepare(
-    `INSERT INTO resource_constraints (id, game_id, kind, direction, total, fact_key, created_at, min_value, max_value, caused_by_event_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(id, params.gameId, params.kind, direction, total, factKey, createdAt, minValue, maxValue, causedByEventId);
+    `INSERT INTO resource_constraints (id, game_id, kind, direction, total, fact_key, created_at, min_value, max_value, caused_by_event_id, tiers)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    id,
+    params.gameId,
+    params.kind,
+    direction,
+    total,
+    factKey,
+    createdAt,
+    minValue,
+    maxValue,
+    causedByEventId,
+    tiers === null ? null : JSON.stringify(tiers)
+  );
 
   const memberStmt = db.prepare(`INSERT INTO resource_constraint_members (constraint_id, resource_id) VALUES (?, ?)`);
   for (const resourceId of params.resourceIds) {
@@ -184,6 +203,7 @@ export function insertConstraintRow(params: {
     minValue,
     maxValue,
     causedByEventId,
+    tiers,
   };
 }
 

@@ -1,7 +1,7 @@
 import { getDatabase } from "../db/connection.js";
 import { validateGameExists } from "./game.js";
 import { getResource } from "./resource.js";
-import type { ConstraintKind, MonotonicDirection, ResourceConstraint } from "../types/index.js";
+import type { ConstraintKind, ImprovisableTier, MonotonicDirection, ResourceConstraint } from "../types/index.js";
 import {
   ConstraintViolationError,
   CONSERVED_SUM_EPSILON,
@@ -205,6 +205,71 @@ export function declareResolveOnlyConstraint(params: {
   }
 
   return insertConstraint(params.gameId, "resolve_only", [params.resourceId], null, null, factKey);
+}
+
+/**
+ * Declare an 'improvisable' constraint (design §5.3's fifth row-based
+ * member): the game saying, on purpose, that `factKey` on `resourceId` may
+ * receive bounded improvised rulings -- and how far one ruling may move it,
+ * per tier. `tiers` is an ordered list the engine keeps in the order given
+ * and never reorders or ranks: which tier is "worse" is the game's to know,
+ * not the engine's, and a key is compared for equality only.
+ *
+ * Declaring it changes nothing for an ordinary write. It is what an
+ * improvised ruling (src/timeline/improvised.ts, and any write a mechanic
+ * tags `improvised`) is checked against at the one choke point
+ * (assertConstraintsAllow, src/timeline/constrained.ts): no declaration, no
+ * ruling. That is the structural guarantee -- a value the game never
+ * declared improvisable is out of reach of every improvised ruling, whatever
+ * a caller proposes.
+ *
+ * Validation, all rejecting rather than coercing: the game and resource
+ * exist; at least one tier; every key a non-empty string, no key twice;
+ * every cap a finite number above zero (a cap of zero would declare a tier
+ * no ruling could ever use); and no second 'improvisable' declaration on the
+ * same (resourceId, factKey) -- scoped by factKey, like 'resolve_only'.
+ * `requiresConfirmation` defaults to false.
+ */
+export function declareImprovisableConstraint(params: {
+  gameId: string;
+  resourceId: string;
+  factKey?: string;
+  tiers: readonly { key: string; cap: number; requiresConfirmation?: boolean }[];
+}): ResourceConstraint {
+  validateGameExists(params.gameId);
+
+  const resource = getResource(params.resourceId);
+  if (!resource) {
+    throw new Error(`Resource '${params.resourceId}' not found.`);
+  }
+  const factKey = params.factKey ?? "value";
+
+  if (!Array.isArray(params.tiers) || params.tiers.length === 0) {
+    throw new Error(`An 'improvisable' constraint needs at least one tier ({ key, cap }).`);
+  }
+  const seen = new Set<string>();
+  const tiers: ImprovisableTier[] = params.tiers.map((tier) => {
+    if (typeof tier?.key !== "string" || tier.key.length === 0) {
+      throw new Error(`Every tier of an 'improvisable' constraint needs a non-empty string 'key'.`);
+    }
+    if (seen.has(tier.key)) {
+      throw new Error(`An 'improvisable' constraint cannot declare duplicate tier key '${tier.key}'.`);
+    }
+    seen.add(tier.key);
+    if (typeof tier.cap !== "number" || !Number.isFinite(tier.cap) || tier.cap <= 0) {
+      throw new Error(
+        `Tier '${tier.key}' needs a cap that is a finite number above zero -- the most one improvised ruling ` +
+          `under this tier may move the value; got ${String(tier.cap)}.`
+      );
+    }
+    return { key: tier.key, cap: tier.cap, requiresConfirmation: tier.requiresConfirmation === true };
+  });
+
+  if (constraintsFor(params.resourceId, factKey).some((c) => c.kind === "improvisable")) {
+    throw new Error(`Resource '${params.resourceId}' already has an 'improvisable' constraint on fact key '${factKey}'.`);
+  }
+
+  return insertConstraintRow({ gameId: params.gameId, kind: "improvisable", resourceIds: [params.resourceId], factKey, tiers });
 }
 
 /**

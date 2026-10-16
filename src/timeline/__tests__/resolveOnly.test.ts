@@ -609,7 +609,7 @@ describe("resolve_only", () => {
     const game = createGame({ name: "grain depot", setting: "test", style: "test" });
     const grain = createResource({ gameId: game.id, ownerType: "game", name: "grain", value: 50 });
     const constraint = constraintTools.declareResolveOnlyConstraint({ gameId: game.id, resourceId: grain.id });
-    const kind: "bounded" | "monotonic" | "conserved" | "resolve_only" = constraint.kind;
+    const kind: "bounded" | "monotonic" | "conserved" | "resolve_only" | "improvisable" = constraint.kind;
     expect(kind).toBe("resolve_only");
   });
 });

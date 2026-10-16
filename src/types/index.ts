@@ -640,8 +640,32 @@ export interface ResourceChange {
  * given row isn't. It is scoped per `factKey` like every member of this
  * family (`resource_constraints.fact_key`, design §5.4 option (C)): a
  * `resolve_only` constraint declared on one fact key of an entity never
- * reaches a write to a different fact key of that same entity. */
-export type ConstraintKind = "bounded" | "monotonic" | "conserved" | "resolve_only";
+ * reaches a write to a different fact key of that same entity.
+ *
+ * `improvisable` (design §5.3) is the fifth row-based member, and the only
+ * one that constrains nothing an ordinary write does: it is the game saying,
+ * on purpose, "this value may receive bounded improvised rulings," with an
+ * ordered list of tiers, each capping how far ONE ruling may move the value.
+ * A write that is not an improvised ruling passes it untouched. A write that
+ * IS one (`improvised` on writeConstrainedValue/transferConstrainedValue,
+ * src/timeline/constrained.ts) is refused unless the value carries this
+ * declaration, the tier is one it declares, the amount is within that tier's
+ * cap, and a tier that requires confirmation was given a confirmation
+ * reference. A value without it can never receive an improvised ruling. */
+export type ConstraintKind = "bounded" | "monotonic" | "conserved" | "resolve_only" | "improvisable";
+
+/** One tier of an `improvisable` declaration. `key` is a token the game
+ * chooses and the engine compares for equality only, never reads for
+ * meaning. `cap` is the largest absolute amount one improvised ruling under
+ * this tier may move the value. `requiresConfirmation` means a ruling under
+ * this tier must carry a confirmation reference -- the engine records the
+ * reference; whether the confirmation behind it was independent is the
+ * caller's question, not the engine's. */
+export interface ImprovisableTier {
+  key: string;
+  cap: number;
+  requiresConfirmation: boolean;
+}
 
 /** The five members of design §5.3's constraint family. `irreversible` is
  * never a row in `resource_constraints` -- it is a flag on a fact -- so it is
@@ -696,6 +720,9 @@ export interface ResourceConstraint {
   // declareConservedConstraint/declareResolveOnlyConstraint, none of which
   // run inside a resolution and so have no event to point at.
   causedByEventId: string | null;
+  // 'improvisable' only; null for every other kind. The declared tiers, in
+  // the order the game declared them (see ImprovisableTier).
+  tiers: ImprovisableTier[] | null;
 }
 
 // Time/Calendar types

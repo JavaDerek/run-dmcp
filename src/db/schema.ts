@@ -517,7 +517,7 @@ export function initializeSchema(options?: { migrations?: readonly SchemaMigrati
     CREATE TABLE IF NOT EXISTS resource_constraints (
       id TEXT PRIMARY KEY,
       game_id TEXT NOT NULL,
-      kind TEXT NOT NULL CHECK (kind IN ('bounded', 'monotonic', 'conserved', 'resolve_only')),
+      kind TEXT NOT NULL CHECK (kind IN ('bounded', 'monotonic', 'conserved', 'resolve_only', 'improvisable')),
       direction TEXT CHECK (direction IN ('increasing', 'decreasing')),
       total REAL,
       created_at TEXT NOT NULL,
@@ -557,6 +557,22 @@ export function initializeSchema(options?: { migrations?: readonly SchemaMigrati
     // Column already exists
   }
 
+  // Every column added to resource_constraints AFTER fact_key, in the order
+  // a fresh database adds them (issue #42's three, then `improvisable`'s
+  // tiers). Shared for the same reason RESOURCE_CONSTRAINTS_DDL and
+  // RESOURCE_CONSTRAINTS_ADD_FACT_KEY_DDL are: the CHECK rebuild below runs
+  // these identical statements on its replacement table, so a fresh and a
+  // migrated database converge on byte-identical stored SQL by construction.
+  // A fresh database runs them near the end of this function (search for
+  // RESOURCE_CONSTRAINTS_LATER_COLUMNS_DDL); see that site for what each
+  // column is.
+  const RESOURCE_CONSTRAINTS_LATER_COLUMNS_DDL: readonly { column: string; ddl: string }[] = [
+    { column: "min_value", ddl: `ALTER TABLE resource_constraints ADD COLUMN min_value REAL` },
+    { column: "max_value", ddl: `ALTER TABLE resource_constraints ADD COLUMN max_value REAL` },
+    { column: "caused_by_event_id", ddl: `ALTER TABLE resource_constraints ADD COLUMN caused_by_event_id TEXT` },
+    { column: "tiers", ddl: `ALTER TABLE resource_constraints ADD COLUMN tiers TEXT` },
+  ];
+
   // Issue #13 / design §5.3, §5.4 option (C): widen resource_constraints'
   // `kind` CHECK to admit 'resolve_only', the fourth row-based constraint
   // family member. SQLite cannot ALTER a CHECK constraint -- unlike the
@@ -592,7 +608,18 @@ export function initializeSchema(options?: { migrations?: readonly SchemaMigrati
     .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'resource_constraints'`)
     .get() as { sql: string } | undefined;
 
-  if (resourceConstraintsDdl && !resourceConstraintsDdl.sql.includes("resolve_only")) {
+  //
+  // WIDENED A SECOND TIME for `improvisable` (design §5.3's fifth row-based
+  // member). The detection token is now `'improvisable'` -- quoted, as the
+  // CHECK's own enum member appears in this function's own DDL -- so ONE
+  // branch upgrades a database carrying either older CHECK (three members or
+  // four). By then such a database may already carry issue #42's
+  // min_value/max_value/caused_by_event_id, so the staging copy below takes
+  // whichever of those columns the old table actually has (read from its own
+  // pragma_table_info, this codebase's vocabulary) and restores every one of
+  // them by id; an earlier version of this block copied only the first seven
+  // columns, which was correct only while nothing else existed to lose.
+  if (resourceConstraintsDdl && !resourceConstraintsDdl.sql.includes("'improvisable'")) {
     // DROP THE resolve_only TRIGGER FIRST, UNCONDITIONALLY, IF IT EXISTS --
     // made ORDER-INDEPENDENT rather than relying on "this trigger has never
     // been created yet the one time this branch runs." That reliance was
@@ -625,7 +652,7 @@ export function initializeSchema(options?: { migrations?: readonly SchemaMigrati
     // the table that would be cascade-emptied is `resource_constraint_members`,
     // which declares
     // `FOREIGN KEY (constraint_id) REFERENCES resource_constraints(id) ON DELETE CASCADE`.
-    rebuildWithForeignKeysSuspended(db, "resource_constraints (resolve_only, issue #13)", () => {
+    rebuildWithForeignKeysSuspended(db, "resource_constraints (resolve_only, issue #13; improvisable)", () => {
       // EMPIRICALLY MEASURED, NOT ASSUMED (see resolveOnly.test.ts, whose
       // FK-check assertion caught a real bug in an earlier version of this
       // block): `ALTER TABLE ... RENAME TO` does not just rename the table
@@ -658,16 +685,29 @@ export function initializeSchema(options?: { migrations?: readonly SchemaMigrati
         CREATE TABLE resource_constraints_staging (
           id TEXT PRIMARY KEY,
           game_id TEXT NOT NULL,
-          kind TEXT NOT NULL CHECK (kind IN ('bounded', 'monotonic', 'conserved', 'resolve_only')),
+          kind TEXT NOT NULL CHECK (kind IN ('bounded', 'monotonic', 'conserved', 'resolve_only', 'improvisable')),
           direction TEXT CHECK (direction IN ('increasing', 'decreasing')),
           total REAL,
           created_at TEXT NOT NULL,
-          fact_key TEXT NOT NULL DEFAULT 'value'
+          fact_key TEXT NOT NULL DEFAULT 'value',
+          min_value REAL,
+          max_value REAL,
+          caused_by_event_id TEXT,
+          tiers TEXT
         )
       `);
+      // Only the later columns the OLD table really has -- names drawn from
+      // RESOURCE_CONSTRAINTS_LATER_COLUMNS_DDL (our own list), filtered by
+      // the old table's pragma_table_info, so no caller-supplied text is ever
+      // interpolated here.
+      const oldColumns = new Set(
+        (db.prepare(`SELECT name FROM pragma_table_info('resource_constraints')`).all() as { name: string }[]).map((r) => r.name)
+      );
+      const carried = RESOURCE_CONSTRAINTS_LATER_COLUMNS_DDL.map((c) => c.column).filter((c) => oldColumns.has(c));
+      const stagedColumns = ["id", "game_id", "kind", "direction", "total", "created_at", "fact_key", ...carried].join(", ");
       db.exec(`
-        INSERT INTO resource_constraints_staging (id, game_id, kind, direction, total, created_at, fact_key)
-        SELECT id, game_id, kind, direction, total, created_at, fact_key FROM resource_constraints
+        INSERT INTO resource_constraints_staging (${stagedColumns})
+        SELECT ${stagedColumns} FROM resource_constraints
       `);
 
       // 2. Drop the OLD table outright -- not renamed, per the note above.
@@ -705,6 +745,14 @@ export function initializeSchema(options?: { migrations?: readonly SchemaMigrati
       //    that formatting.
       db.exec(RESOURCE_CONSTRAINTS_ADD_FACT_KEY_DDL);
 
+      // 5b. Then every later column, by the identical statements and in the
+      //     identical order a fresh database runs them (see
+      //     RESOURCE_CONSTRAINTS_LATER_COLUMNS_DDL), for the same
+      //     byte-identity reason as step 5. The fresh path's own try/catch
+      //     ALTERs near the end of this function then find each column
+      //     already present and do nothing.
+      for (const later of RESOURCE_CONSTRAINTS_LATER_COLUMNS_DDL) db.exec(later.ddl);
+
       // 6. The ALTER above just backfilled every just-copied row's fact_key
       //    with its DEFAULT 'value' -- correct for every row that can exist
       //    today (every declare*Constraint() function other than
@@ -715,12 +763,18 @@ export function initializeSchema(options?: { migrations?: readonly SchemaMigrati
       //    than leaning on that staying true forever. An UPDATE never
       //    touches sqlite_master, so it cannot disturb the byte-identical
       //    DDL text step 5 just produced.
+      //    The same restore, for every later column the staging table holds
+      //    (null where the old table never had the column, which is what an
+      //    ALTER-added column would have read anyway).
+      const restored = ["fact_key", ...RESOURCE_CONSTRAINTS_LATER_COLUMNS_DDL.map((c) => c.column)];
       db.exec(`
         UPDATE resource_constraints
-           SET fact_key = (
-             SELECT fact_key FROM resource_constraints_staging
-              WHERE resource_constraints_staging.id = resource_constraints.id
-           )
+           SET ${restored
+             .map(
+               (column) =>
+                 `${column} = (SELECT ${column} FROM resource_constraints_staging WHERE resource_constraints_staging.id = resource_constraints.id)`
+             )
+             .join(",\n               ")}
       `);
 
       // 7. Drop the staging table. Every id was copied verbatim in step 4,
@@ -1416,20 +1470,26 @@ export function initializeSchema(options?: { migrations?: readonly SchemaMigrati
   // "one hop of provenance, unenforced by a foreign key" shape for every
   // other event-to-event reference in this codebase (resolution_id, row_id,
   // fact_id) -- this column follows it rather than being the one exception.
-  try {
-    db.exec(`ALTER TABLE resource_constraints ADD COLUMN min_value REAL`);
-  } catch {
-    // Column already exists.
-  }
-  try {
-    db.exec(`ALTER TABLE resource_constraints ADD COLUMN max_value REAL`);
-  } catch {
-    // Column already exists.
-  }
-  try {
-    db.exec(`ALTER TABLE resource_constraints ADD COLUMN caused_by_event_id TEXT`);
-  } catch {
-    // Column already exists.
+  //
+  // `tiers` (design §5.3, `improvisable`): the declared tier list of an
+  // `improvisable` constraint, as JSON -- an ordered array of
+  // `{ key, cap, requiresConfirmation }` the registry
+  // (src/timeline/registry.ts) parses back into `ResourceConstraint.tiers`.
+  // NULL for every other kind, the same "one column, several kinds, mostly
+  // null" shape as `direction`, `total` and `min_value`/`max_value`. Stored
+  // on the constraint's own row rather than in a side table so that
+  // removing the constraint removes its tiers with no second DELETE to
+  // forget, and so a rebuild of this table carries them like any column.
+  //
+  // All four run from RESOURCE_CONSTRAINTS_LATER_COLUMNS_DDL (declared beside
+  // RESOURCE_CONSTRAINTS_ADD_FACT_KEY_DDL earlier in this function), whose
+  // statements the CHECK rebuild also runs -- one list, two callers.
+  for (const later of RESOURCE_CONSTRAINTS_LATER_COLUMNS_DDL) {
+    try {
+      db.exec(later.ddl);
+    } catch {
+      // Column already exists.
+    }
   }
 }
 
