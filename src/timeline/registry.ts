@@ -62,6 +62,34 @@ import type { IrreversibleFact } from "./irreversible.js";
  * typically desync the sum by a whole `amount`, not a fraction of one). */
 export const CONSERVED_SUM_EPSILON = 1e-6;
 
+/** Which of an `improvisable` declaration's rules an improvised write broke
+ *  (design §5.3). Named so a caller switches on a token rather than reading
+ *  a sentence back (hard rule 4). */
+export type ImprovisationRule =
+  /** The value carries no `improvisable` declaration on this fact key. */
+  | "not-improvisable"
+  /** The value is improvisable, but not under the tier the write named. */
+  | "undeclared-tier"
+  /** The amount is past the tier's cap. */
+  | "over-cap"
+  /** The tier requires a confirmation reference and the write carried none. */
+  | "confirmation-required";
+
+/** The typed half of an `improvisable` refusal, carried on
+ *  `ConstraintViolationError.improvisation`. `cap` is null when there is no
+ *  tier to have a cap (`not-improvisable`, `undeclared-tier`);
+ *  `declaredTiers` lists the value's declared tier keys, in declared order,
+ *  and is empty when there is no declaration. */
+export interface ImprovisationViolation {
+  rule: ImprovisationRule;
+  key: string;
+  tier: string;
+  /** The absolute amount the write asked to move the value by. */
+  amount: number;
+  cap: number | null;
+  declaredTiers: string[];
+}
+
 export class ConstraintViolationError extends Error {
   constructor(
     public readonly constraintKind: DeclaredConstraintKind,
@@ -75,7 +103,11 @@ export class ConstraintViolationError extends Error {
      *  every other family in this union has no contradicted fact to attach,
      *  so `undefined` is the correct default rather than a fourth sentinel
      *  value. */
-    public readonly contradictedFact?: IrreversibleFact
+    public readonly contradictedFact?: IrreversibleFact,
+    /** Set only when `constraintKind === "improvisable"`, for the same
+     *  reason `contradictedFact` is set only for 'irreversible': which rule
+     *  refused, and the numbers it compared, as data. */
+    public readonly improvisation?: ImprovisationViolation
   ) {
     super(message);
     this.name = "ConstraintViolationError";

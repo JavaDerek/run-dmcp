@@ -5,7 +5,13 @@ import { assertT, compareT, type T } from "./t.js";
 import { currentStoryTime } from "./clock.js";
 import { PROJECTED_TABLES, liveColumns } from "./projection.js";
 import type { EntityKind } from "./kinds.js";
-import { constraintsFor, conservedConstraintFor, ConstraintViolationError, CONSERVED_SUM_EPSILON } from "./registry.js";
+import {
+  constraintsFor,
+  conservedConstraintFor,
+  ConstraintViolationError,
+  CONSERVED_SUM_EPSILON,
+  type ImprovisationRule,
+} from "./registry.js";
 import { irreversibleFactFor, listIrreversibleFacts } from "./irreversible.js";
 import { adjudicationOpen } from "./adjudication.js";
 
@@ -70,6 +76,24 @@ export interface ValueTransition {
   /** Wall-clock ISO stamp recorded by the choke point; null when
    *  unannotated. */
   at: string | null;
+}
+
+/**
+ * What makes a write an IMPROVISED RULING (design §5.3, `improvisable`): the
+ * tier the ruling is made under, and -- for a tier the game declared as
+ * requiring one -- a confirmation reference. A write that carries this is
+ * held to the target's `improvisable` declaration in assertConstraintsAllow
+ * below; a write that does not is never checked against it.
+ *
+ * `confirmation` is recorded, never judged (hard rule 2): the engine checks
+ * that a reference is PRESENT where the tier requires one, and says nothing
+ * about whether the confirmation behind it was independent of the ruling it
+ * confirms. That is the caller's to guarantee -- a witness is never its own
+ * judge, but which witness counts is not a question this engine can answer.
+ */
+export interface ImprovisedWrite {
+  tier: string;
+  confirmation?: string | null;
 }
 
 interface ResolvedProjection {
@@ -214,9 +238,67 @@ export function assertConstraintsAllow(params: {
    *  about `update_resource_value`, so the message names the operation the
    *  caller actually performed. */
   context?: string;
+  /** Present only for an improvised ruling (see `ImprovisedWrite`).
+   *  `amount` is the absolute amount the caller asked to move the value by
+   *  -- the requested delta, or the transfer's amount -- handed in by the
+   *  writer rather than re-derived here as |intended - previous|, so that
+   *  floating point can never push a ruling made exactly at its cap over
+   *  it. */
+  improvised?: ImprovisedWrite & { amount: number };
 }): void {
-  const { entityId, key, previousValue, intendedValue, bounds, conservedMemberWrite, context } = params;
+  const { entityId, key, previousValue, intendedValue, bounds, conservedMemberWrite, context, improvised } = params;
   const constraints = constraintsFor(entityId, key);
+
+  // 'improvisable' (design §5.3): checked FIRST, before the rest of the
+  // family, and only for a write that IS an improvised ruling. The order of
+  // its own refusals is deliberate: no declaration, then no such tier, then
+  // past the cap, then a missing confirmation -- so a ruling that is too big
+  // is reported as too big whether or not someone confirmed it. Every
+  // refusal carries `improvisation` as data, so no caller has to read the
+  // sentence back to learn which rule fired (hard rule 4). Nothing here
+  // reads what a tier key means; keys are compared for equality.
+  if (improvised) {
+    const declaration = constraints.find((c) => c.kind === "improvisable");
+    const declaredTiers = declaration?.tiers ?? [];
+    const tier = declaredTiers.find((t) => t.key === improvised.tier);
+    const refuse = (rule: ImprovisationRule, sentence: string): never => {
+      throw new ConstraintViolationError("improvisable", entityId, sentence, undefined, {
+        rule,
+        key,
+        tier: improvised.tier,
+        amount: improvised.amount,
+        cap: tier ? tier.cap : null,
+        declaredTiers: declaredTiers.map((t) => t.key),
+      });
+    };
+    if (!declaration) {
+      refuse(
+        "not-improvisable",
+        `'${key}' on '${entityId}' is not declared improvisable, so no improvised ruling may move it; it moves only ` +
+          `through a listed mechanic. Declare an 'improvisable' constraint on it if the game means it to receive rulings.`
+      );
+    }
+    if (!tier) {
+      refuse(
+        "undeclared-tier",
+        `'${key}' on '${entityId}' is improvisable, but declares no tier '${improvised.tier}' ` +
+          `(declared: ${declaredTiers.map((t) => t.key).join(", ")}).`
+      );
+    }
+    if (tier && improvised.amount > tier.cap) {
+      refuse(
+        "over-cap",
+        `An improvised ruling under tier '${tier.key}' may move '${key}' on '${entityId}' by at most ${tier.cap}; ` +
+          `this one asked for ${improvised.amount}.`
+      );
+    }
+    if (tier && tier.requiresConfirmation && !(typeof improvised.confirmation === "string" && improvised.confirmation.length > 0)) {
+      refuse(
+        "confirmation-required",
+        `Tier '${tier.key}' on '${key}' of '${entityId}' requires a confirmation reference, and this ruling carries none.`
+      );
+    }
+  }
 
   for (const constraint of constraints) {
     if (constraint.kind === "monotonic") {
@@ -597,6 +679,9 @@ export function writeConstrainedValue(params: {
   reason?: string | null;
   bounds?: { minValue: number | null; maxValue: number | null };
   context?: string;
+  /** Makes this write an improvised ruling, held to the target's
+   *  `improvisable` declaration (see `ImprovisedWrite`). */
+  improvised?: ImprovisedWrite;
 }): ValueTransition {
   const resolved = resolveProjection(params.entityId, params.key);
   const db = getDatabase();
@@ -612,6 +697,14 @@ export function writeConstrainedValue(params: {
     bounds: params.bounds,
     conservedMemberWrite: "reject",
     context: params.context,
+    ...(params.improvised
+      ? {
+          improvised: {
+            ...params.improvised,
+            amount: Math.abs(params.mode === "delta" ? params.value : params.value - previousValue),
+          },
+        }
+      : {}),
   });
 
   const newValue = params.bounds ? clamp(intendedValue, params.bounds.minValue, params.bounds.maxValue) : intendedValue;
@@ -661,6 +754,12 @@ export function transferConstrainedValue(params: {
   toBounds?: { minValue: number | null; maxValue: number | null };
   fromLabel?: string;
   toLabel?: string;
+  /** Makes this transfer an improvised ruling. BOTH legs are held to their
+   *  own `improvisable` declaration under the same tier and the same amount:
+   *  the counterpart is a value an improvised ruling moves too, and a value
+   *  the game never declared improvisable is out of reach whichever side of
+   *  a transfer it is on. */
+  improvised?: ImprovisedWrite;
 }): { from: ValueTransition; to: ValueTransition } {
   const { fromEntityId, toEntityId, key, amount } = params;
   const fromLabel = params.fromLabel ?? fromEntityId;
@@ -707,6 +806,7 @@ export function transferConstrainedValue(params: {
     intendedValue: fromIntended,
     bounds: params.fromBounds,
     conservedMemberWrite: "allow",
+    ...(params.improvised ? { improvised: { ...params.improvised, amount: Math.abs(amount) } } : {}),
   });
   assertConstraintsAllow({
     entityId: toEntityId,
@@ -715,6 +815,7 @@ export function transferConstrainedValue(params: {
     intendedValue: toIntended,
     bounds: params.toBounds,
     conservedMemberWrite: "allow",
+    ...(params.improvised ? { improvised: { ...params.improvised, amount: Math.abs(amount) } } : {}),
   });
 
   assertWithinBoundsForTransfer(fromEntityId, fromLabel, params.fromBounds, fromIntended, "source");
