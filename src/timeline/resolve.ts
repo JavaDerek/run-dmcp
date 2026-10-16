@@ -18,6 +18,7 @@ import {
   type SetTransition,
   type CreatedEntity,
   type DestroyedEntity,
+  type ImprovisedWrite,
 } from "./constrained.js";
 
 /**
@@ -107,7 +108,8 @@ import {
  *      succeeded.
  *   6. Record one `resolution.recorded` event, inside that SAME
  *      transaction, with `causes` carrying the resolution id, the
- *      mechanic's name, and the change count -- following
+ *      mechanic's name, the change count, and the mechanic's own `result`
+ *      when it returned one -- following
  *      `applyLiveWrite`'s (constrained.ts) `causes` discipline of never
  *      including a `row_id` key, which belongs to the projection triggers'
  *      own vocabulary.
@@ -195,6 +197,11 @@ export interface IntendedWrite {
   value: number;
   reason?: string | null;
   bounds?: { minValue: number | null; maxValue: number | null };
+  /** Makes this leg an improvised ruling, held at the choke point to the
+   *  target's `improvisable` declaration (see `ImprovisedWrite`,
+   *  constrained.ts). `improvisedRulingMechanic` (improvised.ts) sets it on
+   *  every leg; any mechanic may. */
+  improvised?: ImprovisedWrite;
 }
 
 /** One intended two-leg transfer between conserved members -- the generic
@@ -208,6 +215,8 @@ export interface IntendedTransfer {
   reason?: string | null;
   fromBounds?: { minValue: number | null; maxValue: number | null };
   toBounds?: { minValue: number | null; maxValue: number | null };
+  /** As on `IntendedWrite`: both legs are held to their own declaration. */
+  improvised?: ImprovisedWrite;
 }
 
 /** One intended set of a non-numeric column on an entity's projected row
@@ -463,6 +472,13 @@ interface ResolutionCauses {
   change_count: number;
   /** Who proposed, when the proposal said (issue #40). */
   actor?: string;
+  /** The mechanic's own `result`, verbatim, when it returned one -- so the
+   *  timeline holds what each resolution reported, not only that it
+   *  happened. Opaque here exactly as it is on `Outcome`. An improvised
+   *  ruling's rationale, cited act, tiers, amounts, precedent key and
+   *  confirmation reference reach the audit trail this way, with no field
+   *  on this shape that knows what any of them is. */
+  result?: Record<string, unknown>;
 }
 
 /** Every `{ ref }` a change carries, in the order it is read (issue #34) --
@@ -656,6 +672,7 @@ function applyChange(change: IntendedChange, gameId: string, refs: Map<string, s
           value: change.value,
           reason: change.reason,
           bounds: change.bounds ?? boundedResourceDefault(entityId, change.key),
+          ...(change.improvised ? { improvised: change.improvised } : {}),
         }),
       ],
     };
@@ -670,6 +687,7 @@ function applyChange(change: IntendedChange, gameId: string, refs: Map<string, s
       reason: change.reason,
       fromBounds: change.fromBounds,
       toBounds: change.toBounds,
+      ...(change.improvised ? { improvised: change.improvised } : {}),
     });
     return { transitions: [from, to] };
   }
@@ -850,6 +868,7 @@ function resolveProposal(mechanicsByName: Map<string, Mechanic>, proposal: Propo
         mechanic: mechanicName,
         change_count: changes.length,
         ...(proposal.actor !== undefined ? { actor: proposal.actor } : {}),
+        ...(adjudication.result !== undefined ? { result: adjudication.result } : {}),
       };
       getDatabase()
         .prepare(

@@ -149,8 +149,9 @@ export {
   transferConstrainedValue,
   valueHistory,
 } from "./timeline/constrained.js";
-export type { ValueTransition } from "./timeline/constrained.js";
+export type { ValueTransition, ImprovisedWrite } from "./timeline/constrained.js";
 export { ConstraintViolationError, constraintsFor, conservedConstraintFor } from "./timeline/registry.js";
+export type { ImprovisationRule, ImprovisationViolation } from "./timeline/registry.js";
 
 // The resolve protocol (design §5.2a, GitHub issue #10) -- the inbound half of
 // authority. The engine enforces the PROTOCOL -- resolution happens before
@@ -287,6 +288,17 @@ export type {
   ConditionRow,
   ClauseRow,
 } from "./timeline/declared.js";
+
+// The improvised ruling (design §5.2a, §5.3): an engine-provided mechanic a
+// consumer registers beside its own, for an act no listed mechanic fits. It
+// moves only values the game declared `improvisable`
+// (declareImprovisableConstraint, exported with the rest of
+// ./tools/constraint.js below), within each declared tier's cap, and records
+// the rationale, the cited act, the tier, the amounts, the precedent key and
+// the confirmation reference on the resolution's own event. A mechanic kind,
+// not an outcome kind: resolve() still returns an Outcome or refuses.
+export { improvisedRulingMechanic, IMPROVISED_RULING } from "./timeline/improvised.js";
+export type { ImprovisedTarget, ImprovisedRulingParameters, ImprovisedRulingResult } from "./timeline/improvised.js";
 
 // Timeline export (design §6) -- the boundary that keeps both halves honest:
 // conversational authoring upstream of a frozen artifact, deterministic

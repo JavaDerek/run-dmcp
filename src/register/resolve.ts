@@ -32,7 +32,9 @@ export function registerResolveTools(server: McpServer, resolver: Resolver) {
         "clock, or a declared expectation that does not hold at the game's current t -- the last of these " +
         "carries one hop of causality per contradicted expectation, so a caller can tell whether the fact " +
         "is wrong or the claim is. A constraint violated mid-adjudication (bounded, monotonic, conserved, " +
-        "resolve_only, irreversible) rolls back every change in the resolution and records no event.",
+        "resolve_only, improvisable, irreversible) rolls back every change in the resolution and records no event; " +
+        "the refusal names its constraintKind, and an improvisable refusal its rule (not-improvisable, " +
+        "undeclared-tier, over-cap, confirmation-required).",
       inputSchema: {
         gameId: z.string().max(100).describe("The game ID"),
         mechanic: z.string().min(1).max(200).describe("The name of a mechanic registered with this resolver"),
@@ -98,7 +100,16 @@ export function registerResolveTools(server: McpServer, resolver: Resolver) {
             constraintKind: error.constraintKind,
             error: error.message,
           });
-          return formatErrorResponse(errors.constraintViolation(error.resourceId, error.message));
+          // Which member of the family refused, and -- for 'improvisable' --
+          // which of its rules and the numbers it compared, as data beside the
+          // sentence, so a client switches on a token instead of reading prose
+          // back (hard rule 4).
+          const refusal = {
+            ...errors.constraintViolation(error.resourceId, error.message),
+            constraintKind: error.constraintKind,
+            ...(error.improvisation ? { improvisation: error.improvisation } : {}),
+          };
+          return formatErrorResponse(refusal);
         }
         log.error("resolve failed", { gameId, mechanic, error: (error as Error).message });
         return {
