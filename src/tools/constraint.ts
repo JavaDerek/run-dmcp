@@ -66,6 +66,14 @@ export { ConstraintViolationError, CONSERVED_SUM_EPSILON };
  * substrates -- this one on `resources`/`resource_constraints`, that one on
  * the timeline's interval-versioned `facts`.
  *
+ * `improvisable` (design §5.3) is the sixth member and the fifth row-based
+ * one, and the only PERMISSION in the family: every other member says what a
+ * write may not do, and this one says which values an improvised ruling may
+ * touch at all, per tier, and how far -- see declareImprovisableConstraint()
+ * below. Like the rest it is evaluated only in assertConstraintsAllow(), and
+ * only for a write tagged as an improvised ruling; an ordinary write never
+ * meets it.
+ *
  * Design §5.4's option (C) merge (Phase 3) is complete for `bounded`/
  * `monotonic`/`conserved`/`resolve_only`: this file declares constraints
  * (insertConstraint and the declare*() functions below) and reads them back

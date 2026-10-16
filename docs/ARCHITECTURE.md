@@ -190,10 +190,11 @@ flowchart TB
 
   subgraph write["src/timeline — the write path"]
     constrained["constrained.ts<br/>THE choke point<br/>writeConstrainedValue · transferConstrainedValue<br/>setProjectedValue · create/destroyProjectedEntity"]
-    registry["registry.ts<br/>resource_constraints rows<br/>bounded · monotonic · conserved · resolve_only"]
+    registry["registry.ts<br/>resource_constraints rows<br/>bounded · monotonic · conserved · resolve_only · improvisable"]
     irrev["irreversible.ts<br/>declare / list irreversible fact keys"]
     resolve["resolve.ts<br/>resolve protocol: propose → adjudicate → outcome<br/>dispatches injected Mechanics; applies IntendedChange"]
     declared["declared.ts<br/>rules as data → Mechanic[] · conditions"]
+    improvised["improvised.ts<br/>improvisedRulingMechanic: bounded rulings<br/>on values declared improvisable"]
     clock["clock.ts · turns.ts<br/>story time axis · who acts when"]
   end
 
@@ -222,6 +223,7 @@ flowchart TB
   resolve --> constrained & clock & narration & adj & registry & proj
   declared --> narration
   declared -.->|types| resolve
+  improvised -.->|types| resolve
   render --> replay
   checkpoint --> replay & clock & proj
   narration --> prov
@@ -240,9 +242,10 @@ flowchart TB
 | **Projection engine** | `src/timeline/projection.ts` | "The timeline writes itself." For each of eight projected tables (games, characters, locations, items, resources, relationships, factions, secrets) it regenerates AFTER INSERT/UPDATE/DELETE triggers from the live column list, then backfills anything the triggers never saw. No write site appends events by hand. |
 | **Adjudication window** | `src/timeline/adjudication.ts` | A one-row marker that both the JS constraint check and the SQL trigger read to decide whether a `resolve_only` write arrived through the resolve protocol. Cleared at startup. |
 | **Constraint registry** | `src/timeline/registry.ts` | Storage and lookup for declared constraints and conserved-set membership. |
-| **Constrained value writer** | `src/timeline/constrained.ts` | Hard rule 7's single choke point. Checks `bounded`, `monotonic`, `conserved` and `resolve_only` in JS; `irreversible` is enforced by the trigger and only *translated* here on the failure path. Transfers between conserved members are atomic and never clamp. History is read back from fact intervals, never from a side table. |
+| **Constrained value writer** | `src/timeline/constrained.ts` | Hard rule 7's single choke point. Checks `bounded`, `monotonic`, `conserved`, `resolve_only` and `improvisable` (the last only for a write tagged as an improvised ruling) in JS; `irreversible` is enforced by the trigger and only *translated* here on the failure path. Transfers between conserved members are atomic and never clamp. History is read back from fact intervals, never from a side table. |
 | **Resolve protocol** | `src/timeline/resolve.ts` | §5.2a. A proposal names a mechanic and parameters; the resolver refuses out-of-turn actors and contradicted expectations, hands the mechanic an `AdjudicationInput` with **no database handle**, and applies the returned `IntendedChange[]` (write, transfer, set, create, destroy) through the choke point inside one adjudication window. The outcome is rows, never a verdict. |
 | **Declared rules** | `src/timeline/declared.ts` | Mechanics and conditions as JSON (`DMCP_RULES_FILE`), validated and compiled into the same `Mechanic` interface, so a stock binary can adjudicate without TypeScript on the caller's side. |
+| **Improvised ruling** | `src/timeline/improvised.ts` | An engine-provided `Mechanic` for an act no listed mechanic fits: the caller names values, a tier and signed amounts, a rationale and the cited act; every leg reaches the choke point tagged `improvised`, so only values declared `improvisable` move, within each tier's cap, and the ruling is recorded on its own `resolution.recorded` event. A mechanic kind, not an outcome kind. |
 | **Story clock and turn order** | `src/timeline/clock.ts`, `turns.ts` | Declares a game's `t` axis once (hard rule 6) and advances it; declares and queries who is due at `t`. |
 | **Replay, changes, export, checkpoint** | `replay.ts`, `changes.ts`, `export.ts`, `checkpoint.ts` | Point snapshot at `t`; half-open interval scan of transitions (§5.5); freeze/thaw of a whole game's timeline (§6); live-vs-replayed divergence report. Each returns records. None returns a judgement. |
 | **Narration constraint and renderer** | `narration.ts`, `render.ts`, `provenance.ts` | The outbound half of authority (§5.2b, §7): what holds at `t`, each fact with the event that opened it; a structural contradiction check against an opaque claim; a renderer that can only emit nouns and adjectives from a caller-injected vocabulary, so absence is unconstructable (hard rule 3). |

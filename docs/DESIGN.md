@@ -234,6 +234,18 @@ uncertain, there are no dice, no opposed actions, no player proposing anything. 
 decided what happens. A protocol with one consumer should be scrutinised, and it has been; it
 survives because brink's entire reason for needing an engine lives here.
 
+**The improvised ruling is a mechanic, not a third outcome** (added 2026-10-16). A resolve returns an
+`Outcome` or refuses, and `Outcome` deliberately has no kind field; that stays true. For an act no
+registered mechanic fits, the engine provides one mechanic of its own, `improvisedRulingMechanic`,
+which a caller registers like any other. Its parameters name one or more values, a tier and a signed
+amount for each, a rationale, the verbatim words of the act it rules on, an optional precedent key
+(stored only; lookup is later work) and an optional confirmation reference. Every leg reaches the
+choke point tagged as an improvised ruling and is held to the value's `improvisable` declaration
+(§5.3); one bad leg rolls back the whole ruling. The `resolution.recorded` event now carries each
+mechanic's own `result`, which is how every improvised ruling — act, values, tiers, amounts,
+rationale, precedent key, confirmation — becomes auditable on the timeline without the event shape
+knowing what any of those is.
+
 #### 5.2b The constraint, which must be data
 
 Its failure mode is the one the video client actually has: a lyric establishes at 6:26 that the
@@ -313,6 +325,27 @@ summing to a constant.
 And it is worth restating why this one earns its place: **it is the single most common continuity
 failure in long-form narrative, and it is mechanically checkable** — which is true of almost nothing
 else about narrative.
+
+**`improvisable` (added 2026-10-16) is the family's permission member.** Every other member says what
+a write may not do; this one says which values an *improvised ruling* may touch at all, and how far.
+A game declares it on a value with an ordered list of tiers, each `{key, cap}` — the most one ruling
+under that tier may move the value — and optionally which tiers need a confirmation reference. An
+ordinary write never meets it. A write tagged as an improvised ruling (§5.2a) is refused at the same
+choke point as the rest of the family unless the value is declared improvisable, the tier is one it
+declares, the amount is within that tier's cap, and a tier that needs confirmation carries a
+reference. A value without the declaration can never receive one: that is how a game keeps its hard
+values structurally out of reach. It composes with the others rather than relaxing them — a conserved
+improvisable value still moves only by transfer, both legs held to their own declaration; a bound
+still binds; `resolve_only` is satisfied because the ruling *is* a resolution. The engine records the
+confirmation reference and does not judge whether the confirmation behind it was independent (§5.5's
+rule: it records decisions, it does not make them).
+
+The motivating case was a world that sent every act its mechanics did not list to refusal, so an act
+of feigning a collapse in front of an observer "reached past what was there" and never happened. The
+shape came from brink's open-world rulings design: unlisted is never forbidden and never free — it
+touches nothing and is remembered, or it gets a small ruling on a value the author declared soft. Its
+first real caller is the two-principal consumer whose world produced that case; brink adopts it when
+its own Phase 3 puts it on the resolve protocol.
 
 ### 5.4 THE OPEN DECISION: one versioning substrate
 

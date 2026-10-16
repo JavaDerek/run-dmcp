@@ -21,16 +21,16 @@ catalogue of how to describe objects, characters and motivations so a world buil
 holds together the first time, plus sample `CLAUDE.md` entries a consumer can copy. If you learn a
 world-authoring lesson while working on any consumer, generalise it into that file (this engine's own
 neutral vocabulary only — no consumer's words, per "This engine has two consumers and belongs to
-neither" below) rather than losing it in one repo. Its two newest lessons (2026-09-27): what one
-principal perceives of another's act describes the attempt, never an outcome that may not have
-happened — the object's own described state carries the outcome, and no sentence composed before the
-resolution doubles as an outcome record; and a property a mind works on over several acts should read
-differently as it moves (reading bands, ascending, silent above the first, seen by everyone who
-perceives the object). The two before them (2026-09-26): measure a `createTurnReader` question set
-against the population that will actually write to it, not only against intents shaped like its own
-answer keys, and label each disagreement by which layer it belongs to; and never let one object's
-description carry another object's name — least of all a plural of it — when your world models
-exactly one.
+neither" below) rather than losing it in one repo. Its newest lesson (2026-10-16): unlisted is not
+impossible — a world that sends every act its mechanics do not list to refusal turns an open world
+into a closed one; the act happens, and either touches nothing (it is remembered) or receives a
+bounded improvised ruling (`improvisedRulingMechanic`) on a value the author declared `improvisable`,
+and only an act the fiction cannot hold is refused, its attempt still narrated. The two before it
+(2026-09-27): what one principal perceives of another's act describes the attempt, never an outcome
+that may not have happened — the object's own described state carries the outcome, and no sentence
+composed before the resolution doubles as an outcome record; and a property a mind works on over
+several acts should read differently as it moves (reading bands, ascending, silent above the first,
+seen by everyone who perceives the object).
 
 **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is the map, not the territory** — C4 levels 1 to 3
 (context, containers, components) of the built tree, ending in a table of which test enforces each
@@ -80,8 +80,9 @@ a starter set.
    it silently attaches one unit's content to another's (§5.1, §14).
 7. **One versioning substrate, one choke point.** A constrained numeric value changes through
    `writeConstrainedValue` / `transferConstrainedValue` (`src/timeline/constrained.ts`) and nowhere
-   else, and all four constraint kinds are evaluated there — `irreversible` is enforced by its
-   trigger on `facts` and *translated* on the failure path, never re-checked in JS. "What did this
+   else, and all five row-based constraint kinds are evaluated there (`improvisable` only for a write
+   tagged as an improvised ruling) — `irreversible` is enforced by its trigger on `facts` and
+   *translated* on the failure path, never re-checked in JS. "What did this
    value used to be" is answered by fact intervals: `resource_history` and `relationship_history` are
    frozen by `BEFORE INSERT` triggers so a second history is unconstructable rather than merely
    discouraged. Never add a table that versions something `facts` already versions (§5.4, option C).

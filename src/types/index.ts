@@ -667,7 +667,7 @@ export interface ImprovisableTier {
   requiresConfirmation: boolean;
 }
 
-/** The five members of design §5.3's constraint family. `irreversible` is
+/** The six members of design §5.3's constraint family. `irreversible` is
  * never a row in `resource_constraints` -- it is a flag on a fact -- so it is
  * not a `ConstraintKind`, but it IS something a violation can be reported
  * for. */

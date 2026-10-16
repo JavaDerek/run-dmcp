@@ -329,6 +329,59 @@ A quick audit for any world that relays one principal's acts to another: for eve
 the relayed sentence aloud on the assumption that the resolution refused. Any sentence that becomes a
 lie under that assumption is describing an outcome, and should be reworded as the attempt.
 
+## Lesson: unlisted is not impossible
+
+The concrete incident: a world whose referee ruled every act against the mechanics the world listed,
+and sent every act none of them fit to refusal. A principal under watch dropped to the floor and
+feigned a medical collapse, to draw the watcher closer. No mechanic listed feigning anything, so the
+ruling came back that the act "reached past what is here" -- and it never happened. Not in the fiction,
+not on the timeline, not in what the watcher perceived. The world had no way to say "that happened,
+and it moves nothing we measure," so it said the act had not happened at all. A world that refuses
+every act its mechanics do not list is a closed world, however open its prose reads, and the player
+learns that within a few turns.
+
+"Unlisted" is never "forbidden", and it is never "free". The question at the boundary is *how much*,
+not *whether*. Four rulings cover it:
+
+| ruling | when | what happens |
+|---|---|---|
+| **Listed** | a mechanic fits | resolve it, exactly |
+| **Flavour** | the act touches nothing the world measures | it happens in the fiction and is remembered (narrated, and on the timeline); nothing is written |
+| **Improvised** | no mechanic fits, but the act plausibly touches someone or something | a small, bounded ruling on a value the author declared `improvisable`, through the engine's `improvisedRulingMechanic`, recorded with its rationale and the act it cites |
+| **Impossible** | the act cannot happen in the fiction at all (flying by flapping one's arms) | the *attempt* happens and is narrated failing |
+
+Only the last refuses, and even it does not erase the act: the attempt is real and can be perceived
+(see the lesson above on perceiving the attempt). Under these rules the feigned collapse happens; the
+watcher perceives someone falling; and, if the author declared the watcher's attention as an
+improvisable value, it moves by a small amount toward the one on the floor -- a ruling, not a
+mechanic, and the next time the same kind of act happens it can be ruled the same way.
+
+What this asks of the author:
+
+1. **Declare the soft values on purpose.** `declareImprovisableConstraint` (or
+   `declare_resource_constraint` with kind `improvisable`) on exactly the values an improvised ruling
+   may land on -- one principal's regard for another, an observer's attention, a store's goodwill --
+   with an ordered list of tiers, each with a `cap`. The caps are data the engine enforces, not prose
+   asking a model to be modest: "+3" is a ruling, "+300" is refused.
+2. **Leave the hard values undeclared.** A value without the declaration can never receive an
+   improvised ruling, from any input, through any caller; it moves only through listed mechanics. That
+   is the whole guarantee, and it is structural. If a value is conserved and you do declare it,
+   rulings on it move by transfer between members, so conservation holds.
+3. **Keep the largest tier below the worst listed act.** If no improvisation can move a value further
+   than the most drastic listed mechanic does, no unlisted act outweighs the rules.
+4. **Make the top tier need a second opinion.** Mark it `requiresConfirmation` and have a separate
+   call -- not the one proposing the ruling -- confirm it, then pass that call's reference as the
+   ruling's `confirmation`. The engine records the reference; it cannot tell whether the confirmation
+   was independent, so that is yours to guarantee. A witness is never its own judge.
+5. **Have the referee answer in keys.** Value id, tier key, signed amount, a rationale, the verbatim
+   words of the act, and optionally a precedent key for "the same kind of act". Never prose for the
+   engine to interpret -- it reads none of it, it only records it on the resolution's event.
+
+A quick audit for any world with a referee: write down ten acts a player could type that none of your
+mechanics list. For each, say which of the four rulings it gets. If any lands on "impossible" when it
+could plainly happen in the fiction, the referee is closing your world, and the fix is a declared
+improvisable value or a flavour ruling -- not another listed mechanic for that one act.
+
 ## Checklist before you ship a `createTurnReader` question set
 
 - For every `(effect, property)` combination your effects layer accepts, can you point to the exact
@@ -474,6 +527,17 @@ first (say what is, never what is absent). They reach every principal who percei
 is a gameplay change we make on purpose. See run-dmcp's `docs/AUTHORING-GUIDE.md`.
 ```
 
+```markdown
+## Unlisted is not impossible
+
+An act none of our mechanics list still happens. It touches nothing and is remembered, or it
+receives a bounded improvised ruling (run-dmcp's `improvisedRulingMechanic`) on a value we declared
+`improvisable` on purpose, with per-tier caps as data and the top tier needing a confirmation from a
+separate call. Only an act that cannot happen in the fiction is refused, and even then the attempt is
+narrated. The values that decide the game are never declared improvisable. See run-dmcp's
+`docs/AUTHORING-GUIDE.md`.
+```
+
 ## Provenance
 
 Sources are named by role, not by name, the way `docs/ARCHITECTURE.md` names consumers: "the
@@ -516,3 +580,8 @@ principal was told on four turns that a way out had been opened when it had stay
 into its notes and spoke it; and in which five turns of real work on the one part that mattered each
 read exactly the same, while other objects in the same location already read differently as they
 moved.
+
+Seventh entry (2026-10-16), from the two-principal consumer's issue #16 -- a feigned collapse ruled
+out of existence because nothing listed it -- and from the turn-by-turn signatory's open-world rulings
+design (§4, §5 and §7 there), which named the four rulings, placed the improvised one in this engine as
+a mechanic over values a game declares `improvisable`, and took the lesson's first line from it.
