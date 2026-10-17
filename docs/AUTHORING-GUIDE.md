@@ -382,6 +382,56 @@ mechanics list. For each, say which of the four rulings it gets. If any lands on
 could plainly happen in the fiction, the referee is closing your world, and the fix is a declared
 improvisable value or a flavour ruling -- not another listed mechanic for that one act.
 
+## Lesson: a goal is an aim, declared once, that the world's own changes can reach
+
+The concrete incident: a consumer has a model author each world from a short problem text (a situation,
+the things to hand, an aim) and checks the aim in code as a declared condition (`conditions_at`). Over
+one tuning set, five of its worlds had to be authored again, each for a fault the author could have
+avoided, and each was fixed by a one-off note to the author about that one world. The faults fell into
+five shapes. Each one made the world measure its author rather than whoever played it:
+
+1. **One thing declared twice.** A ledge out of reach was declared as an object within reach *and* as a
+   location beyond it. Two entities for one thing means two sets of properties, two answers to "where is
+   it", and two things a citation can land on, and a reader picks whichever one the actor's words happen
+   to match. **Declare each thing once,** on one side of whatever line your world draws (within reach or
+   beyond it, inside or outside, carried or fixed). Half of this is mechanical: no object and location
+   share an id, and code can refuse that. The same thing under two ids is not mechanical, so read for it.
+2. **A method stated as the aim.** "The fitting is attached to the wall" for a fitting that had only come
+   loose; "the vehicle rests on the road" for getting a vehicle out of a ditch. Each names one way of
+   getting there, so every other way, including the one the actor actually takes, fails the goal check
+   even when the aim is met. **State the aim, the state of affairs asked for, never a method of reaching
+   it.** A join or a location in a goal is a method unless the aim is exactly that. A goal that already
+   holds when the world is loaded states no aim at all, and that one code can check.
+3. **A goal nothing in the world can reach.** A goal required a heavy object to be somewhere, and nothing
+   the actor had, and no mechanic the world listed, could move it there. **Every clause of a goal must be
+   reachable by the world's own changes:** a listed mechanic, or a value declared `improvisable` that a
+   bounded ruling may move. When the aim really is "the heavy thing gets free", state it as a value on that
+   thing that says what it measures, not as where the thing is.
+4. **The obstacle declared as a permanent number.** The problem's own obstacle, the reason the situation
+   is hard, was declared as a fixed value with no way to change it. Every referee that read it ruled as if
+   it were permanent, so nothing the actor tried could work on the one thing the problem is about. **An
+   obstacle the actor can work on must be changeable** by something the world declares: a listed mechanic,
+   or an `improvisable` declaration with tiers. If it cannot be, leave it out as a number and let the
+   description carry it. This does not loosen "unlisted is not impossible" above: the values that decide a
+   contest between principals stay undeclared, so an obstacle there must be one a listed mechanic moves.
+5. **One aim split into several judged values, at their maximum.** One aim (a route that holds and reaches
+   where it goes) was declared as three overlapping values, how complete, how stable and how far, two of
+   them required at exactly their maximum. The referee credited the route as reaching and never called it
+   complete, so the goal never held though the aim was met. **One aim, one judged value, a reachable
+   threshold:** name the value for what it measures, and set the threshold where a few bounded rulings can
+   land (`>= 8` on a 0 to 10 scale), never at the exact maximum that only a "perfect" ruling reaches.
+
+The lesson behind the five matters as much as they do: **a correction sent to an author for one world
+fixes one world.** Of the six lessons that tuning set taught, the only one that reached the next world was
+the one that had become a validator rule and a line in the author's prompt; the five sent as notes did not.
+Keep authoring lessons in one ledger that the author prompt is generated from. Give each lesson an
+enforcement: a structural check where one is possible, a line on a human audit checklist where it is not.
+Let a re-author request cite only ledger entries, so a new correction has to enter the ledger, and so every
+later world, first. Keep the structural checks narrow: an id shared by an object and a location, a goal that
+holds at load, a threshold at a value's exact maximum, several judged values on one entity. They read ids
+and numbers, never prose. The shapes that need reading (a method dressed as an aim, an obstacle that ought
+to move) go on the checklist, because a check that guesses at meaning is worse than none.
+
 ## Checklist before you ship a `createTurnReader` question set
 
 - For every `(effect, property)` combination your effects layer accepts, can you point to the exact
@@ -434,6 +484,11 @@ improvisable value or a flavour ruling -- not another listed mechanic for that o
 - For each property a mind is expected to move over several acts, does its object read differently
   at some point along the way, from authored bands ascending and silent above the first? If every act
   on the way reads the same, the actor is working from a number alone.
+- If your world has a declared goal: is each thing declared once? Does the goal state the aim and not a
+  method, and does it not already hold at load? Can a listed mechanic or an `improvisable` value reach
+  every clause? Is the obstacle the actor works on changeable? Is each aim one judged value, with a
+  threshold below its maximum? And does a correction to an authored world become a lesson the next world
+  is authored under, not a note about this one?
 - When you find a case like this, add it here — generalised, in this file's neutral vocabulary — and
   add a pointer to it in your own project's `CLAUDE.md`. Root `CLAUDE.md`'s "cross-repo invariant
   nothing can check" section names where those pointers live today.
@@ -538,6 +593,17 @@ narrated. The values that decide the game are never declared improvisable. See r
 `docs/AUTHORING-GUIDE.md`.
 ```
 
+```markdown
+## A goal is an aim, declared once, that the world can reach
+
+Each thing in our worlds is declared once, on one side of the reach line. A goal states the aim, never a
+method of reaching it, and never already holds at load. A listed mechanic or an `improvisable` value can
+reach every clause. The obstacle the actor works on is changeable, or lives only in the description. One aim
+is one judged value, with a threshold below its maximum. A correction to an authored world becomes a lesson
+in our ledger (prompt text plus a structural check or an audit line) before it goes to the author, never a
+one-off note about that world. See run-dmcp's `docs/AUTHORING-GUIDE.md`.
+```
+
 ## Provenance
 
 Sources are named by role, not by name, the way `docs/ARCHITECTURE.md` names consumers: "the
@@ -585,3 +651,7 @@ Seventh entry (2026-10-16), from the two-principal consumer's issue #16 -- a fei
 out of existence because nothing listed it -- and from the turn-by-turn signatory's open-world rulings
 design (§4, §5 and §7 there), which named the four rulings, placed the improvised one in this engine as
 a mechanic over values a game declares `improvisable`, and took the lesson's first line from it.
+
+Eighth entry (2026-10-17), from a consumer that has a model author each world from a short problem text and
+checks the world's declared goal in code: five worlds re-authored by one-off notes over its tuning set, and
+its owner's observation that only the one lesson made into a rule had reached the next world.

@@ -21,11 +21,16 @@ catalogue of how to describe objects, characters and motivations so a world buil
 holds together the first time, plus sample `CLAUDE.md` entries a consumer can copy. If you learn a
 world-authoring lesson while working on any consumer, generalise it into that file (this engine's own
 neutral vocabulary only — no consumer's words, per "This engine has two consumers and belongs to
-neither" below) rather than losing it in one repo. Its newest lesson (2026-10-16): unlisted is not
+neither" below) rather than losing it in one repo. Its newest lesson (2026-10-17): a goal is an aim,
+declared once, that the world's own changes can reach — declare each thing once, state the aim and not a
+method (and never a goal that already holds at load), make every clause reachable by a listed mechanic or an
+`improvisable` value, keep the obstacle the actor works on changeable, and give one aim one judged value
+with a threshold below its maximum; and a correction to an authored world becomes a ledger lesson the next
+world is authored under, never a one-off note. The one before it (2026-10-16): unlisted is not
 impossible — a world that sends every act its mechanics do not list to refusal turns an open world
 into a closed one; the act happens, and either touches nothing (it is remembered) or receives a
 bounded improvised ruling (`improvisedRulingMechanic`) on a value the author declared `improvisable`,
-and only an act the fiction cannot hold is refused, its attempt still narrated. The two before it
+and only an act the fiction cannot hold is refused, its attempt still narrated. The two before that
 (2026-09-27): what one principal perceives of another's act describes the attempt, never an outcome
 that may not have happened — the object's own described state carries the outcome, and no sentence
 composed before the resolution doubles as an outcome record; and a property a mind works on over
