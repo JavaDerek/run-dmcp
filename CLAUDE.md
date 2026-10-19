@@ -21,7 +21,7 @@ catalogue of how to describe objects, characters and motivations so a world buil
 holds together the first time, plus sample `CLAUDE.md` entries a consumer can copy. If you learn a
 world-authoring lesson while working on any consumer, generalise it into that file (this engine's own
 neutral vocabulary only — no consumer's words, per "This engine has two consumers and belongs to
-neither" below) rather than losing it in one repo. Its newest lesson (2026-10-19): any state an act could change is a condition -- hot, inflated, playing, unused, not only defects -- a substance the actor might pour or apply is an object of its own, and a value that can grow is rendered with how far it can go. The one before it (2026-10-18): a condition an act could
+neither" below) rather than losing it in one repo. Its newest lesson (2026-10-19, afternoon): write an authoring rule by what a thing is, never by how the actor might use it -- every sheet, pad or pliable thing declares that it bends and how long it is. The one before it (2026-10-19): any state an act could change is a condition -- hot, inflated, playing, unused, not only defects -- a substance the actor might pour or apply is an object of its own, and a value that can grow is rendered with how far it can go. The one before it (2026-10-18): a condition an act could
 change is an `improvisable` value on the thing, on every thing that has one, never words in a name or a
 description; and a lesson about prose needs a reader of its own -- a model auditing every world against every
 checklist line, three times with a majority, each fail quoting the world verbatim -- whose literal reading makes
