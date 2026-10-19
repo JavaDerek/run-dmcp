@@ -484,6 +484,37 @@ it:
   description"; a later one said descriptions never carry conditions. The author was told both. Read the
   ledger whole when you add to it.
 
+## Lesson: a state is a condition too; a substance the actor uses is an object; a length that can grow says how far
+
+The concrete incident: the same consumer as the two lessons above, the morning after, with every world re-audited
+under a revised ledger and a fresh problem set authored against it. Three faults, each found by asking why a world
+still failed after three rounds of re-authoring, or why a sensible plan still failed in play:
+
+1. **The examples taught only defects.** The lesson "a condition is a value" listed deflated, loose, soaked, dim.
+   The worlds that kept failing it after three rounds all carried a *state* that was not a defect -- "a serving of
+   hot soup", "inflated", "playing music", "an unused mat" -- most often the very state the aim changes (the soup
+   to cool, the music to stop). The author read the examples as the rule. **Any state an act could change is a
+   condition: hot, full, inflated, switched on, playing, unused, clean, wet, as much as broken or loose -- and the
+   state the aim changes most of all.** When a lesson keeps failing, read what the survivors have in common
+   before re-sending it; here it was the examples, not the author.
+2. **A substance that exists only as a property of its container.** Mineral water declared only as its bottle's
+   seal; water only implied by a bucket. The actor opens the bottle (fine), then "pours the water into the cup" --
+   and there is nothing to move, so the step can only be ruled as changing nothing, and every later use of "the
+   water" fails because no such thing exists. **A substance the actor might pour, scoop, spread or apply is an
+   object of its own, described as being in its container.** A spill already on a surface stays a property of
+   that surface (the lesson above); the difference is whether the actor will *move* it.
+3. **A length that can grow, shown without its stretch.** A collapsible net declared at 65 cm of a possible
+   120; tape on a roll, a retractable leash, a bungee. The rendered state said "65 cm" and nothing else, so the
+   actor never extended it and built a worse tool instead. Across four problem sets 61 objects declared such a
+   stretch; the actor had been shown none of them. **When a declared value can grow, render how far: "length 65
+   cm (extends to 120 cm)".** It is declared data, so it belongs in state, not in prose.
+
+And one about the reader that judges whole attempts, measured rather than assumed: over 62 attempts where the goal
+held, the whole-attempt check agreed with the scoring judge on 50 of the 51 it passed, but on only 5 of the 11 it
+vetoed. **A veto-only judge errs strict, and you only find out by asking the scoring judge about the vetoes
+specifically**; the agreement on passes hides it. Whether that strictness is worth its cost (about two problems
+in fifty there) is a choice to make on the numbers, and it was kept.
+
 ## Checklist before you ship a `createTurnReader` question set
 
 - For every `(effect, property)` combination your effects layer accepts, can you point to the exact
@@ -668,6 +699,16 @@ verbatim; play refuses a world without a current pass. When an audit fails a goo
 run-dmcp's `docs/AUTHORING-GUIDE.md`.
 ```
 
+```markdown
+## States are conditions; substances are objects; stretches are rendered
+
+Any state an act could change is a condition -- hot, full, inflated, playing, unused, not only defects -- and the
+state the aim changes most of all; it is a value, never an adjective in a name. A substance the actor might pour,
+scoop, spread or apply is an object of its own, in its container, never only a property of the container. A value
+that can grow is rendered with how far it can go. When a lesson keeps failing, read what the survivors share.
+See run-dmcp's `docs/AUTHORING-GUIDE.md`.
+```
+
 ## Provenance
 
 Sources are named by role, not by name, the way `docs/ARCHITECTURE.md` names consumers: "the
@@ -725,3 +766,7 @@ of a six-world sample that found two checklist lessons broken in five worlds and
 by a model chair, and the chair's own lessons -- its noise across identical runs, and checklist lines whose
 wording failed good worlds.
 
+Tenth entry (2026-10-19), from the same consumer's overnight run and the morning after: the defects-only examples
+found by reading what three rounds of surviving fails shared, the substance fault behind two problems where every use
+of the water failed, the unrendered stretch behind a reach that was never extended, and an offline comparison of the
+whole-attempt check against the scoring judge.
