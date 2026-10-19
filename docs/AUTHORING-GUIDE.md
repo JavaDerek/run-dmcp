@@ -432,6 +432,58 @@ holds at load, a threshold at a value's exact maximum, several judged values on 
 and numbers, never prose. The shapes that need reading (a method dressed as an aim, an obstacle that ought
 to move) go on the checklist, because a check that guesses at meaning is worse than none.
 
+## Lesson: a condition is a value, and a lesson about prose needs a reader that is not the author
+
+The concrete incident: the same consumer as the lesson above, a later problem set, a new author model, and a
+ledger that already held every lesson above. A second model audited a sample of six of the new worlds against
+the ledger's checklist. Five of the six broke one line and two broke another, and both lines were checklist
+lines only: in the author's prompt, never checked by anything but a person reading a sample. The faults, and
+the ones found when every world was then audited:
+
+1. **A condition left in words.** "A deflated ball", "a paddle with a loose handle", "the gloves are soaked",
+   "the torch is dim", a location's description saying what has gone wrong. A name or a description never
+   changes, so after the actor inflates the ball every later reading still says "deflated", and a rendering
+   of the location from its description says it too. Worse, in one world the ring's defects were values the
+   world could change while the paddle's and the board's were only words, so one repair path was tracked and
+   the others were not. **Every condition the problem gives a thing that an act could change is a value on
+   that thing, declared `improvisable`, on every thing that has one; names and descriptions say what a thing
+   is, never what state it is in.** A thing's purpose ("for a dog") and a fact no act could undo (a broken
+   bottle's sharp edges) are not conditions and may stay in words.
+2. **One thing, two entries, in new shapes.** A spill declared as an object *and* as the floor's residue; a
+   tree standing at the location *and* its upper part as a place beyond reach. **A spill, stain or mess is a
+   property of the surface it is on; a thing with a part out of reach is that place alone.**
+3. **An aim to remove something set at its exact minimum.** `== 0` from above is reachable only by a ruling
+   that the thing is wholly gone. **Give a removal a threshold a few rulings can reach** (`<= 2` on a 0 to 10
+   scale). A harm that starts at none and must stay there may be `== 0`: that keeps it, it does not clear it.
+4. **A thing that could reach, span or hang with no length.** A reach mechanic reads a length; an object
+   without one reaches nothing, and the actor's sensible plan is refused. **Every object that could reach,
+   span, prop or hang something declares a length.**
+5. **Distance for what walking closes.** A vehicle "in the ditch, beyond reach" when the ditch is ground the
+   actor can step into. **Declare a place beyond reach only for what walking cannot close.**
+6. **A field the author fills with no stated meaning.** The prompt said what a property's maximum is and never
+   what its minimum is; one author used 0 every time, the next set the minimum equal to the value, and the
+   validator refused almost every world. **Say what every field means, in the prompt**, even the one every
+   earlier author guessed right.
+
+What made those faults survive was not the author. **A lesson about prose that only a person checks on a
+sample is a lesson in name only.** The validator reads ids and structure, rightly, so the prose lessons need
+a reader of their own: a model that judges every world against every checklist line, in closed keys (`pass`
+or `fail` per line), each fail quoting the world verbatim, which code checks. Three things learned building
+it:
+
+- **One audit call is noisy.** Verdicts on a few worlds in two dozen flipped between identical runs. Take
+  three independent audits and fail a line only when two of them fail it, so one noisy call neither passes a
+  world nor blocks one. Tie each audit to the exact world, ledger and auditor instructions it judged; any
+  change makes it stale, and play refuses a world without a current pass.
+- **An audit reads the checklist literally, so the checklist wording is now load-bearing.** A line that
+  listed "intended" as an example of a forbidden condition failed "a leash intended for a dog"; a line that
+  said an obstacle must never be a fixed number failed every fixed distance, the very thing reaching is built
+  to close. Each was a wording fault in the lesson, not in the worlds. When an audit fails a world, read the
+  quote before re-authoring: if the world is right, fix the line.
+- **Lessons can contradict each other.** One lesson said a condition belongs in a value "or the location's
+  description"; a later one said descriptions never carry conditions. The author was told both. Read the
+  ledger whole when you add to it.
+
 ## Checklist before you ship a `createTurnReader` question set
 
 - For every `(effect, property)` combination your effects layer accepts, can you point to the exact
@@ -604,6 +656,18 @@ in our ledger (prompt text plus a structural check or an audit line) before it g
 one-off note about that world. See run-dmcp's `docs/AUTHORING-GUIDE.md`.
 ```
 
+```markdown
+## Conditions are values, and an automated reader checks the prose lessons
+
+A condition an act could change (deflated, loose, soaked, dim) is an `improvisable` value on the thing,
+on every thing that has one; names and descriptions say what a thing is, never its state. A spill is a
+property of its surface; a thing with a part out of reach is that place alone. A removal's threshold sits
+above its minimum. Anything that can reach, span or hang declares a length. Every world is audited against
+every checklist line by a model, three times, a line failing only on a majority, each fail quoting the world
+verbatim; play refuses a world without a current pass. When an audit fails a good world, fix the line. See
+run-dmcp's `docs/AUTHORING-GUIDE.md`.
+```
+
 ## Provenance
 
 Sources are named by role, not by name, the way `docs/ARCHITECTURE.md` names consumers: "the
@@ -655,3 +719,9 @@ a mechanic over values a game declares `improvisable`, and took the lesson's fir
 Eighth entry (2026-10-17), from a consumer that has a model author each world from a short problem text and
 checks the world's declared goal in code: five worlds re-authored by one-off notes over its tuning set, and
 its owner's observation that only the one lesson made into a rule had reached the next world.
+
+Ninth entry (2026-10-18), from the same consumer: a new problem set and author model, a second model's audit
+of a six-world sample that found two checklist lessons broken in five worlds and two, every world then audited
+by a model chair, and the chair's own lessons -- its noise across identical runs, and checklist lines whose
+wording failed good worlds.
+
