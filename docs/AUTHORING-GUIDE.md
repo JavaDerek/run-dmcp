@@ -515,6 +515,22 @@ vetoed. **A veto-only judge errs strict, and you only find out by asking the sco
 specifically**; the agreement on passes hides it. Whether that strictness is worth its cost (about two problems
 in fifty there) is a choice to make on the numbers, and it was kept.
 
+## Lesson: write an authoring rule by what a thing is, never by how the actor might use it
+
+The concrete incident: the same consumer, the afternoon after the lesson above. A tent leak overhead; the actor's
+plan was sound -- roll a sketchpad into a pole and push a tarp patch over the leak -- and was refused twice because
+the pad was not declared bendable, and three times more because it had no length to reach with. An existing rule
+already said "a thing that could reach or span declares a length", and the audit passed the world anyway: a pad does
+not look like something that reaches until someone rolls it.
+
+The first fix proposed was the same rule, widened by use ("anything the actor might roll, fold or extend into a pole
+declares that it bends and a length"). An outside reviewer caught the flaw: **a rule phrased by use asks the author to
+foresee the solution.** It misses the non-obvious item, and worse, it leaks the intended solution into which objects
+get the properties -- only the one the author expected the actor to use. **Phrase it by kind instead**: every sheet,
+pad or pliable thing (paper, card, pads, maps, tarps, foil, mats, cloth, tape, string, rope) declares that it bends
+and how long it is, whatever the problem seems to need it for. A rule by kind is applied the same way in every world,
+and an audit can check it without guessing intent.
+
 ## Checklist before you ship a `createTurnReader` question set
 
 - For every `(effect, property)` combination your effects layer accepts, can you point to the exact
@@ -709,6 +725,15 @@ that can grow is rendered with how far it can go. When a lesson keeps failing, r
 See run-dmcp's `docs/AUTHORING-GUIDE.md`.
 ```
 
+```markdown
+## Authoring rules are by kind, not by use
+
+Every sheet, pad or pliable thing declares that it bends and how long it is, whatever the problem seems to need it
+for. Write every authoring rule by what a thing is, never by how the actor might use it: a rule by use makes the
+author foresee the solution and leaks it into which objects get the properties. See run-dmcp's
+`docs/AUTHORING-GUIDE.md`.
+```
+
 ## Provenance
 
 Sources are named by role, not by name, the way `docs/ARCHITECTURE.md` names consumers: "the
@@ -770,3 +795,7 @@ Tenth entry (2026-10-19), from the same consumer's overnight run and the morning
 found by reading what three rounds of surviving fails shared, the substance fault behind two problems where every use
 of the water failed, the unrendered stretch behind a reach that was never extended, and an offline comparison of the
 whole-attempt check against the scoring judge.
+
+Eleventh entry (2026-10-19, afternoon), from the same consumer: a pad that could not be rolled into the pole the
+actor needed, an existing by-use rule the audit could not apply to it, and an outside reviewer's correction of the
+first by-use fix.
