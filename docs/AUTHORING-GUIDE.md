@@ -531,6 +531,22 @@ pad or pliable thing (paper, card, pads, maps, tarps, foil, mats, cloth, tape, s
 and how long it is, whatever the problem seems to need it for. A rule by kind is applied the same way in every world,
 and an audit can check it without guessing intent.
 
+## Lesson: a goal that names how things are joined uses the join the problem names
+
+The concrete incident: the same consumer, the same night, from a page where a person types a situation and is told
+what is wrong with it before it runs. The typed problem was a sandwich: two slices of bread, spread, "pressed together".
+The author model wrote the goal's join condition with the kind `on` (laid one on the other). The actor spread both
+slices and pressed them together four times; the referee, correctly, ruled each press an `attach`; both spread-values
+were judged met -- and the goal never held, because `attached` is what pressing produces and `on` is a placed
+arrangement. The world had passed every check then in force, so the run ended "exhausted" for the world's fault.
+
+Nothing structural could catch it: both kinds are legitimate, and which one is right depends on the problem's words.
+That makes it an audit line, not a validator rule. **State the join the problem names**: things pressed, stuck, tied,
+hooked, glued or fixed together are `attached`; set, laid or stacked on is `on`; put into a hollow thing is `inside`;
+propped beneath is `under`; and where the problem only says things end up joined, `attached`. This is the earlier
+lesson (state the aim, not a method) applied to the join kind: a join kind the problem never named is a method the
+author chose, and the actor who does what the problem says cannot reach it.
+
 ## Checklist before you ship a `createTurnReader` question set
 
 - For every `(effect, property)` combination your effects layer accepts, can you point to the exact
@@ -734,6 +750,15 @@ author foresee the solution and leaks it into which objects get the properties. 
 `docs/AUTHORING-GUIDE.md`.
 ```
 
+```markdown
+## A goal's join kind is the one the problem names
+
+A goal condition that says how two things are joined uses the join the problem's own words name: pressed, stuck,
+tied, glued or fixed together is `attached`; set or stacked on is `on`; put into is `inside`; propped beneath is
+`under`; no arrangement named is `attached`. A kind chosen because it looks tidy is a method, and an actor who
+does what the problem says never reaches it. See run-dmcp's `docs/AUTHORING-GUIDE.md`.
+```
+
 ## Provenance
 
 Sources are named by role, not by name, the way `docs/ARCHITECTURE.md` names consumers: "the
@@ -799,3 +824,7 @@ whole-attempt check against the scoring judge.
 Eleventh entry (2026-10-19, afternoon), from the same consumer: a pad that could not be rolled into the pole the
 actor needed, an existing by-use rule the audit could not apply to it, and an outside reviewer's correction of the
 first by-use fix.
+
+Twelfth entry (2026-10-19, night), from the same consumer: the first live run of a page where a typed situation is
+checked and then played. A sandwich goal asked for a join the actor's sensible act could not make, the referee ruled
+correctly, and no check in force could tell the world was at fault.
