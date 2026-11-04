@@ -547,6 +547,22 @@ propped beneath is `under`; and where the problem only says things end up joined
 lesson (state the aim, not a method) applied to the join kind: a join kind the problem never named is a method the
 author chose, and the actor who does what the problem says cannot reach it.
 
+## Lesson: a person's own body is not a loose item
+
+The concrete incident: a typed problem, "you have a sore tooth; there is a bottle of oral analgesic on the counter;
+stop the pain". The author model declared the tooth as an item located at the person, put the pain on the tooth, and
+declared no mouth. The world passed every check then in force. In play, the actor "put the tooth down" and then "put
+it back in my mouth", and the referee ruled the second act a transfer to the person: with no mouth to act on, the
+nearest thing it could record about a thing the actor held was a change of holder.
+
+A part of a person's own body is never a loose item. Three rules follow. **How a body feels is a property of the
+person**, not of the part (pain, hurt, tiredness). **A part that can be harmed or detached is declared per character,
+from what the text says**, never invented from a name or a gender: a text that mentions a tooth declares the tooth; it
+does not issue every character a full anatomy. **Name only the parts the problem touches**; the rest of the body is
+not modelled until a problem needs it. Nothing structural can catch this: an item at a person is a legitimate
+declaration for a coat or a coin, and only the problem's words say the thing is part of the person. That makes it an
+audit line, not a validator rule.
+
 ## Checklist before you ship a `createTurnReader` question set
 
 - For every `(effect, property)` combination your effects layer accepts, can you point to the exact
@@ -757,6 +773,13 @@ A goal condition that says how two things are joined uses the join the problem's
 tied, glued or fixed together is `attached`; set or stacked on is `on`; put into is `inside`; propped beneath is
 `under`; no arrangement named is `attached`. A kind chosen because it looks tidy is a method, and an actor who
 does what the problem says never reaches it. See run-dmcp's `docs/AUTHORING-GUIDE.md`.
+
+## A person's own body is not a loose item
+
+A part of a person's own body (a tooth, a hand, a mouth) is never declared as an item that sits somewhere, can be put
+down or handed over. How the body feels (pain, hurt, tiredness) is a property of the person, not of the part. A part
+that can be harmed or detached is declared for that character only where the problem's text says so, never invented
+from a name or a gender; name only the parts the problem touches. See run-dmcp's `docs/AUTHORING-GUIDE.md`.
 ```
 
 ## Provenance
@@ -828,3 +851,7 @@ first by-use fix.
 Twelfth entry (2026-10-19, night), from the same consumer: the first live run of a page where a typed situation is
 checked and then played. A sandwich goal asked for a join the actor's sensible act could not make, the referee ruled
 correctly, and no check in force could tell the world was at fault.
+
+Thirteenth entry (2026-11-03), from the same consumer: a typed situation about a sore tooth. The author declared the
+tooth as an item at the person and no mouth; the actor "put it back in my mouth" and the referee, with no mouth to act
+on, ruled a transfer. The world had passed every check in force.
