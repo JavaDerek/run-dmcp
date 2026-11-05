@@ -563,6 +563,30 @@ not modelled until a problem needs it. Nothing structural can catch this: an ite
 declaration for a coat or a coin, and only the problem's words say the thing is part of the person. That makes it an
 audit line, not a validator rule.
 
+## Lesson: when two bodies fight, the referee rules what an act is, and code settles the rest
+
+The concrete incident: two actors shut in one room to fight to the death, a referee model ruling every step as an
+unlisted act on bounded values. Every attack landed (80 of 80). A stab was recorded as the knife moving to the victim.
+A knife did no better than a pan. A thing thrown stayed in the thrower's hand and was used again. Reviewers, reading
+samples blind, called a little over half the rulings accurate. Asking the referee harder did not reach any of these, because
+each asks it to settle something it has no way to settle from one step's words.
+
+Three things moved out of the ruling, each by closed key and engine state, and each measured. **Whether an act against
+the other body lands is a die**, rolled by code from declared values; the referee still says what the act is and how
+large; a miss writes nothing and is no precedent. **How much a blow can hurt is limited by what is in the hand**: the
+world declares a ceiling for each thing and for bare hands, a piece takes its thing's ceiling, and code holds the
+ruling to it. **What leaves the hand is its own closed question**, cited from the step, and code moves that thing loose
+into the scene on a hit or a miss; a blow by itself is never a change of holder, and something thrown toward a body
+never lands in its hands. A question a shared-world loop adds this way stays off for worlds with no opponent, so
+measured solo prompts are unchanged.
+
+Test it on rooms nothing was tuned on. On the rooms these fixes were tuned on, reviewers passed 92% of rulings and 20 of
+24 fights as coherent. On fresh rooms written by a different author, the same code scored 83% and 14 of 24, and that
+exposed the thrown-thing fault as the largest. The fix for it, on another fresh set, reached 87% and 19 of 24. Check
+the dice as well before crediting a change: one round's low landing rate made the ceiling look more effective than it
+may have been. Still open: nothing but words makes a large body stronger, and a fighter who gives up simply ends the
+fight, which reads as false in a fight to the death.
+
 ## Checklist before you ship a `createTurnReader` question set
 
 - For every `(effect, property)` combination your effects layer accepts, can you point to the exact
@@ -780,6 +804,12 @@ A part of a person's own body (a tooth, a hand, a mouth) is never declared as an
 down or handed over. How the body feels (pain, hurt, tiredness) is a property of the person, not of the part. A part
 that can be harmed or detached is declared for that character only where the problem's text says so, never invented
 from a name or a gender; name only the parts the problem touches. See run-dmcp's `docs/AUTHORING-GUIDE.md`.
+## When two bodies fight, the referee rules what an act is, and code settles the rest
+
+Whether an act against the other body lands is a die rolled by code from declared values, never a ruling. How much a
+blow can hurt is limited by a ceiling declared for each thing and for bare hands. What leaves the hand is a closed
+question, and code moves it loose on a hit or a miss; a blow is never a change of holder. Measure on rooms nothing was
+tuned on. See run-dmcp's `docs/AUTHORING-GUIDE.md`.
 ```
 
 ## Provenance
@@ -855,3 +885,5 @@ correctly, and no check in force could tell the world was at fault.
 Thirteenth entry (2026-11-03), from the same consumer: a typed situation about a sore tooth. The author declared the
 tooth as an item at the person and no mouth; the actor "put it back in my mouth" and the referee, with no mouth to act
 on, ruled a transfer. The world had passed every check in force.
+
+Latest entry (2026-11-04), from a private consumer's fight measurements: ten rounds of 24 fights or fewer, the last two on rooms nothing had been tuned on, audited blind by a separate model.
