@@ -584,8 +584,31 @@ Test it on rooms nothing was tuned on. On the rooms these fixes were tuned on, r
 24 fights as coherent. On fresh rooms written by a different author, the same code scored 83% and 14 of 24, and that
 exposed the thrown-thing fault as the largest. The fix for it, on another fresh set, reached 87% and 19 of 24. Check
 the dice as well before crediting a change: one round's low landing rate made the ceiling look more effective than it
-may have been. Still open: nothing but words makes a large body stronger, and a fighter who gives up simply ends the
-fight, which reads as false in a fight to the death.
+may have been. Still open: nothing but words makes a large body stronger. A fighter who gave up simply ended the fight; the
+next lesson covers that.
+
+## Lesson: a fight needs a reason on both sides, and giving up is an offer
+
+The concrete incident: two actors shut in a room, each told to kill the other, and every fight where nobody fell read as
+false to reviewers (0 of 8). A fighter who gave up simply ended the fight, and the other never heard it. The obvious fix was a
+rule about surrender. The better one came from asking what a surrender would be weighed against: the actors had an order, not a reason.
+
+So each actor gets a concrete reason of their own, told in their own problem text, plus an aim code can read from state and score at
+the end. **Declare both or neither**: an actor with no reason cannot weigh anything, and the loader refuses a one-sided fight. **Do
+not tell an actor the other wants the opposite**: that is for it to find out, and it may be false. **Giving up or calling it over is an
+offer**: the other hears it and decides on their own turn, a step withdraws it, and it is over only when both stand by theirs at once or
+someone falls. **An aim ends nothing**: if taking the thing ended the fight, one lucky grab would decide it before the holder could answer.
+
+Measured on one set of four fresh rooms, the same bodies and things in each, with only the reasons changed. Where the holder had no use
+for the thing, the holder let it go in all 8 fights with no blow attempted. Where each would lose something real, it was never handed over,
+and actors hid it, used it up or fought over it (median 5 attempted blows). Where one meant to kill for a past wrong, the median was
+11.5, and pleading stopped nothing in any of 8. Fights where nobody fell went from 0 of 8 credible to 14 of 18, with the review question also
+rewritten to read each fight against the reasons, so that step is not a clean comparison.
+
+Three limits. Choose aims carefully: "holds the phone" scored as a loss for an actor who had already used its one call, which was what
+that actor wanted, so write the aim as the thing wanted, not the object standing for it. A cost only in the words does nothing to the
+actor who pays it, so the engine cannot tell a heavy loss from a light one. And an offered ending may go almost unused: only 1 of 24 fights
+used the formal give-up, against 6 of 24 before. Pleas came as speech, so measure whether anything reaches for what you built.
 
 ## Checklist before you ship a `createTurnReader` question set
 
@@ -810,6 +833,12 @@ Whether an act against the other body lands is a die rolled by code from declare
 blow can hurt is limited by a ceiling declared for each thing and for bare hands. What leaves the hand is a closed
 question, and code moves it loose on a hit or a miss; a blow is never a change of holder. Measure on rooms nothing was
 tuned on. See run-dmcp's `docs/AUTHORING-GUIDE.md`.
+## A fight needs a reason on both sides, and giving up is an offer
+
+Each actor gets a concrete reason in their own problem text and an aim code scores from state at the end; both or neither. Never
+tell an actor the other wants the opposite. Giving up is an offer the other hears and decides on; it is over when both stand by
+theirs or someone falls. An aim ends nothing. Write the aim as what is wanted, not the object standing for it. See run-dmcp's
+`docs/AUTHORING-GUIDE.md`.
 ```
 
 ## Provenance
