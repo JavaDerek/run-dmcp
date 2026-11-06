@@ -610,6 +610,49 @@ that actor wanted, so write the aim as the thing wanted, not the object standing
 actor who pays it, so the engine cannot tell a heavy loss from a light one. And an offered ending may go almost unused: only 1 of 24 fights
 used the formal give-up, against 6 of 24 before. Pleas came as speech, so measure whether anything reaches for what you built.
 
+## Lesson: an object whose use changes something beyond itself says what, and to whom
+
+The concrete incident: two leaders of neighbouring nations shut in one room for a night, each nation's security and
+resources declared as values on its leader, and on the table a disputed treaty that, signed, would give one side a
+valley. The room described it only as a treaty. The referee ruled signing it as a change to the paper and nothing else,
+so taking advantage of the weaker side touched no value the world counts, and a mind weighing acts by those values saw
+nothing to gain. The order book that could send troops to the other's border fared better only because its use was
+obvious.
+
+An object whose use would change something beyond itself (who holds land, food, money, troops or safety; how a person
+fares) says in its own description what that change is and to whom it falls, in plain terms: a treaty that cedes a
+valley says the valley and what it yields pass to the other side; an order book says which units it can send and from
+where. Never describe such an object only as what it is. This is the "descriptions say what the world models" lesson
+seen from the other side: there, a description promised more than the world held; here, the world holds the values and
+the description never connects the object to them. A structural check cannot see it, since a treaty with a short
+description is a legitimate declaration, so it is an audit line.
+
+The referee needs a way to say it, too. A ruling shape where one improvised act moves all its values in one direction
+can rule help but never its price: sending troops came out as raising both the helped side's security and the sender's
+resources. A ruling that may carry a consequence in the other direction, as a listed effect's can, is how a cost is
+said.
+
+## Lesson: a character's values and its readiness to act are separate sentences, and only an intervention shows the second
+
+The concrete incident: a mind told a fixed sentence for how much other people matter to it (0 to 4) and one for how
+readily it acts (0 to 4), put in rooms with a stranger in trouble. Two things went wrong in turn. First, the top value
+sentences carried acts ("you go out of your way to ease it", "you help anyone who needs it"), and the most caring mind
+helped in 12 of 12 fights at every point of the activity scale: the act word in the value sentence decided the act, and
+the activity sentence did nothing. Rewording them to carry values only ("their suffering matters to you; you will bear a
+real cost rather than cause it") fixed the scales' independence and still produced no passive good character: in rooms
+where a stranger lay bleeding within reach, the most caring, least active mind treated them in 192 of 192 fights.
+
+That was the room's doing, not the sentences'. A free rescue at one's feet binds even a passive good person. In rooms
+where helping meant stepping into another party's trouble at a cost (sending one's own forces to a neighbour's border),
+the same sentences alone gave all four corners: the caring, passive mind helped in 2 of 8 fights and declined in its
+own words to interfere; the caring, active one in 8 of 8; the uncaring, passive one did nothing; the uncaring, active
+one took advantage in 8 of 8. Small samples, blind-audited, all four as predicted before the run.
+
+So: **write values and readiness to act as separate sentences, each kept out of the other's lane** (a guard test that
+keeps act words out of the value sentence and welfare words out of the activity one is cheap). **To see readiness to
+act, build a situation where acting is an intervention**, not one where the need is at the character's feet and costs
+nothing to meet; there, every caring character acts, and the activity scale cannot show.
+
 ## Checklist before you ship a `createTurnReader` question set
 
 - For every `(effect, property)` combination your effects layer accepts, can you point to the exact
@@ -839,6 +882,16 @@ Each actor gets a concrete reason in their own problem text and an aim code scor
 tell an actor the other wants the opposite. Giving up is an offer the other hears and decides on; it is over when both stand by
 theirs or someone falls. An aim ends nothing. Write the aim as what is wanted, not the object standing for it. See run-dmcp's
 `docs/AUTHORING-GUIDE.md`.
+## An object whose use changes something beyond itself says what, and to whom
+
+An object whose use would change who holds land, food, money, troops or safety, or how a person fares, says in its own
+description what that change is and to whom it falls; never describe it only as what it is ("a treaty"). And let a
+ruling say a cost: an improvised act may carry a consequence the other way. See run-dmcp's `docs/AUTHORING-GUIDE.md`.
+## A character's values and readiness to act are separate sentences
+
+A value sentence carries no act ("you help anyone" decides the act); an activity sentence carries no value. Readiness
+to act shows only where acting is an intervention at a cost, never a free rescue at the character's feet. See
+run-dmcp's `docs/AUTHORING-GUIDE.md`.
 ```
 
 ## Provenance
@@ -916,3 +969,7 @@ tooth as an item at the person and no mouth; the actor "put it back in my mouth"
 on, ruled a transfer. The world had passed every check in force.
 
 Latest entry (2026-11-04), from a private consumer's fight measurements: ten rounds of 24 fights or fewer, the last two on rooms nothing had been tuned on, audited blind by a separate model.
+
+Entry of 2026-11-06, from the same private consumer: trait scales crossed over more than seven hundred fights in rooms
+written by a model nothing was tuned on, and a pilot of four rooms where helping was an intervention, audited blind by a
+separate model, whose smoke runs found the object and ruling-shape faults in the first lesson above.
