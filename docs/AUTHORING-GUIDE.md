@@ -610,27 +610,21 @@ that actor wanted, so write the aim as the thing wanted, not the object standing
 actor who pays it, so the engine cannot tell a heavy loss from a light one. And an offered ending may go almost unused: only 1 of 24 fights
 used the formal give-up, against 6 of 24 before. Pleas came as speech, so measure whether anything reaches for what you built.
 
-## Lesson: an object whose use changes something beyond itself says what, and to whom
+## Lesson: a ruling must be able to say what an act costs
 
 The concrete incident: two leaders of neighbouring nations shut in one room for a night, each nation's security and
-resources declared as values on its leader, and on the table a disputed treaty that, signed, would give one side a
-valley. The room described it only as a treaty. The referee ruled signing it as a change to the paper and nothing else,
-so taking advantage of the weaker side touched no value the world counts, and a mind weighing acts by those values saw
-nothing to gain. The order book that could send troops to the other's border fared better only because its use was
-obvious.
+resources declared as values on its leader, and on the table an order book that could send one side's brigades to the
+other's border, at the sender's cost. The referee ruled sending them as raising both the helped side's security and the
+sender's resources, so help came out better than free, and a mind weighing acts by those values chose it for nothing.
+The ruling shape was the fault: one improvised act moved all its values in one direction, so it could rule help but
+never its price. An improvised ruling that may carry a consequence the other way, as a listed effect's already could,
+is how a cost is said.
 
-An object whose use would change something beyond itself (who holds land, food, money, troops or safety; how a person
-fares) says in its own description what that change is and to whom it falls, in plain terms: a treaty that cedes a
-valley says the valley and what it yields pass to the other side; an order book says which units it can send and from
-where. Never describe such an object only as what it is. This is the "descriptions say what the world models" lesson
-seen from the other side: there, a description promised more than the world held; here, the world holds the values and
-the description never connects the object to them. A structural check cannot see it, since a treaty with a short
-description is a legitimate declaration, so it is an audit line.
-
-The referee needs a way to say it, too. A ruling shape where one improvised act moves all its values in one direction
-can rule help but never its price: sending troops came out as raising both the helped side's security and the sender's
-resources. A ruling that may carry a consequence in the other direction, as a listed effect's can, is how a cost is
-said.
+What first looked like a second fault was not one. Signing a treaty in the same room was ruled a change to the paper
+only, and it read as a description that never tied the treaty to the values. The treaty's description in fact said it
+gave a valley to the signer and took effect only when both leaders had signed, and the other leader never did: the
+ruling was right. A lesson was written for the wrong fault before anyone read the object's own words, and a model
+auditing the room against that lesson passed it. Read the object's description before blaming it.
 
 ## Lesson: a character's values and its readiness to act are separate sentences, and only an intervention shows the second
 
@@ -882,11 +876,11 @@ Each actor gets a concrete reason in their own problem text and an aim code scor
 tell an actor the other wants the opposite. Giving up is an offer the other hears and decides on; it is over when both stand by
 theirs or someone falls. An aim ends nothing. Write the aim as what is wanted, not the object standing for it. See run-dmcp's
 `docs/AUTHORING-GUIDE.md`.
-## An object whose use changes something beyond itself says what, and to whom
+## A ruling must be able to say what an act costs
 
-An object whose use would change who holds land, food, money, troops or safety, or how a person fares, says in its own
-description what that change is and to whom it falls; never describe it only as what it is ("a treaty"). And let a
-ruling say a cost: an improvised act may carry a consequence the other way. See run-dmcp's `docs/AUTHORING-GUIDE.md`.
+If one improvised ruling moves all its values one way, a cost cannot be ruled and help comes out free: let an improvised
+act carry a consequence the other way, as a listed effect's can. Before blaming an object's description for a ruling,
+read it. See run-dmcp's `docs/AUTHORING-GUIDE.md`.
 ## A character's values and readiness to act are separate sentences
 
 A value sentence carries no act ("you help anyone" decides the act); an activity sentence carries no value. Readiness
@@ -972,4 +966,4 @@ Latest entry (2026-11-04), from a private consumer's fight measurements: ten rou
 
 Entry of 2026-11-06, from the same private consumer: trait scales crossed over more than seven hundred fights in rooms
 written by a model nothing was tuned on, and a pilot of four rooms where helping was an intervention, audited blind by a
-separate model, whose smoke runs found the object and ruling-shape faults in the first lesson above.
+separate model, whose smoke runs found the ruling-shape fault in the first lesson above, and a misdiagnosis.
