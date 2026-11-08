@@ -647,6 +647,33 @@ keeps act words out of the value sentence and welfare words out of the activity 
 act, build a situation where acting is an intervention**, not one where the need is at the character's feet and costs
 nothing to meet; there, every caring character acts, and the activity scale cannot show.
 
+## Lesson: a character is handed only what the character would know, said as the character would say it
+
+The concrete incident: a game where the player, as one head of government, telephones another, and a model voices
+the other leader. The engine kept the two sides' commitments as terms, and for each term it kept a separate note on
+how the engine itself would check performance: one kind of commitment the code could see happen on its own board,
+every other kind "a recorded commitment; its performance is not automatically verified". Those notes were part of
+the staff's private read-back, which is where they belong. They were also handed, verbatim, into the foreign
+leader's prompt, beside an instruction to "state the distinction when material". The leader did. Asked where the
+other side's forces would go and how many, he answered in character that these were "recorded words, not something
+either of us can verify automatically": the referee's bookkeeping, in a head of state's mouth, in the middle of a
+negotiation that had been going well.
+
+Nothing in the model was wrong. It said what it was handed, and it was handed the engine's own account of itself.
+A role prompt is not a place to be thorough: everything in it is something the character may say, and the only
+reliable way to keep a word out of a character's mouth is to keep it out of the character's context. So: **give a
+character the facts the character would know, phrased the way the character would know them, and nothing about
+how the engine records, checks or verifies.** The same term can be rendered twice from one source, once for the
+staff who need to know what the code can confirm and once for the character who does not; the rendering for the
+character carries the commitment and the party it binds, and no verification note at all. When the character
+should want certainty, tell it to ask for certainty the way its kind of character would (an inspection, a
+notification, a witness), not to repeat how the code will know.
+
+The engine-side form of the lesson, which is why it is in this guide and not only in that game's notes: a reader
+or a role that is given a closed vocabulary will reach for it (see "a reader choosing from a closed list does not
+reliably answer none", above). Verification scopes, status fields and schema names are a closed vocabulary like any
+other. Keep them in the surfaces that are about the engine, and out of every surface that is a person speaking.
+
 ## Checklist before you ship a `createTurnReader` question set
 
 - For every `(effect, property)` combination your effects layer accepts, can you point to the exact
@@ -886,6 +913,12 @@ read it. See run-dmcp's `docs/AUTHORING-GUIDE.md`.
 A value sentence carries no act ("you help anyone" decides the act); an activity sentence carries no value. Readiness
 to act shows only where acting is an intervention at a cost, never a free rescue at the character's feet. See
 run-dmcp's `docs/AUTHORING-GUIDE.md`.
+## A character is handed only what the character would know
+
+Everything in a role prompt is something the character may say. Render a commitment for a speaking character as
+the commitment and the party it binds, never with the engine's note on how it will be checked; keep verification
+scopes, status fields and schema names in the referee's and the staff's surfaces. See run-dmcp's
+`docs/AUTHORING-GUIDE.md`.
 ```
 
 ## Provenance
@@ -967,3 +1000,8 @@ Latest entry (2026-11-04), from a private consumer's fight measurements: ten rou
 Entry of 2026-11-06, from the same private consumer: trait scales crossed over more than seven hundred fights in rooms
 written by a model nothing was tuned on, and a pilot of four rooms where helping was an intervention, audited blind by a
 separate model, whose smoke runs found the ruling-shape fault in the first lesson above, and a misdiagnosis.
+
+Entry of 2026-11-08, from the private telephone-call consumer's owner playtest: a model-voiced foreign leader
+repeated the engine's verification note for a commitment to the player, in character, because the note had been
+placed in its prompt; the repair rendered the same terms a second way for the character, without the note, and
+the lesson above is its general form.
